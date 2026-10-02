@@ -262,129 +262,34 @@
   const ctx = canvas.getContext("2d");
   const stage = $("stage");
 
-  // SPRITE SWAP POINT
-  // Drawn only through a circular clip (see drawToken) so the dark photo
-  // background never shows as a rectangle. Drop in a new png and reload.
-  //   assets/vera.png assets/roxie.png assets/lila.png assets/nyx.png
-  //   assets/zombie.png assets/zombie-brute.png assets/boss.png
-  //   assets/base.png assets/upgrade-wall.png assets/upgrade-aura.png assets/upgrade-turret.png
-  // Crawlers, spitters, and shriekers reuse zombie.png. Bloaters reuse the brute.
+  // Field art is the cutout PNGs (real alpha). Drawn whole with drawSprite.
+  //   assets/vera-sprite.png assets/roxie-sprite.png assets/lila-sprite.png assets/nyx-sprite.png
+  //   assets/zombie-sprite.png assets/zombie-brute-sprite.png assets/boss-sprite.png
+  //   assets/base-sprite.png assets/upgrade-wall-sprite.png assets/upgrade-aura-sprite.png assets/upgrade-turret-sprite.png
+  // Crawlers, spitters, and shriekers reuse the zombie cutout. Bloaters reuse the brute.
   const sprites = {};
   function loadSprites() {
     const files = [
-      ["vera", "assets/vera.png", 0.18, ""],
-      ["roxie", "assets/roxie.png", 0.18, ""],
-      ["lila", "assets/lila.png", 0.18, ""],
-      ["nyx", "assets/nyx.png", 0.18, ""],
-      ["zombie", "assets/zombie.png", 0.4, ""],
-      ["brute", "assets/zombie-brute.png", 0.38, ""],
-      ["boss", "assets/boss.png", 0.34, ""],
-      ["base", "assets/base.png", 0.5, ""],
-      ["wall", "assets/upgrade-wall.png", 0.5, ""],
-      ["aura", "assets/upgrade-aura.png", 0.5, "glow"],
-      ["turret", "assets/upgrade-turret.png", 0.5, ""],
+      ["vera", "assets/vera-sprite.png"],
+      ["roxie", "assets/roxie-sprite.png"],
+      ["lila", "assets/lila-sprite.png"],
+      ["nyx", "assets/nyx-sprite.png"],
+      ["zombie", "assets/zombie-sprite.png"],
+      ["brute", "assets/zombie-brute-sprite.png"],
+      ["boss", "assets/boss-sprite.png"],
+      ["base", "assets/base-sprite.png"],
+      ["wall", "assets/upgrade-wall-sprite.png"],
+      ["aura", "assets/upgrade-aura-sprite.png"],
+      ["turret", "assets/upgrade-turret-sprite.png"],
     ];
     for (const row of files) {
       const key = row[0];
-      const src = row[1];
-      const anchor = row[2];
-      const mode = row[3];
       const img = new Image();
       img.decoding = "async";
-      img.onload = () => {
-        try { sprites[key] = prepareSprite(img, anchor, mode); }
-        catch (err) { sprites[key] = null; }
-      };
+      img.onload = () => { sprites[key] = img; };
       img.onerror = () => { sprites[key] = null; };
-      img.src = src;
+      img.src = row[1];
     }
-  }
-
-  function prepareSprite(img, anchor, mode) {
-    const S = 280;
-    const c = document.createElement("canvas");
-    c.width = S;
-    c.height = S;
-    const g = c.getContext("2d", { willReadFrequently: true });
-    g.drawImage(img, 0, 0, S, S);
-    const image = g.getImageData(0, 0, S, S);
-    const d = image.data;
-    let ar = 0, ag = 0, ab = 0, n = 0;
-    const sample = (x, y) => {
-      const i = (y * S + x) * 4;
-      ar += d[i]; ag += d[i + 1]; ab += d[i + 2]; n++;
-    };
-    for (let i = 0; i < S; i += 6) {
-      sample(i, 0); sample(i, S - 1); sample(0, i); sample(S - 1, i);
-    }
-    ar /= n; ag /= n; ab /= n;
-    const thresh = 34 * 34;
-    const seen = new Uint8Array(S * S);
-    const stack = new Int32Array(S * S);
-    let sp = 0;
-    const push = (x, y) => {
-      if (x < 0 || y < 0 || x >= S || y >= S) return;
-      const p = y * S + x;
-      if (seen[p]) return;
-      seen[p] = 1;
-      stack[sp++] = p;
-    };
-    push(0, 0); push(S - 1, 0); push(0, S - 1); push(S - 1, S - 1);
-    while (sp) {
-      const p = stack[--sp];
-      const x = p % S;
-      const y = (p / S) | 0;
-      const i = p * 4;
-      const dr = d[i] - ar, dg = d[i + 1] - ag, db = d[i + 2] - ab;
-      if (dr * dr + dg * dg + db * db > thresh) continue;
-      d[i + 3] = 0;
-      push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1);
-    }
-    if (mode === "glow") {
-      for (let p = 0; p < S * S; p++) {
-        const i = p * 4;
-        const maxc = Math.max(d[i], d[i + 1], d[i + 2]);
-        if (maxc < 26) d[i + 3] = 0;
-        else if (maxc < 54) d[i + 3] = Math.min(d[i + 3], ((maxc - 26) / 28) * 255);
-      }
-    }
-    let minX = S, minY = S, maxX = 0, maxY = 0, opaque = 0;
-    for (let y = 0; y < S; y++) {
-      for (let x = 0; x < S; x++) {
-        if (d[(y * S + x) * 4 + 3] > 24) {
-          opaque++;
-          if (x < minX) minX = x;
-          if (y < minY) minY = y;
-          if (x > maxX) maxX = x;
-          if (y > maxY) maxY = y;
-        }
-      }
-    }
-    const frac = opaque / (S * S);
-    const knocked = frac > 0.08 && frac < 0.78 && maxX > minX + 8;
-    if (!knocked) {
-      const side = Math.round(Math.min(img.width, img.height) * 0.8);
-      const sx = Math.round((img.width - side) / 2);
-      const sy = Math.round(img.height * 0.02);
-      const out = document.createElement("canvas");
-      out.width = side;
-      out.height = side;
-      out.getContext("2d").drawImage(img, sx, Math.min(sy, img.height - side), side, side, 0, 0, side, side);
-      return { canvas: out, anchor: anchor, frac: frac, knocked: false };
-    }
-    g.putImageData(image, 0, 0);
-    const pad = 2;
-    minX = Math.max(0, minX - pad);
-    minY = Math.max(0, minY - pad);
-    maxX = Math.min(S - 1, maxX + pad);
-    maxY = Math.min(S - 1, maxY + pad);
-    const bw = maxX - minX + 1;
-    const bh = maxY - minY + 1;
-    const out = document.createElement("canvas");
-    out.width = bw;
-    out.height = bh;
-    out.getContext("2d").drawImage(c, minX, minY, bw, bh, 0, 0, bw, bh);
-    return { canvas: out, anchor: anchor, frac: frac, knocked: true };
   }
 
   const units = [];
@@ -1174,24 +1079,50 @@
     musicTick(dt);
   }
 
-  function drawToken(key, x, y, r, backup) {
+  // Whole cutout. No circular clip. Feet sit on (x, y) unless anchor is "center".
+  // size is sprite height for figures, or the longer side for centered props.
+  function drawSprite(key, x, y, size, opts) {
+    opts = opts || {};
+    const img = sprites[key];
+    const ready = img && img.complete && img.naturalWidth > 0;
+    if (!ready) {
+      if (opts.backup) {
+        ctx.save();
+        ctx.translate(x, opts.anchor === "center" ? y : y - size * 0.45);
+        opts.backup(size * 0.42);
+        ctx.restore();
+      }
+      return false;
+    }
+    const aspect = img.naturalWidth / img.naturalHeight;
+    let dw, dh, ox, oy;
+    if (opts.anchor === "center") {
+      if (aspect >= 1) { dw = size; dh = size / aspect; }
+      else { dh = size; dw = size * aspect; }
+      ox = -dw / 2;
+      oy = -dh / 2;
+    } else {
+      dh = size;
+      dw = size * aspect;
+      ox = -dw / 2;
+      oy = -dh;
+    }
+    const flash = opts.flash || 0;
     ctx.save();
-    ctx.translate(x, y);
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.clip();
-    const spr = sprites[key];
-    if (spr && spr.canvas) {
-      const img = spr.canvas;
-      const scale = Math.max((r * 2) / img.width, (r * 2) / img.height);
-      const dw = img.width * scale;
-      const dh = img.height * scale;
-      ctx.drawImage(img, -r - (dw - r * 2) * 0.5, -r - (dh - r * 2) * spr.anchor, dw, dh);
-    } else if (backup) {
-      backup(r);
+    ctx.translate(x, y + (opts.bob || 0));
+    if (opts.rot) ctx.rotate(opts.rot);
+    ctx.scale(opts.sx == null ? 1 : opts.sx, opts.sy == null ? 1 : opts.sy);
+    const alpha = opts.alpha == null ? ctx.globalAlpha : opts.alpha;
+    ctx.globalAlpha = alpha;
+    if (opts.filter && opts.filter !== "none") ctx.filter = opts.filter;
+    ctx.drawImage(img, ox, oy, dw, dh);
+    if (flash > 0.02) {
+      ctx.filter = "brightness(0) invert(1)";
+      ctx.globalAlpha = alpha * Math.min(0.9, flash);
+      ctx.drawImage(img, ox, oy, dw, dh);
     }
     ctx.restore();
+    return true;
   }
 
   function drawHeroFallback(h, r) {
@@ -1239,101 +1170,95 @@
     crawler: "#9be36a", spitter: "#d2f25a", shrieker: "#d7b3ff", bloater: "#e0a15c",
   };
 
+  function heroHeight(u) {
+    return u.named ? 16.4 : 14.6;
+  }
+
   function drawUnit(u) {
     const h = HEROES[u.kind];
-    const r = u.named ? 5.05 : 4.35;
+    const height = heroHeight(u);
     const moving = (u.step || 0) > 0.04 && !reduceMotion;
     const cycle = u.walk * 2.8;
     const stride = reduceMotion ? 0 : Math.sin(cycle);
-    const bob = reduceMotion ? 0 : Math.abs(Math.sin(cycle)) * (moving ? 1.25 : 0.16);
-    const breathe = !u.combat && !moving && !reduceMotion ? Math.sin(u.idle * 1.7) * 0.05 : 0;
-    const lean = u.lunge || 0;
-    const lx = Math.cos(u.facing) * lean * 2.35;
-    const ly = Math.sin(u.facing) * lean * 2.35;
-    const sway = stride * (moving ? 0.42 : 0.08);
-    const x = u.x + lx + Math.cos(u.facing + Math.PI / 2) * sway;
-    const y = u.y + bob + ly + Math.sin(u.facing + Math.PI / 2) * sway;
-    ctx.fillStyle = "rgba(0,0,0,0.38)";
+    const bob = reduceMotion ? 0 : -Math.abs(stride) * (moving ? 0.85 : 0.12);
+    const attack = u.lunge || 0;
+    const lean = (moving ? 0.2 : 0) * Math.cos(u.facing || 0);
+    const squash = moving ? Math.abs(stride) : 0;
+    const x = u.x;
+    const y = u.y;
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
     ctx.beginPath();
-    ctx.ellipse(u.x, u.y + r * 0.82, r * (moving ? 0.7 + Math.abs(stride) * 0.18 : 0.62), r * 0.2, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, y + 0.35, height * 0.16, height * 0.045, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate((moving ? stride * 0.28 : 0) + lean * 0.62);
-    ctx.scale(1 + (moving ? Math.abs(stride) * 0.1 : breathe * 0.4), 1 - (moving ? Math.abs(stride) * 0.08 : 0) + breathe);
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.fillStyle = "#10131b";
-    ctx.fill();
-    drawToken(u.kind, 0, 0, r, (rr) => drawHeroFallback(h, rr));
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.strokeStyle = h.accent;
-    ctx.globalAlpha = u.named ? 1 : 0.8;
-    ctx.lineWidth = u.named ? 0.48 : 0.28;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    drawSprite(u.kind, x, y, height, {
+      bob: bob,
+      rot: lean + attack * 0.32 * (Math.cos(u.facing || 0) >= 0 ? 1 : -1),
+      sx: 1 + squash * 0.06,
+      sy: 1 - squash * 0.05,
+      backup: (rr) => drawHeroFallback(h, rr),
+    });
     if (u.named) {
       ctx.fillStyle = h.accent;
       ctx.beginPath();
-      ctx.arc(r * 0.64, -r * 0.64, 0.48, 0, Math.PI * 2);
+      ctx.arc(x + height * 0.16, y - height - 0.35, 0.42, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.restore();
     const fx = Math.cos(u.facing), fy = Math.sin(u.facing);
+    const gx = x + fx * height * 0.18;
+    const gy = y - height * 0.46 + fy * height * 0.08;
     ctx.strokeStyle = h.accent;
-    ctx.lineWidth = 0.4;
+    ctx.lineWidth = 0.35;
     ctx.beginPath();
-    ctx.moveTo(x + fx * r * 0.85, y + fy * r * 0.85);
-    ctx.lineTo(x + fx * (r + 1.7), y + fy * (r + 1.7));
+    ctx.moveTo(gx, gy);
+    ctx.lineTo(gx + fx * 1.7, gy + fy * 1.7);
     ctx.stroke();
     if (u.muzzle > 0) {
       const a = Math.min(1, u.muzzle / 0.1);
       ctx.globalAlpha = a;
       ctx.fillStyle = "#fff6d4";
       ctx.beginPath();
-      ctx.arc(x + fx * (r + 1.55), y + fy * (r + 1.55), 0.9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = a * 0.4;
-      ctx.fillStyle = h.accent;
-      ctx.beginPath();
-      ctx.arc(x + fx * (r + 2.35), y + fy * (r + 2.35), 1.45, 0, Math.PI * 2);
+      ctx.arc(gx + fx * 2.1, gy + fy * 2.1, 0.7, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
     }
+  }
+
+  function enemyHeight(e) {
+    const table = {
+      walker: 12.4, runner: 11.2, crawler: 8.8, spitter: 12.6, shrieker: 13,
+      tank: 15.4, brute: 15.8, bloater: 16.2, boss: 22.5,
+    };
+    return (table[e.type] || 12.4) * (e.elite ? 1.06 : 1);
   }
 
   function drawEnemy(e) {
     const dx = BASE.x - e.x;
     const dy = BASE.y - e.y;
     const dist = Math.hypot(dx, dy) || 1;
-    const pulse = e.bloater && !reduceMotion ? 1 + Math.sin(state.time * 3 + e.id) * 0.05 : 1;
-    const r = e.r * 1.38 * pulse;
+    const height = enemyHeight(e) * (e.bloater && !e.dead && !reduceMotion ? 1 + Math.sin(state.time * 3 + e.id) * 0.03 : 1);
     if (e.dead) {
       const k = Math.max(0, e.dying / (e.dyingMax || 0.42));
-      ctx.save();
-      ctx.globalAlpha = Math.min(1, k * 1.35);
-      ctx.translate(e.x, e.y + (1 - k) * e.r * 0.35);
-      if (!reduceMotion) ctx.rotate((1 - k) * 1.15 * (e.side || 1));
-      const shrink = Math.max(0.04, k);
-      ctx.scale(shrink, shrink * (0.72 + 0.28 * k));
-      drawToken(e.sprite, 0, 0, r, (rr) => drawZombieFallback(e, rr));
-      ctx.restore();
+      drawSprite(e.sprite, e.x, e.y + (1 - k) * 0.8, height, {
+        alpha: Math.min(1, k * 1.25),
+        rot: reduceMotion ? 0 : (1 - k) * (Math.PI / 2) * (e.side || 1),
+        filter: spriteFilter(e),
+        backup: (rr) => drawZombieFallback(e, rr),
+      });
       return;
     }
     const bobF = e.crawler ? 3.1 : e.runner ? 2.7 : 2.05;
     const cycle = e.walk * bobF;
     const stride = reduceMotion ? 0 : Math.sin(cycle);
-    const bobA = reduceMotion ? 0 : e.crawler ? 0.95 : e.runner ? 0.82 : 0.7;
-    const bob = Math.abs(stride) * bobA;
-    const lunge = (e.lunge || 0) * 1.7;
-    const sway = stride * (e.crawler ? 0.55 : 0.38);
-    const x = e.x + (dx / dist) * lunge + (-dy / dist) * sway;
-    const y = e.y + bob + (dy / dist) * lunge + (dx / dist) * sway;
-    const tilt = reduceMotion ? 0 : (dx / dist) * (e.crawler ? 0.16 : 0.1) + stride * 0.32 + (e.lunge || 0) * 0.7;
-    ctx.fillStyle = "rgba(0,0,0,0.42)";
+    const bobAmp = e.crawler ? 0.7 : e.runner ? 0.62 : 0.5;
+    const bob = reduceMotion ? 0 : -Math.abs(stride) * bobAmp;
+    const attack = e.lunge || 0;
+    const lean = reduceMotion ? 0 : (dx / dist) * (e.crawler ? 0.16 : 0.12);
+    const squash = Math.abs(stride);
+    const x = e.x;
+    const y = e.y;
+    ctx.fillStyle = "rgba(0,0,0,0.38)";
     ctx.beginPath();
-    ctx.ellipse(e.x, e.y + r * 0.78, r * 0.72, r * 0.22, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, y + 0.4, height * 0.18, height * 0.05, 0, 0, Math.PI * 2);
     ctx.fill();
     if (e.shrieker) {
       const glow = reduceMotion ? 0.22 : 0.16 + Math.sin(state.time * 3 + e.id) * 0.05;
@@ -1345,64 +1270,36 @@
       ctx.stroke();
       ctx.setLineDash([]);
     }
-    const hitPop = e.flash > 0 ? 1 + (e.flash / 0.18) * 0.14 : 1;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(tilt);
-    ctx.scale(hitPop * (1 + Math.abs(stride) * 0.07), hitPop * (1 - Math.abs(stride) * 0.06));
-    ctx.filter = spriteFilter(e);
-    drawToken(e.sprite, 0, 0, r, (rr) => drawZombieFallback(e, rr));
-    ctx.restore();
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.strokeStyle = e.elite ? "#ffd56a" : (RING[e.type] || "#6e3038");
-    ctx.lineWidth = e.boss || e.elite ? 0.5 : 0.28;
-    ctx.stroke();
-    if (e.elite) {
-      ctx.beginPath();
-      ctx.arc(x, y, r + 0.55, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(255,213,106,0.85)";
-      ctx.lineWidth = 0.22;
-      ctx.stroke();
-    }
-    if (e.runner) {
-      ctx.strokeStyle = "rgba(230,220,120,0.85)";
-      ctx.lineWidth = 0.28;
-      ctx.beginPath();
-      ctx.moveTo(x - r * 0.2, y + r * 0.2);
-      ctx.lineTo(x - r - 1.5, y + r * 0.45);
-      ctx.stroke();
-    }
+    const flash = e.flash > 0 ? Math.min(1, e.flash / 0.18) : 0;
+    drawSprite(e.sprite, x, y, height, {
+      bob: bob,
+      rot: lean + attack * 0.34 * (dx >= 0 ? 1 : -1),
+      sx: 1 + squash * 0.055 + flash * 0.03,
+      sy: 1 - squash * 0.045,
+      filter: spriteFilter(e),
+      flash: flash,
+      backup: (rr) => drawZombieFallback(e, rr),
+    });
     if (e.spitter && e.spitCd < 0.45) {
       ctx.fillStyle = "#eaff9a";
       ctx.beginPath();
-      ctx.arc(x + (dx / dist) * (r + 0.4), y + (dy / dist) * (r + 0.4), 0.45, 0, Math.PI * 2);
+      ctx.arc(x + (dx / dist) * (height * 0.22), y - height * 0.42, 0.45, 0, Math.PI * 2);
       ctx.fill();
     }
     if (e.slowT > 0 || e.stunT > 0) {
       ctx.strokeStyle = e.stunT > 0 ? "rgba(255,255,255,0.9)" : "rgba(196,155,255,0.9)";
       ctx.lineWidth = 0.28;
       ctx.beginPath();
-      ctx.arc(x, y, r + 0.4, 0, Math.PI * 2);
+      ctx.arc(x, y - height * 0.5, height * 0.22, 0, Math.PI * 2);
       ctx.stroke();
     }
-    if (e.flash > 0) {
-      ctx.save();
-      ctx.globalAlpha = Math.min(0.9, e.flash / 0.18);
-      ctx.globalCompositeOperation = "lighter";
-      ctx.fillStyle = "#fff";
-      ctx.beginPath();
-      ctx.arc(x, y, r * 0.92, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-    const w = r * 2.15;
-    const hx = x - w / 2;
-    const hy = y - r - 1.15;
+    const barW = Math.min(height * 0.7, 8);
+    const hx = x - barW / 2;
+    const hy = y - height - 1.05;
     ctx.fillStyle = "rgba(0,0,0,0.65)";
-    ctx.fillRect(hx, hy, w, 0.48);
+    ctx.fillRect(hx, hy, barW, 0.48);
     ctx.fillStyle = e.elite ? "#ffd56a" : e.boss ? "#ff6b8a" : "#c5e38a";
-    ctx.fillRect(hx, hy, w * Math.max(0, e.hp / e.max), 0.48);
+    ctx.fillRect(hx, hy, barW * Math.max(0, e.hp / e.max), 0.48);
     if (e.boss) {
       ctx.fillStyle = "#f3e9ff";
       ctx.font = "700 2.4px Passion One, Impact, sans-serif";
@@ -1444,18 +1341,7 @@
   }
 
   function drawProp(key, x, y, size, rot) {
-    const spr = sprites[key];
-    if (!spr || !spr.canvas) return false;
-    const img = spr.canvas;
-    const sc = size / Math.max(img.width, img.height);
-    const dw = img.width * sc;
-    const dh = img.height * sc;
-    ctx.save();
-    ctx.translate(x, y);
-    if (rot) ctx.rotate(rot);
-    ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
-    ctx.restore();
-    return true;
+    return drawSprite(key, x, y, size, { anchor: "center", rot: rot || 0 });
   }
 
   function sandbagSpots() {
@@ -1545,7 +1431,10 @@
 
   function drawBase() {
     drawSandbags(false);
-    const built = drawProp("base", BASE.x, BASE.y + 0.4, BASE.r * 2.55, 0);
+    const built = drawSprite("base", BASE.x, BASE.y + BASE.r * 0.15, BASE.r * 2.7, {
+      anchor: "center",
+      flash: state.baseFlash > 0 ? Math.min(0.85, state.baseFlash / 0.18) : 0,
+    });
     if (!built) {
       ctx.beginPath();
       ctx.arc(BASE.x, BASE.y, BASE.r, 0, Math.PI * 2);
@@ -1555,7 +1444,7 @@
       ctx.strokeStyle = "#6a6254";
       ctx.stroke();
     }
-    if (state.baseFlash > 0) {
+    if (state.baseFlash > 0 && !built) {
       ctx.save();
       ctx.globalAlpha = Math.min(0.5, state.baseFlash / 0.18);
       ctx.fillStyle = "#ff5d6c";
