@@ -7,7 +7,9 @@
   const BASE_HP0 = 200;
   const START_CASH = 100;
   const CAP = 10;
+  const FINALE = 100;
   const ORDER = ["vera", "roxie", "lila", "nyx"];
+  const MUSIC_GAIN = 0.26;
 
   const HEROES = {
     vera: {
@@ -41,47 +43,198 @@
     tank: { sprite: "brute", hp: 170, speed: 4.05, r: 3.45, reward: 16, bite: 8, biteEvery: 1.05, armor: 0.12, slowRes: 0.28 },
     brute: { sprite: "brute", hp: 128, speed: 5.5, r: 3.25, reward: 14, bite: 6, biteEvery: 0.9, armor: 0.34, slowRes: 0.2, armored: true },
     boss: { sprite: "boss", hp: 1680, speed: 3.9, r: 5.9, reward: 80, bite: 18, biteEvery: 0.8, armor: 0.2, slowRes: 0.62, boss: true },
+    crawler: { sprite: "zombie", hp: 18, speed: 15.4, r: 1.95, reward: 4, bite: 2, biteEvery: 0.55, armor: 0, slowRes: 0.05, crawler: true },
+    spitter: { sprite: "zombie", hp: 54, speed: 6.1, r: 2.7, reward: 11, bite: 3, biteEvery: 1.1, armor: 0, slowRes: 0.1, spitter: true, spit: 7, spitEvery: 2.45, spitRange: 28, spitSpeed: 8.2 },
+    shrieker: { sprite: "zombie", hp: 76, speed: 6.5, r: 2.85, reward: 15, bite: 4, biteEvery: 1, armor: 0, slowRes: 0.16, shrieker: true, shriek: 1.42, shriekR: 12 },
+    bloater: { sprite: "brute", hp: 124, speed: 4.25, r: 3.75, reward: 18, bite: 6, biteEvery: 1.05, armor: 0.06, slowRes: 0.22, bloater: true, explode: 16, explodeR: 13 },
   };
 
-  const WAVES = [
-    { name: "Shamble", blurb: "Walkers stumble in off every edge.", groups: [{ type: "walker", n: 8, every: 1.05 }] },
-    { name: "Pack", blurb: "A thicker crowd from all sides.", groups: [{ type: "walker", n: 12, every: 0.78 }] },
-    { name: "Strays", blurb: "Runners break ahead of the walkers.", groups: [
-      { type: "walker", n: 6, every: 0.85 },
-      { type: "runner", n: 6, every: 0.95, delay: 1.8 },
-    ] },
-    { name: "Fast Swarm", challenge: "faster", speed: 1.24, blurb: "Challenge: the whole wave is sprinting.", groups: [
-      { type: "runner", n: 12, every: 0.46 },
-      { type: "walker", n: 5, every: 0.7, delay: 0.8 },
-    ] },
-    { name: "Bulwark", blurb: "Tanks shoulder through the pack.", groups: [
-      { type: "walker", n: 8, every: 0.7 },
-      { type: "tank", n: 3, every: 2.2, delay: 1.4 },
-    ] },
-    { name: "Crossfire", blurb: "Every kind, from every side.", groups: [
-      { type: "runner", n: 8, every: 0.5 },
-      { type: "walker", n: 8, every: 0.62, delay: 0.3 },
-      { type: "tank", n: 2, every: 2.8, delay: 2 },
-    ] },
-    { name: "Armored Rush", challenge: "armored", blurb: "Challenge: plated brutes. Shots glance off.", groups: [
-      { type: "brute", n: 6, every: 1.2 },
-      { type: "runner", n: 8, every: 0.5, delay: 1 },
-    ] },
-    { name: "Horde", blurb: "They do not stop coming.", groups: [
-      { type: "walker", n: 22, every: 0.32 },
-      { type: "tank", n: 3, every: 2.4, delay: 1.6 },
-    ] },
-    { name: "Blackout", blurb: "Runners and iron in the dark.", groups: [
-      { type: "runner", n: 14, every: 0.36 },
-      { type: "tank", n: 4, every: 1.8, delay: 0.8 },
-    ] },
-    { name: "Graveking", boss: true, blurb: "Boss: the Graveking and his court.", groups: [
-      { type: "walker", n: 8, every: 0.5 },
-      { type: "boss", n: 1, every: 1, delay: 3.2 },
-      { type: "runner", n: 8, every: 0.48, delay: 4.5 },
-      { type: "brute", n: 2, every: 1.6, delay: 5.5 },
-    ] },
+  const TYPE_NAME = {
+    walker: "Walkers", runner: "Runners", tank: "Tanks", brute: "Brutes", boss: "The Graveking",
+    crawler: "Crawlers", spitter: "Spitters", shrieker: "Shriekers", bloater: "Bloaters",
+  };
+
+  const DEBUTS = [
+    { stage: 1, type: "walker", name: "Walker", line: "Walkers. Slow, and they bite the gate." },
+    { stage: 3, type: "runner", name: "Runner", line: "Runners. Lighter, and much faster." },
+    { stage: 5, type: "tank", name: "Tank", line: "Tanks. Thick, slow, and hard to drop." },
+    { stage: 7, type: "brute", name: "Brute", line: "Brutes. Plated. Shots glance off." },
+    { stage: 10, type: "boss", name: "Graveking", line: "The Graveking. A boss. He does not come alone." },
+    { stage: 12, type: "crawler", name: "Crawler", line: "Crawlers. Small, fast, and they swarm." },
+    { stage: 16, type: "elite", name: "Elite", line: "Elites. Tinted gold, with a lot more health." },
+    { stage: 18, type: "spitter", name: "Spitter", line: "Spitters. They stop and lob a slow glob at the gate." },
+    { stage: 26, type: "shrieker", name: "Shrieker", line: "Shriekers. The wail makes nearby dead hurry." },
+    { stage: 34, type: "bloater", name: "Bloater", line: "Bloaters. They burst on death, and the gate takes it if they pop close." },
   ];
+
+  const EARLY_META = {
+    1: { name: "Shamble", blurb: "Walkers stumble in off every edge." },
+    2: { name: "Pack", blurb: "A thicker crowd from all sides." },
+    3: { name: "Strays", blurb: "Runners break ahead of the walkers." },
+    4: { name: "Fast Swarm", blurb: "Challenge: the whole wave is sprinting." },
+    5: { name: "Bulwark", blurb: "Tanks shoulder through the pack." },
+    6: { name: "Crossfire", blurb: "Every kind, from every side." },
+    7: { name: "Armored Rush", blurb: "Challenge: plated brutes. Shots glance off." },
+    8: { name: "Horde", blurb: "They do not stop coming." },
+    9: { name: "Blackout", blurb: "Runners and iron in the dark." },
+    10: { name: "Graveking", blurb: "Boss: the Graveking and his court." },
+  };
+
+  const EARLY_GROUPS = {
+    1: [{ type: "walker", n: 8, every: 1.05 }],
+    2: [{ type: "walker", n: 12, every: 0.78 }],
+    3: [{ type: "walker", n: 6, every: 0.85 }, { type: "runner", n: 6, every: 0.95, delay: 1.8 }],
+    4: [{ type: "runner", n: 12, every: 0.46 }, { type: "walker", n: 5, every: 0.7, delay: 0.8 }],
+    5: [{ type: "walker", n: 8, every: 0.7 }, { type: "tank", n: 3, every: 2.2, delay: 1.4 }],
+    6: [{ type: "runner", n: 8, every: 0.5 }, { type: "walker", n: 8, every: 0.62, delay: 0.3 }, { type: "tank", n: 2, every: 2.8, delay: 2 }],
+    7: [{ type: "brute", n: 6, every: 1.2 }, { type: "runner", n: 8, every: 0.5, delay: 1 }],
+    8: [{ type: "walker", n: 22, every: 0.32 }, { type: "tank", n: 3, every: 2.4, delay: 1.6 }],
+    9: [{ type: "runner", n: 14, every: 0.36 }, { type: "tank", n: 4, every: 1.8, delay: 0.8 }],
+    10: [{ type: "walker", n: 8, every: 0.5 }, { type: "boss", n: 1, every: 1, delay: 3.2 }, { type: "runner", n: 8, every: 0.48, delay: 4.5 }, { type: "brute", n: 2, every: 1.6, delay: 5.5 }],
+  };
+
+  const NAME_A = ["Ash", "Wire", "Ditch", "Lantern", "Marrow", "Cinder", "Hollow", "Rust", "Veil", "Chapel", "Orchard", "Static", "Gutter", "Pall", "Thorn", "Night", "Salt", "Glass", "River", "Kiln", "Moth", "Briar", "Hush", "Soot", "Willow", "Iron", "Fog", "Pine", "Grave", "Ember"];
+  const NAME_B = ["Walk", "Line", "Hour", "Mouth", "Field", "Choir", "Rain", "Watch", "Bell", "Road", "Pit", "Song", "March", "Crown", "Flood", "Wake", "Gate", "Pack", "Cut", "Yard"];
+
+  function cloneGroups(list) {
+    const out = [];
+    for (const g of list) out.push({ type: g.type, n: g.n, every: g.every, delay: g.delay || 0 });
+    return out;
+  }
+
+  function debutsOn(n) {
+    const list = [];
+    for (const d of DEBUTS) if (d.stage === n) list.push(d);
+    return list;
+  }
+
+  function stageName(n) {
+    if (n === FINALE) return "Last Gate";
+    if (n % 10 === 0) return "Graveking";
+    if (EARLY_META[n]) return EARLY_META[n].name;
+    const i = n - 11;
+    return NAME_A[i % NAME_A.length] + " " + NAME_B[(i * 7) % NAME_B.length];
+  }
+
+  function describe(n, groups) {
+    if (n === FINALE) return "Finale. The Graveking comes for the yard, and he brings everyone.";
+    if (EARLY_META[n]) return EARLY_META[n].blurb;
+    const bits = [];
+    const debut = debutsOn(n);
+    if (debut.length) {
+      const lines = [];
+      for (const d of debut) lines.push(d.line);
+      bits.push(lines.join(" "));
+    }
+    if (n % 10 === 0) bits.push("The Graveking again, with a thicker court.");
+    else if (n % 10 === 4) bits.push("The whole wave moves faster.");
+    else if (n % 10 === 7) bits.push("Plated brutes. Shots glance off.");
+    if (!bits.length) {
+      const names = [];
+      for (const g of groups) {
+        const label = TYPE_NAME[g.type] || g.type;
+        if (names.indexOf(label) === -1) names.push(label);
+      }
+      bits.push(names.join(", ") + " come in off every edge.");
+    }
+    return bits.join(" ");
+  }
+
+  function hpMul(n, isBoss) {
+    if (isBoss) {
+      if (n >= FINALE) return 3.8;
+      return 1 + Math.max(0, n - 10) * 0.02;
+    }
+    return 1 + Math.max(0, n - 1) * 0.037;
+  }
+
+  function speedMul(n) {
+    let s = 1 + Math.min(0.32, Math.max(0, n - 1) * 0.0026);
+    if (n % 10 === 4) s += 0.24;
+    return s;
+  }
+
+  function makeGroups(n) {
+    if (n <= 10) return cloneGroups(EARLY_GROUPS[n]);
+    if (n === FINALE) {
+      return cloneGroups([
+        { type: "walker", n: 16, every: 0.34 },
+        { type: "runner", n: 12, every: 0.3, delay: 0.4 },
+        { type: "crawler", n: 14, every: 0.24, delay: 0.2 },
+        { type: "tank", n: 4, every: 1.6, delay: 1.2 },
+        { type: "brute", n: 4, every: 1.4, delay: 1.5 },
+        { type: "spitter", n: 5, every: 1.5, delay: 2 },
+        { type: "shrieker", n: 3, every: 2, delay: 1.8 },
+        { type: "bloater", n: 4, every: 1.8, delay: 2.4 },
+        { type: "boss", n: 1, every: 1, delay: 3.2 },
+      ]);
+    }
+    const groups = [];
+    const late = Math.min(1, Math.max(0, (n - 10) / 90));
+    const add = (type, count, every, delay) => {
+      const c = Math.round(count);
+      if (c <= 0) return;
+      groups.push({ type: type, n: c, every: Math.max(0.22, every), delay: delay || 0 });
+    };
+    const crawlerFeature = n === 12 || n % 4 === 0 || n % 10 === 2;
+    const spitFeature = n === 18 || n % 5 === 3 || n % 10 === 8;
+    const shriekFeature = n === 26 || n % 6 === 2 || n % 10 === 6;
+    const bloatFeature = n === 34 || n % 7 === 6 || n % 10 === 4;
+    add("walker", 8 + n * 0.2, 0.74 - late * 0.34, 0);
+    add("runner", 3 + n * 0.09, 0.58 - late * 0.22, 0.7);
+    if (n % 2 === 1 || n % 10 === 0) add("tank", 1 + n / 24, 2.05, 1.3);
+    if (n % 10 === 7 || n % 10 === 9 || n % 10 === 0 || n % 10 === 5) add("brute", 1 + n / 22, 1.4, 1.05);
+    if (n >= 12 && crawlerFeature) add("crawler", n === 12 ? 16 : 7 + n * 0.07, 0.28, 0.25);
+    else if (n >= 12) add("crawler", 4 + n * 0.03, 0.36, 0.5);
+    if (n >= 18 && spitFeature) add("spitter", n === 18 ? 4 : 2 + n / 32, 1.65, 1.7);
+    else if (n > 18) add("spitter", 1 + n / 40, 1.8, 2.2);
+    if (n >= 26 && shriekFeature) add("shrieker", n === 26 ? 3 : 1 + n / 42, 2.15, 1.15);
+    else if (n > 26) add("shrieker", 1, 2.4, 1.6);
+    if (n >= 34 && bloatFeature) add("bloater", n === 34 ? 4 : 1 + n / 30, 1.95, 2);
+    else if (n > 34) add("bloater", 1, 2.3, 2.4);
+    if (n % 10 === 0) {
+      add("boss", 1, 1, 3);
+      add("runner", 6 + n * 0.03, 0.4, 4);
+      if (n >= 26) add("shrieker", 1, 2, 3.4);
+      if (n >= 34) add("bloater", 2, 2.2, 4.6);
+    }
+    let total = 0;
+    for (const g of groups) total += g.n;
+    const capN = 60;
+    if (total > capN) {
+      const scale = capN / total;
+      for (const g of groups) {
+        if (g.type === "boss") continue;
+        g.n = Math.max(1, Math.round(g.n * scale));
+      }
+    }
+    return groups;
+  }
+
+  const STAGE_CACHE = [];
+  function stageSpec(n) {
+    const idx = Math.max(1, n | 0);
+    if (!STAGE_CACHE[idx]) {
+      const groups = makeGroups(idx);
+      let challenge = null;
+      if (idx % 10 !== 0 && idx % 10 === 4) challenge = "faster";
+      else if (idx % 10 !== 0 && idx % 10 === 7) challenge = "armored";
+      else if (idx % 10 !== 0 && idx >= 12 && idx % 10 === 2) challenge = "swarm";
+      STAGE_CACHE[idx] = {
+        n: idx,
+        name: stageName(idx),
+        blurb: describe(idx, groups),
+        groups: groups,
+        boss: idx % 10 === 0,
+        finale: idx === FINALE,
+        challenge: challenge,
+        speed: speedMul(idx),
+        hpMul: hpMul(idx, false),
+        bossHp: hpMul(idx, true),
+      };
+    }
+    return STAGE_CACHE[idx];
+  }
 
   const BASE_UPS = {
     wall: { name: "Sandbag Wall", mark: "W", blurb: "Armor. The base takes less damage.", costs: [65, 95, 140], max: 3 },
@@ -102,7 +255,6 @@
     { id: "gate", name: "Reinforced Gate", short: "HP+", desc: "Max base HP +30, and heal 30." },
     { id: "cash", name: "Scavenge", short: "CASH", desc: "Pocket $45 from the yard." },
   ];
-
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const $ = (id) => document.getElementById(id);
   const canvas = $("game");
@@ -114,6 +266,7 @@
   // background never shows as a rectangle. Drop in a new png and reload.
   //   assets/vera.png assets/roxie.png assets/lila.png assets/nyx.png
   //   assets/zombie.png assets/zombie-brute.png assets/boss.png
+  // Crawlers, spitters, and shriekers reuse zombie.png. Bloaters reuse the brute.
   const sprites = {};
   function loadSprites() {
     const files = [
@@ -228,6 +381,7 @@
   const rings = [];
   const particles = [];
   const floaters = [];
+  const spits = [];
   let uid = 1;
   let eid = 1;
 
@@ -236,24 +390,27 @@
       phase: "shop",
       wave: 1,
       cash: START_CASH,
+      earned: 0,
       baseHp: BASE_HP0,
       baseMax: BASE_HP0,
       ups: { wall: 0, aura: 0, turret: 0 },
       dmgMult: 1, rateMult: 1, moveMult: 1, rangeMult: 1,
       sale: 0,
-      taken: [],
-      modLabels: [],
+      mods: {},
       kills: 0, spawned: 0, shots: 0, travel: 0,
       closest: 1e9, baseHurt: 0,
       log: [],
       time: 0, fightT: 0,
       shake: 0, baseFlash: 0, banner: null,
-      muted: false, sent: false,
+      muted: false, sent: false, runLive: false,
+      pausedFrom: null,
+      perkDue: false, perkPicked: true,
       spawnQ: [], offer: [],
-      turretCd: 0.2, turretAng: -Math.PI / 2,
+      turretCd: 0.2, turretAng: -Math.PI / 2, turretFlash: 0,
     };
   }
   const state = freshState();
+  state.phase = "title";
 
   const SPECKS = Array.from({ length: 70 }, (_, i) => ({
     x: ((i * 53) % 997) / 997 * WORLD_W,
@@ -264,6 +421,7 @@
 
   let view = { ox: 0, oy: 0, s: 1 };
   let audioCtx = null;
+  let music = null;
   let toastTimer = 0;
   const rosterButtons = {};
   const upButtons = {};
@@ -321,6 +479,9 @@
       facing: ang,
       strafe: Math.random() * 4,
       muzzle: 0,
+      lunge: 0,
+      step: 0,
+      combat: false,
     };
     units.push(u);
     return u;
@@ -368,22 +529,44 @@
     return { x: pad, y: rand(pad, WORLD_H - pad) };
   }
 
-  function spawnEnemy(type) {
+  function markElites(q, n) {
+    if (n < 16) return;
+    const pool = [];
+    for (let i = 0; i < q.length; i++) if (q[i].type !== "boss") pool.push(i);
+    let want = 1;
+    if (n >= 75) want = 4;
+    else if (n >= 50) want = 3;
+    else if (n >= 30) want = 2;
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0;
+      const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
+    const k = Math.min(want, pool.length);
+    for (let i = 0; i < k; i++) q[pool[i]].elite = true;
+  }
+
+  function spawnEnemy(type, elite) {
     const proto = ENEMIES[type];
-    const wave = WAVES[state.wave - 1];
+    if (!proto) return;
+    const spec = stageSpec(state.wave);
     const p = edgePoint();
-    const scale = proto.boss ? 1 : 1 + (state.wave - 1) * 0.05;
-    const hp = Math.round(proto.hp * scale);
-    enemies.push({
+    const mul = proto.boss ? spec.bossHp : spec.hpMul;
+    const hp = Math.max(1, Math.round(proto.hp * mul));
+    const foe = {
       id: ++eid,
       type: type,
       sprite: proto.sprite,
       boss: !!proto.boss,
       runner: !!proto.runner,
       armored: !!proto.armored,
+      crawler: !!proto.crawler,
+      spitter: !!proto.spitter,
+      shrieker: !!proto.shrieker,
+      bloater: !!proto.bloater,
+      elite: false,
       x: p.x, y: p.y, r: proto.r,
       hp: hp, max: hp,
-      speed: proto.speed * (wave.speed || 1),
+      speed: proto.speed * spec.speed,
       reward: proto.reward,
       bite: proto.bite,
       biteEvery: proto.biteEvery,
@@ -393,28 +576,51 @@
       slowFactor: 1, slowT: 0, stunT: 0,
       walk: Math.random() * 8,
       side: Math.random() < 0.5 ? -1 : 1,
-      flash: 0, dead: false,
-    });
+      flash: 0, dead: false, dying: 0, dyingMax: 0.42, lunge: 0,
+      spitDmg: proto.spit ? Math.max(1, Math.round(proto.spit * (1 + (state.wave - 1) * 0.012))) : 0,
+      spitEvery: proto.spitEvery || 2.45,
+      spitRange: proto.spitRange || 28,
+      spitSpeed: proto.spitSpeed || 8.2,
+      spitCd: proto.spitter ? rand(0.35, proto.spitEvery || 2.45) : 0,
+      shriek: proto.shriek || 1.42,
+      shriekR: proto.shriekR || 12,
+      explode: proto.explode ? Math.max(1, Math.round(proto.explode * (1 + (state.wave - 1) * 0.015))) : 0,
+      explodeR: proto.explodeR || 13,
+    };
+    if (elite && !proto.boss) {
+      foe.elite = true;
+      foe.hp = Math.max(1, Math.round(foe.hp * 2.15));
+      foe.max = foe.hp;
+      foe.reward = Math.max(1, Math.round(foe.reward * 1.85));
+      foe.speed *= 1.06;
+      foe.armor = Math.min(0.58, (foe.armor || 0) + 0.1);
+      foe.bite = Math.max(1, Math.round(foe.bite * 1.25));
+      foe.r *= 1.06;
+    }
+    if (proto.boss && state.wave === FINALE) foe.r *= 1.1;
+    enemies.push(foe);
     state.spawned++;
   }
 
   function startWave() {
     if (state.phase !== "shop") return;
-    const spec = WAVES[state.wave - 1];
+    const spec = stageSpec(state.wave);
     state.phase = "fight";
     state.fightT = 0;
     state.sent = true;
     state.spawnQ = [];
     for (const g of spec.groups) {
       for (let i = 0; i < g.n; i++) {
-        state.spawnQ.push({ t: 0.35 + (g.delay || 0) + i * g.every, type: g.type });
+        state.spawnQ.push({ t: 0.35 + (g.delay || 0) + i * g.every, type: g.type, elite: false });
       }
     }
     state.spawnQ.sort((a, b) => a.t - b.t);
-    const kind = spec.boss ? "BOSS" : spec.challenge ? "CHALLENGE" : "WAVE";
+    markElites(state.spawnQ, state.wave);
+    const kind = spec.finale ? "FINALE" : spec.boss ? "BOSS" : spec.challenge ? "CHALLENGE" : "STAGE";
     toast(kind + " " + state.wave + " — " + spec.name);
     state.banner = { title: spec.name, sub: spec.blurb, life: 2.3 };
-    blip(170, 0.09, "square", 0.03);
+    if (spec.boss) bossSting();
+    else blip(170, 0.09, "square", 0.03);
   }
 
   function hurtEnemy(e, raw) {
@@ -422,7 +628,7 @@
     const dealt = raw * (1 - (e.armor || 0));
     if (dealt <= 0) return;
     e.hp -= dealt;
-    e.flash = 0.08;
+    e.flash = 0.1;
     if (e.hp <= 0) killEnemy(e);
   }
 
@@ -430,9 +636,18 @@
     if (!e || e.dead) return;
     e.dead = true;
     e.hp = 0;
+    e.dyingMax = reduceMotion ? 0.16 : 0.42;
+    e.dying = e.dyingMax;
     state.cash += e.reward;
+    state.earned += e.reward;
     state.kills++;
-    burst(e.x, e.y, e.boss ? "#d7c4ff" : "#8a9474", e.boss ? 14 : 6, e.boss ? 7 : 4.5);
+    if (e.bloater) {
+      const dist = Math.hypot(e.x - BASE.x, e.y - BASE.y);
+      burst(e.x, e.y, "#e39a45", 16, 7);
+      rings.push({ x: e.x, y: e.y, r: 0.4, max: e.explodeR, life: 0.4, color: "#ffb15a" });
+      if (dist <= e.explodeR) hurtBase(e.explode);
+    }
+    burst(e.x, e.y, e.elite ? "#ffd56a" : e.boss ? "#d7c4ff" : "#8a9474", e.boss ? 14 : 6, e.boss ? 7 : 4.5);
     if (floaters.length < 24) {
       floaters.push({ x: e.x, y: e.y - e.r, text: "+" + e.reward, life: 0.7, color: "#ffc857" });
     }
@@ -472,7 +687,7 @@
   function burst(x, y, color, n, speed) {
     const count = reduceMotion ? Math.min(2, n) : n;
     for (let i = 0; i < count; i++) {
-      if (particles.length > 110) particles.shift();
+      if (particles.length > 140) particles.shift();
       const a = Math.random() * Math.PI * 2;
       const v = speed * (0.35 + Math.random());
       const life = 0.28 + Math.random() * 0.32;
@@ -483,9 +698,25 @@
     }
   }
 
+  function launchSpit(e, dist) {
+    if (spits.length > 36) return;
+    const nx = (BASE.x - e.x) / dist;
+    const ny = (BASE.y - e.y) / dist;
+    spits.push({
+      x: e.x + nx * (e.r + 0.35),
+      y: e.y + ny * (e.r + 0.35),
+      vx: nx * e.spitSpeed,
+      vy: ny * e.spitSpeed,
+      dmg: e.spitDmg,
+      life: 8,
+    });
+    e.lunge = 0.65;
+  }
+
   function fire(u, target, s) {
     u.cooldown = 1 / s.rate;
-    u.muzzle = 0.08;
+    u.muzzle = 0.1;
+    u.lunge = 1;
     u.facing = Math.atan2(target.y - u.y, target.x - u.x);
     state.shots++;
     if (s.kind === "snipe") {
@@ -502,8 +733,8 @@
         }
       }
       victims.sort((a, b) => a.d - b.d);
-      const cap = s.cap || 4;
-      const n = Math.min(cap, victims.length);
+      const capHit = s.cap || 4;
+      const n = Math.min(capHit, victims.length);
       for (let i = 0; i < n; i++) {
         hurtEnemy(victims[i].e, s.dmg);
         flashes.push({ x: victims[i].e.x, y: victims[i].e.y, sx: u.x, sy: u.y, life: 0.1, max: 0.1, color: s.accent });
@@ -561,6 +792,7 @@
         let score = d + db * 0.45;
         if (biting) score -= 16;
         if (e.boss) score -= 8;
+        if (e.elite) score -= 4;
         if (inSector) score -= 5;
         if (score < bestScore) { bestScore = score; best = e; }
       }
@@ -577,6 +809,7 @@
     u.x += (dx / d) * step;
     u.y += (dy / d) * step;
     u.walk += step;
+    u.step = (u.step || 0) + step;
     u.facing = Math.atan2(dy, dx);
     state.travel += step;
   }
@@ -617,7 +850,9 @@
     for (const u of units) {
       const s = statsOf(u);
       u.idle += dt;
+      u.step = 0;
       const target = fighting ? pickTarget(u, s) : null;
+      u.combat = !!target;
       if (target) {
         const d = Math.hypot(target.x - u.x, target.y - u.y);
         if (d > s.range) {
@@ -656,6 +891,19 @@
     return d <= aura.r ? aura.slow : 1;
   }
 
+  function shriekMul(e, howlers) {
+    if (!howlers.length || e.shrieker) return 1;
+    let best = 1;
+    for (let i = 0; i < howlers.length; i++) {
+      const s = howlers[i];
+      if (Math.hypot(s.x - e.x, s.y - e.y) <= s.shriekR) {
+        const boost = 1 + (s.shriek - 1) * (1 - (e.slowRes || 0));
+        if (boost > best) best = boost;
+      }
+    }
+    return best;
+  }
+
   function separateEnemies() {
     for (let i = 0; i < enemies.length; i++) {
       const a = enemies[i];
@@ -677,6 +925,8 @@
   }
 
   function updateEnemies(dt) {
+    const howlers = [];
+    for (const e of enemies) if (!e.dead && e.shrieker) howlers.push(e);
     for (const e of enemies) {
       if (e.dead) continue;
       e.flash = Math.max(0, e.flash - dt);
@@ -685,16 +935,25 @@
         e.slowT -= dt;
         if (e.slowT <= 0) e.slowFactor = 1;
       }
+      if (e.spitter && e.stunT <= 0) e.spitCd -= dt;
       const dx = BASE.x - e.x;
       const dy = BASE.y - e.y;
       const dist = Math.hypot(dx, dy) || 0.0001;
       if (dist < state.closest) state.closest = dist;
       const stop = BASE.r + e.r * 0.62;
-      const mul = (e.stunT > 0 ? 0 : e.slowFactor) * auraMul(e);
-      if (dist > stop) {
-        const step = e.speed * mul * dt;
+      const pace = (e.stunT > 0 ? 0 : e.slowFactor) * auraMul(e) * shriekMul(e, howlers);
+      const hold = e.spitter && dist <= e.spitRange && dist > stop + 0.35;
+      if (hold) {
+        e.walk += dt * 1.15;
+        if (e.stunT <= 0 && e.spitCd <= 0) {
+          e.spitCd = e.spitEvery;
+          launchSpit(e, dist);
+        }
+      } else if (dist > stop) {
+        const step = e.speed * pace * dt;
         const nx = dx / dist, ny = dy / dist;
-        const wob = Math.sin(e.walk * 0.8) * 0.45 * e.side;
+        const wobAmp = e.crawler ? 1.35 : 0.45;
+        const wob = Math.sin(e.walk * (e.crawler ? 1.4 : 0.8)) * wobAmp * e.side;
         e.x += nx * step + (-ny) * wob * dt * 2.2;
         e.y += ny * step + nx * wob * dt * 2.2;
         e.walk += Math.max(step, dt);
@@ -706,7 +965,9 @@
           e.biteCd -= dt;
           if (e.biteCd <= 0) {
             e.biteCd = e.biteEvery;
+            e.lunge = 1;
             hurtBase(e.bite);
+            if (state.phase !== "fight") return;
           }
         }
         const spin = e.stunT > 0 ? 0 : e.side * dt * 0.35;
@@ -715,7 +976,7 @@
         e.y = BASE.y + Math.sin(ang) * stop;
       }
     }
-    separateEnemies();
+    if (state.phase === "fight") separateEnemies();
   }
 
   function updatePatches(dt) {
@@ -724,6 +985,24 @@
       for (const e of enemies) {
         if (e.dead) continue;
         if (Math.hypot(e.x - p.x, e.y - p.y) <= p.r + e.r * 0.35) hurtEnemy(e, p.dps * dt);
+      }
+    }
+  }
+
+  function updateSpits(dt) {
+    for (let i = spits.length - 1; i >= 0; i--) {
+      const p = spits[i];
+      p.life -= dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      const hit = Math.hypot(p.x - BASE.x, p.y - BASE.y) <= BASE.r + 0.7;
+      if (p.life <= 0 || hit) {
+        if (hit) {
+          hurtBase(p.dmg);
+          burst(p.x, p.y, "#d6ff6a", 4, 3);
+        }
+        spits.splice(i, 1);
+        if (state.phase !== "fight") return;
       }
     }
   }
@@ -743,6 +1022,7 @@
     state.turretCd -= dt;
     if (state.turretCd <= 0) {
       state.turretCd = 1 / spec.rate;
+      state.turretFlash = 0.08;
       const ang = state.turretAng;
       bolts.push({
         x: BASE.x + Math.cos(ang) * (BASE.r * 0.85),
@@ -790,26 +1070,35 @@
   }
 
   function compact() {
-    for (let i = enemies.length - 1; i >= 0; i--) if (enemies[i].dead) enemies.splice(i, 1);
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
+      if (e.dead && e.dying <= 0) enemies.splice(i, 1);
+    }
     for (let i = patches.length - 1; i >= 0; i--) if (patches[i].life <= 0) patches.splice(i, 1);
   }
 
   function checkClear() {
     if (state.phase !== "fight") return;
     if (state.spawnQ.length) return;
-    if (enemies.length) return;
+    if (spits.length) return;
+    for (let i = 0; i < enemies.length; i++) if (!enemies[i].dead) return;
     const cleared = state.wave;
     const bonus = 8 + cleared * 3;
     state.cash += bonus;
+    state.earned += bonus;
     state.log.push("w" + cleared + " hp" + Math.round(state.baseHp) + " $" + state.cash + " u" + units.length);
-    toast("Wave " + cleared + " down +$" + bonus);
-    if (cleared >= WAVES.length) { win(); return; }
+    toast("Stage " + cleared + " down +$" + bonus);
+    blip(240, 0.08, "sine", 0.03);
+    if (cleared >= FINALE) { win(); return; }
     state.wave = cleared + 1;
-    if (cleared === 3 || cleared === 6 || cleared === 9) openPick();
-    else state.phase = "shop";
+    openBrief(cleared % 3 === 0);
   }
 
   function updateFx(dt) {
+    for (const e of enemies) {
+      if (e.dead) e.dying -= dt;
+      e.lunge = Math.max(0, (e.lunge || 0) - dt * 5);
+    }
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
       p.life -= dt;
@@ -832,10 +1121,15 @@
       rings[i].r += dt * 16;
       if (rings[i].life <= 0) rings.splice(i, 1);
     }
-    for (const u of units) u.muzzle = Math.max(0, u.muzzle - dt);
+    for (const u of units) {
+      u.muzzle = Math.max(0, u.muzzle - dt);
+      u.lunge = Math.max(0, u.lunge - dt * 5.5);
+    }
+    state.turretFlash = Math.max(0, state.turretFlash - dt);
   }
 
   function update(dt) {
+    if (state.phase === "paused" || state.phase === "title") return;
     state.time += dt;
     state.shake = Math.max(0, state.shake - dt * 1.8);
     state.baseFlash = Math.max(0, state.baseFlash - dt);
@@ -845,19 +1139,24 @@
     }
     if (state.phase === "fight") {
       state.fightT += dt;
-      while (state.spawnQ.length && state.spawnQ[0].t <= state.fightT) spawnEnemy(state.spawnQ.shift().type);
+      while (state.spawnQ.length && state.spawnQ[0].t <= state.fightT && state.phase === "fight") {
+        const job = state.spawnQ.shift();
+        spawnEnemy(job.type, job.elite);
+      }
       updateEnemies(dt);
-      updatePatches(dt);
-      updateUnits(dt);
-      updateTurret(dt);
-      updateBolts(dt);
-      updateLobs(dt);
-      compact();
-      checkClear();
-    } else if (state.phase === "shop") {
+      if (state.phase === "fight") updateSpits(dt);
+      if (state.phase === "fight") updatePatches(dt);
+      if (state.phase === "fight") updateUnits(dt);
+      if (state.phase === "fight") updateTurret(dt);
+      if (state.phase === "fight") updateBolts(dt);
+      if (state.phase === "fight") updateLobs(dt);
+      if (state.phase === "fight") checkClear();
+    } else if (state.phase === "shop" || state.phase === "brief") {
       updateUnits(dt);
     }
     updateFx(dt);
+    compact();
+    musicTick(dt);
   }
 
   function drawToken(key, x, y, r, backup) {
@@ -896,38 +1195,61 @@
   }
 
   function drawZombieFallback(e, r) {
-    ctx.fillStyle = e.boss ? "#5c4d6e" : "#6a7264";
+    ctx.fillStyle = e.boss ? "#5c4d6e" : e.bloater ? "#6a5a32" : e.crawler ? "#4e6a38" : "#6a7264";
     ctx.beginPath();
     ctx.ellipse(0, r * 0.18, r * 0.52, r * 0.62, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#9aa18c";
+    ctx.fillStyle = e.spitter ? "#d6e27a" : "#9aa18c";
     ctx.beginPath();
     ctx.arc(0, -r * 0.32, r * 0.4, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = "#ff2a3a";
     ctx.fillRect(-r * 0.18, -r * 0.4, r * 0.1, r * 0.08);
     ctx.fillRect(r * 0.08, -r * 0.38, r * 0.1, r * 0.08);
-    ctx.fillStyle = "#7a2430";
-    ctx.fillRect(-r * 0.05, r * 0.1, r * 0.32, r * 0.1);
   }
+
+  function spriteFilter(e) {
+    let f = "";
+    if (e.type === "tank") f = "brightness(0.78)";
+    else if (e.type === "crawler") f = "hue-rotate(78deg) saturate(1.35) brightness(1.05)";
+    else if (e.type === "spitter") f = "hue-rotate(46deg) saturate(1.5) brightness(1.08)";
+    else if (e.type === "shrieker") f = "hue-rotate(235deg) saturate(1.25) brightness(1.08)";
+    else if (e.type === "bloater") f = "hue-rotate(12deg) saturate(1.45) brightness(0.92)";
+    if (e.elite) f = (f ? f + " " : "") + "sepia(0.55) saturate(1.7) brightness(1.12)";
+    return f || "none";
+  }
+
+  const RING = {
+    walker: "#6e3038", runner: "#e6dc78", tank: "#8aa0b8", brute: "#c8b498", boss: "#c49bff",
+    crawler: "#9be36a", spitter: "#d2f25a", shrieker: "#d7b3ff", bloater: "#e0a15c",
+  };
 
   function drawUnit(u) {
     const h = HEROES[u.kind];
     const r = u.named ? 5.05 : 4.35;
-    const bob = Math.sin(u.walk * 1.35) * (reduceMotion ? 0 : 0.3);
-    const x = u.x;
-    const y = u.y + bob;
+    const moving = (u.step || 0) > 0.05 && !reduceMotion;
+    const bob = reduceMotion ? 0 : Math.sin(u.walk * 1.55) * (moving ? 0.5 : 0.1);
+    const breathe = !u.combat && !moving && !reduceMotion ? Math.sin(u.idle * 1.7) * 0.045 : 0;
+    const tilt = moving ? Math.cos(u.facing) * 0.2 : 0;
+    const lx = Math.cos(u.facing) * (u.lunge || 0) * 1.25;
+    const ly = Math.sin(u.facing) * (u.lunge || 0) * 1.25;
+    const x = u.x + lx;
+    const y = u.y + bob + ly;
     ctx.fillStyle = "rgba(0,0,0,0.38)";
     ctx.beginPath();
-    ctx.ellipse(u.x, u.y + r * 0.8, r * 0.7, r * 0.24, 0, 0, Math.PI * 2);
+    ctx.ellipse(u.x, u.y + r * 0.82, r * (moving ? 0.78 : 0.64), r * 0.22, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(tilt);
+    ctx.scale(1 + breathe * 0.45, 1 + breathe);
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fillStyle = "#10131b";
     ctx.fill();
-    drawToken(u.kind, x, y, r, (rr) => drawHeroFallback(h, rr));
+    drawToken(u.kind, 0, 0, r, (rr) => drawHeroFallback(h, rr));
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.strokeStyle = h.accent;
     ctx.globalAlpha = u.named ? 1 : 0.8;
     ctx.lineWidth = u.named ? 0.48 : 0.28;
@@ -936,9 +1258,10 @@
     if (u.named) {
       ctx.fillStyle = h.accent;
       ctx.beginPath();
-      ctx.arc(x + r * 0.64, y - r * 0.64, 0.48, 0, Math.PI * 2);
+      ctx.arc(r * 0.64, -r * 0.64, 0.48, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.restore();
     const fx = Math.cos(u.facing), fy = Math.sin(u.facing);
     ctx.strokeStyle = h.accent;
     ctx.lineWidth = 0.4;
@@ -947,34 +1270,77 @@
     ctx.lineTo(x + fx * (r + 1.7), y + fy * (r + 1.7));
     ctx.stroke();
     if (u.muzzle > 0) {
-      ctx.globalAlpha = Math.min(1, u.muzzle / 0.08);
-      ctx.fillStyle = "#fff4cc";
+      const a = Math.min(1, u.muzzle / 0.1);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = "#fff6d4";
       ctx.beginPath();
-      ctx.arc(x + fx * (r + 1.4), y + fy * (r + 1.4), 0.62, 0, Math.PI * 2);
+      ctx.arc(x + fx * (r + 1.55), y + fy * (r + 1.55), 0.9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = a * 0.4;
+      ctx.fillStyle = h.accent;
+      ctx.beginPath();
+      ctx.arc(x + fx * (r + 2.35), y + fy * (r + 2.35), 1.45, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
     }
   }
 
   function drawEnemy(e) {
-    const bob = Math.sin(e.walk * (e.runner ? 2.2 : 1.45)) * (reduceMotion ? 0 : 0.22);
-    const x = e.x;
-    const y = e.y + bob;
-    const r = e.r * 1.38;
+    const dx = BASE.x - e.x;
+    const dy = BASE.y - e.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const pulse = e.bloater && !reduceMotion ? 1 + Math.sin(state.time * 3 + e.id) * 0.05 : 1;
+    const r = e.r * 1.38 * pulse;
+    if (e.dead) {
+      const k = Math.max(0, e.dying / (e.dyingMax || 0.42));
+      ctx.save();
+      ctx.globalAlpha = k;
+      ctx.translate(e.x, e.y + (1 - k) * e.r * 0.8);
+      if (!reduceMotion) ctx.rotate((1 - k) * 0.45 * (e.side || 1));
+      ctx.scale(0.45 + 0.55 * k, 0.3 + 0.7 * k);
+      drawToken(e.sprite, 0, 0, r, (rr) => drawZombieFallback(e, rr));
+      ctx.restore();
+      return;
+    }
+    const bobF = e.crawler ? 2.5 : e.runner ? 2.2 : 1.45;
+    const bobA = reduceMotion ? 0 : e.crawler ? 0.36 : 0.24;
+    const bob = Math.sin(e.walk * bobF) * bobA;
+    const lunge = (e.lunge || 0) * 0.85;
+    const x = e.x + (dx / dist) * lunge;
+    const y = e.y + bob + (dy / dist) * lunge;
+    const tilt = reduceMotion ? 0 : (dx / dist) * (e.crawler ? 0.22 : 0.14);
     ctx.fillStyle = "rgba(0,0,0,0.42)";
     ctx.beginPath();
     ctx.ellipse(e.x, e.y + r * 0.78, r * 0.72, r * 0.22, 0, 0, Math.PI * 2);
     ctx.fill();
+    if (e.shrieker) {
+      const glow = reduceMotion ? 0.22 : 0.16 + Math.sin(state.time * 3 + e.id) * 0.05;
+      ctx.beginPath();
+      ctx.arc(x, y, e.shriekR, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(196,155,255," + glow + ")";
+      ctx.lineWidth = 0.18;
+      ctx.setLineDash([0.8, 0.75]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
     ctx.save();
-    if (e.type === "tank") ctx.filter = "brightness(0.78)";
-    if (e.flash > 0) ctx.globalAlpha = 0.55;
-    drawToken(e.sprite, x, y, r, (rr) => drawZombieFallback(e, rr));
+    ctx.translate(x, y);
+    ctx.rotate(tilt);
+    ctx.filter = spriteFilter(e);
+    drawToken(e.sprite, 0, 0, r, (rr) => drawZombieFallback(e, rr));
     ctx.restore();
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.strokeStyle = e.boss ? "#c49bff" : e.armored ? "#c8b498" : "#6e3038";
-    ctx.lineWidth = e.boss ? 0.5 : 0.26;
+    ctx.strokeStyle = e.elite ? "#ffd56a" : (RING[e.type] || "#6e3038");
+    ctx.lineWidth = e.boss || e.elite ? 0.5 : 0.28;
     ctx.stroke();
+    if (e.elite) {
+      ctx.beginPath();
+      ctx.arc(x, y, r + 0.55, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255,213,106,0.85)";
+      ctx.lineWidth = 0.22;
+      ctx.stroke();
+    }
     if (e.runner) {
       ctx.strokeStyle = "rgba(230,220,120,0.85)";
       ctx.lineWidth = 0.28;
@@ -983,6 +1349,12 @@
       ctx.lineTo(x - r - 1.5, y + r * 0.45);
       ctx.stroke();
     }
+    if (e.spitter && e.spitCd < 0.45) {
+      ctx.fillStyle = "#eaff9a";
+      ctx.beginPath();
+      ctx.arc(x + (dx / dist) * (r + 0.4), y + (dy / dist) * (r + 0.4), 0.45, 0, Math.PI * 2);
+      ctx.fill();
+    }
     if (e.slowT > 0 || e.stunT > 0) {
       ctx.strokeStyle = e.stunT > 0 ? "rgba(255,255,255,0.9)" : "rgba(196,155,255,0.9)";
       ctx.lineWidth = 0.28;
@@ -990,19 +1362,28 @@
       ctx.arc(x, y, r + 0.4, 0, Math.PI * 2);
       ctx.stroke();
     }
+    if (e.flash > 0) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(0.7, e.flash / 0.1);
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
     const w = r * 2.15;
     const hx = x - w / 2;
-    const hy = y - r - 1.2;
+    const hy = y - r - 1.15;
     ctx.fillStyle = "rgba(0,0,0,0.65)";
     ctx.fillRect(hx, hy, w, 0.48);
-    ctx.fillStyle = e.boss ? "#ff6b8a" : "#c5e38a";
+    ctx.fillStyle = e.elite ? "#ffd56a" : e.boss ? "#ff6b8a" : "#c5e38a";
     ctx.fillRect(hx, hy, w * Math.max(0, e.hp / e.max), 0.48);
     if (e.boss) {
       ctx.fillStyle = "#f3e9ff";
       ctx.font = "700 2.4px Passion One, Impact, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
-      ctx.fillText("GRAVEKING", x, hy - 0.2);
+      ctx.fillText(state.wave === FINALE ? "LAST KING" : "GRAVEKING", x, hy - 0.2);
     }
   }
 
@@ -1072,21 +1453,32 @@
       ctx.fillStyle = "#7f8ea3";
       ctx.fillRect(BASE.r * 0.95, -0.28, 1.3, 0.56);
       ctx.restore();
+      if (state.turretFlash > 0) {
+        ctx.save();
+        ctx.translate(BASE.x, BASE.y);
+        ctx.rotate(state.turretAng);
+        ctx.globalAlpha = Math.min(1, state.turretFlash / 0.08);
+        ctx.fillStyle = "#fff4cc";
+        ctx.beginPath();
+        ctx.arc(BASE.r * 0.95 + 1.35, 0, 0.7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
     }
     const frac = Math.max(0, state.baseHp / state.baseMax);
     ctx.beginPath();
     ctx.arc(BASE.x, BASE.y, BASE.r + 1.7 + state.ups.wall * 0.25, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac);
     ctx.strokeStyle = frac < 0.3 ? "#ff5d6c" : "#7dffb3";
-    ctx.lineWidth = 0.72;
+    ctx.lineWidth = 0.85;
     ctx.stroke();
     ctx.fillStyle = "#f4f1ea";
     ctx.font = "700 3px Passion One, Impact, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("GATE", BASE.x, BASE.y - 0.7);
-    ctx.font = "700 2.15px sans-serif";
+    ctx.fillText("GATE", BASE.x, BASE.y - 1.05);
+    ctx.font = "700 2.45px sans-serif";
     ctx.fillStyle = frac < 0.3 ? "#ff8d98" : "#d9ffe8";
-    ctx.fillText(String(Math.max(0, Math.ceil(state.baseHp))), BASE.x, BASE.y + 2.15);
+    ctx.fillText(String(Math.max(0, Math.ceil(state.baseHp))), BASE.x, BASE.y + 1.85);
   }
 
   function resize() {
@@ -1107,6 +1499,8 @@
   function draw() {
     resize();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.filter = "none";
+    ctx.globalAlpha = 1;
     ctx.fillStyle = "#05060a";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const sh = reduceMotion ? 0 : state.shake;
@@ -1135,7 +1529,10 @@
     ctx.fillRect(WORLD_W - 5, 0, 5, WORLD_H);
     drawFence();
     for (const p of patches) drawPatch(p);
-    for (const e of enemies) if (!e.dead) drawEnemy(e);
+    for (const e of enemies) {
+      if (e.dead && e.dying <= 0) continue;
+      drawEnemy(e);
+    }
     drawBase();
     for (const b of bolts) {
       ctx.strokeStyle = b.color;
@@ -1151,6 +1548,16 @@
       ctx.arc(p.x, p.y, 0.65, 0, Math.PI * 2);
       ctx.fill();
     }
+    for (const p of spits) {
+      ctx.fillStyle = "rgba(214,255,106,0.35)";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 1.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#eaff9a";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 0.55, 0, Math.PI * 2);
+      ctx.fill();
+    }
     for (const f of flashes) {
       ctx.globalAlpha = Math.max(0, f.life / f.max);
       ctx.strokeStyle = f.color;
@@ -1162,7 +1569,7 @@
     }
     ctx.globalAlpha = 1;
     for (const ring of rings) {
-      ctx.globalAlpha = Math.max(0, ring.life / 0.32);
+      ctx.globalAlpha = Math.max(0, ring.life / 0.4);
       ctx.strokeStyle = ring.color;
       ctx.lineWidth = 0.32;
       ctx.beginPath();
@@ -1203,30 +1610,48 @@
     return lv ? "Sentry hits for " + [0, 11, 18, 28][lv] : "Not built";
   }
 
+  function modLine() {
+    const parts = [];
+    for (const p of PERKS) {
+      const c = state.mods[p.id] || 0;
+      if (!c) continue;
+      parts.push(c > 1 ? p.short + " x" + c : p.short);
+    }
+    return parts.join("  ·  ");
+  }
+
   function syncHud() {
-    $("hp").textContent = String(Math.max(0, Math.ceil(state.baseHp)));
+    const hpNow = Math.max(0, Math.ceil(state.baseHp));
+    $("hp").textContent = String(hpNow);
+    $("hpLabel").textContent = "/ " + state.baseMax + " HP";
     $("cash").textContent = String(state.cash);
     $("waveNum").textContent = String(state.wave);
-    const frac = Math.max(0, state.baseHp / state.baseMax);
+    $("waveOf").textContent = "/ " + FINALE;
+    const frac = state.baseMax > 0 ? Math.max(0, state.baseHp / state.baseMax) : 0;
     $("hpFill").style.transform = "scaleX(" + frac + ")";
     $("hpPill").classList.toggle("low", frac < 0.3);
-    const spec = WAVES[state.wave - 1];
+    const spec = stageSpec(state.wave);
     $("waveName").textContent = spec.name;
     const tag = $("waveTag");
-    if (spec.boss) { tag.textContent = "BOSS"; tag.className = "tag boss"; }
+    if (spec.finale) { tag.textContent = "FINALE"; tag.className = "tag boss"; }
+    else if (spec.boss) { tag.textContent = "BOSS"; tag.className = "tag boss"; }
     else if (spec.challenge) { tag.textContent = "CHALLENGE"; tag.className = "tag chal"; }
     else { tag.textContent = ""; tag.className = "tag"; }
     if (state.phase === "fight") {
-      const left = state.spawnQ.length + enemies.filter((e) => !e.dead).length;
-      $("waveBlurb").textContent = left + " left in the wave";
-    } else if (state.phase === "shop") {
-      $("waveBlurb").textContent = spec.blurb;
-    }
-    $("mods").textContent = state.modLabels.join("  ·  ");
+      let left = state.spawnQ.length + spits.length;
+      for (const e of enemies) if (!e.dead) left++;
+      $("waveBlurb").textContent = left + " still in the stage";
+    } else if (state.phase === "paused") $("waveBlurb").textContent = "Paused";
+    else if (state.phase === "brief") $("waveBlurb").textContent = "Between stages";
+    else if (state.phase === "won") $("waveBlurb").textContent = "The gate held.";
+    else if (state.phase === "lost") $("waveBlurb").textContent = "The gate fell.";
+    else if (state.phase === "shop") $("waveBlurb").textContent = spec.blurb;
+    else $("waveBlurb").textContent = "";
+    $("mods").textContent = modLine();
     const next = $("next");
     next.disabled = state.phase !== "shop";
-    next.textContent = state.phase === "fight" ? "HOLDING" : (state.wave === 1 && !state.sent ? "START WAVE" : "NEXT WAVE");
-    const locked = state.phase === "pick" || state.phase === "won" || state.phase === "lost";
+    next.textContent = state.phase === "fight" ? "HOLDING" : "START WAVE";
+    const locked = state.phase === "won" || state.phase === "lost" || state.phase === "brief" || state.phase === "paused" || state.phase === "title" || state.phase === "pick";
     for (const id of ORDER) {
       const btn = rosterButtons[id];
       const cost = priceOf(id);
@@ -1250,6 +1675,7 @@
       btn.querySelector(".fx").textContent = upEffect(id, lv);
       btn.classList.toggle("broke", locked || maxed || state.cash < (maxed ? 1e9 : up.costs[lv]));
     }
+    $("pauseBtn").textContent = state.phase === "paused" ? "RESUME" : "PAUSE";
   }
 
   function toast(msg) {
@@ -1261,7 +1687,6 @@
   }
 
   function unlock() {
-    if (state.muted) return;
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
@@ -1286,6 +1711,152 @@
     } catch (err) { /* ignore */ }
   }
 
+  function setMusicMuted(muted) {
+    if (!music || !audioCtx) return;
+    const t = audioCtx.currentTime || 0;
+    try {
+      music.master.gain.cancelScheduledValues(t);
+      music.master.gain.setTargetAtTime(muted ? 0.0001 : MUSIC_GAIN, t, 0.06);
+    } catch (err) {
+      music.master.gain.value = muted ? 0.0001 : MUSIC_GAIN;
+    }
+  }
+
+  function buildMusic() {
+    const master = audioCtx.createGain();
+    master.gain.value = state.muted ? 0.0001 : MUSIC_GAIN;
+    master.connect(audioCtx.destination);
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 480;
+    filter.Q.value = 0.45;
+    filter.connect(master);
+    function osc(freq, gain) {
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = "sine";
+      o.frequency.value = freq;
+      g.gain.value = gain;
+      o.connect(g);
+      g.connect(filter);
+      o.start();
+      return { o: o, g: g };
+    }
+    const a = osc(73.42, 0.22);
+    osc(110, 0.1);
+    osc(146.83, 0.035);
+    const lfo = audioCtx.createOscillator();
+    lfo.frequency.value = 0.05;
+    const lfoG = audioCtx.createGain();
+    lfoG.gain.value = 0.045;
+    lfo.connect(lfoG);
+    lfoG.connect(a.g.gain);
+    lfo.start();
+    const drift = audioCtx.createOscillator();
+    drift.frequency.value = 0.028;
+    const driftG = audioCtx.createGain();
+    driftG.gain.value = 0.3;
+    drift.connect(driftG);
+    driftG.connect(a.o.frequency);
+    drift.start();
+    try {
+      const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
+      const data = buf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < data.length; i++) {
+        const white = Math.random() * 2 - 1;
+        last = last * 0.97 + white * 0.03;
+        data[i] = last * 2.2;
+      }
+      const noise = audioCtx.createBufferSource();
+      noise.buffer = buf;
+      noise.loop = true;
+      const bp = audioCtx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = 280;
+      bp.Q.value = 0.65;
+      const ng = audioCtx.createGain();
+      ng.gain.value = 0.04;
+      noise.connect(bp);
+      bp.connect(ng);
+      ng.connect(master);
+      noise.start();
+    } catch (err) { /* drone still plays */ }
+    music = { master: master, nextHigh: 3.2 + Math.random() * 2.5 };
+  }
+
+  function startMusic() {
+    if (state.muted || !state.runLive) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!audioCtx) audioCtx = new AC();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      if (music) { setMusicMuted(false); return; }
+      buildMusic();
+    } catch (err) { music = null; }
+  }
+
+  function playTone(freq, when, dur, peak) {
+    if (!audioCtx || state.muted) return;
+    try {
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      const f = audioCtx.createBiquadFilter();
+      f.type = "lowpass";
+      f.frequency.value = 1700;
+      o.type = "sine";
+      o.frequency.value = freq;
+      const dest = music && music.master ? music.master : audioCtx.destination;
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), when + Math.min(0.12, dur * 0.25));
+      g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+      o.connect(f);
+      f.connect(g);
+      g.connect(dest);
+      o.start(when);
+      o.stop(when + dur + 0.02);
+    } catch (err) { /* ignore */ }
+  }
+
+  function softTone() {
+    const notes = [523.25, 622.25, 698.46, 783.99, 932.33];
+    const freq = notes[(Math.random() * notes.length) | 0];
+    playTone(freq, audioCtx.currentTime || 0, 2.8, 0.12);
+  }
+
+  function bossSting() {
+    if (!audioCtx || state.muted) return;
+    const now = audioCtx.currentTime || 0;
+    playTone(196, now, 0.55, 0.16);
+    playTone(155.56, now + 0.2, 0.7, 0.13);
+    playTone(130.81, now + 0.4, 0.95, 0.11);
+    playTone(880, now + 0.12, 0.32, 0.045);
+  }
+
+  function musicTick(dt) {
+    if (!music || state.muted || !audioCtx) return;
+    if (state.phase === "paused" || state.phase === "title") return;
+    music.nextHigh -= dt;
+    if (music.nextHigh <= 0) {
+      music.nextHigh = 6.5 + Math.random() * 7;
+      softTone();
+    }
+  }
+
+  function syncSoundLabels() {
+    $("mute").textContent = state.muted ? "OFF" : "SND";
+    $("titleMute").textContent = state.muted ? "SOUND OFF" : "SOUND ON";
+  }
+
+  function onMute() {
+    state.muted = !state.muted;
+    syncSoundLabels();
+    if (state.muted) { setMusicMuted(true); return; }
+    unlock();
+    if (state.runLive) startMusic();
+  }
+
   function applyPerk(id) {
     if (id === "dmg") state.dmgMult *= 1.2;
     else if (id === "rate") state.rateMult *= 1.16;
@@ -1296,11 +1867,14 @@
     else if (id === "gate") {
       state.baseMax += 30;
       state.baseHp = Math.min(state.baseMax, state.baseHp + 30);
-    } else if (id === "cash") state.cash += 45;
+    } else if (id === "cash") {
+      state.cash += 45;
+      state.earned += 45;
+    }
   }
 
   function rollPerks() {
-    const pool = PERKS.filter((p) => state.taken.indexOf(p.id) === -1);
+    const pool = PERKS.slice();
     for (let i = pool.length - 1; i > 0; i--) {
       const j = (Math.random() * (i + 1)) | 0;
       const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
@@ -1308,61 +1882,154 @@
     return pool.slice(0, 3);
   }
 
-  function choosePerk(perk) {
-    applyPerk(perk.id);
-    state.taken.push(perk.id);
-    state.modLabels.push(perk.short);
-    state.phase = "shop";
-    state.offer = [];
-    $("overlay").classList.add("hidden");
-    toast(perk.name);
-  }
-
-  function openPick() {
-    state.phase = "pick";
-    const choices = rollPerks();
-    state.offer = choices;
-    $("ovTitle").textContent = "Between waves";
-    $("ovBody").textContent = "Pick one free upgrade. Base gear is still bought with cash.";
+  function renderPerks() {
     const box = $("ovChoices");
     box.innerHTML = "";
+    const choices = rollPerks();
+    state.offer = choices;
     for (const perk of choices) {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "choice";
-      b.innerHTML = "<b>" + perk.name + "</b><span>" + perk.desc + "</span>";
-      b.addEventListener("click", () => choosePerk(perk));
+      const strong = document.createElement("b");
+      strong.textContent = perk.name;
+      const span = document.createElement("span");
+      span.textContent = perk.desc;
+      b.appendChild(strong);
+      b.appendChild(span);
+      b.addEventListener("click", () => {
+        if (state.perkPicked) return;
+        applyPerk(perk.id);
+        state.mods[perk.id] = (state.mods[perk.id] || 0) + 1;
+        state.perkPicked = true;
+        $("ovBtn").disabled = false;
+        const kids = box.children;
+        for (let i = 0; i < kids.length; i++) kids[i].disabled = true;
+        b.disabled = false;
+        b.classList.add("picked");
+        toast(perk.name);
+        blip(520, 0.07, "square", 0.03);
+      });
       box.appendChild(b);
     }
-    $("ovBtn").hidden = true;
+  }
+
+  function fillDebuts(list) {
+    const box = $("ovDebut");
+    box.innerHTML = "";
+    if (!list.length) { box.hidden = true; return; }
+    box.hidden = false;
+    for (const d of list) {
+      const row = document.createElement("div");
+      row.className = "debut";
+      const b = document.createElement("b");
+      b.textContent = "New · " + d.name;
+      const s = document.createElement("span");
+      s.textContent = d.line;
+      row.appendChild(b);
+      row.appendChild(s);
+      box.appendChild(row);
+    }
+  }
+
+  function fillSummary() {
+    const box = $("ovSummary");
+    box.hidden = false;
+    box.innerHTML = "";
+    const rows = [
+      [String(state.wave), "Stage reached"],
+      [String(state.kills), "Kills"],
+      ["$" + state.earned, "Cash earned"],
+    ];
+    for (const pair of rows) {
+      const d = document.createElement("div");
+      d.className = "sum";
+      const b = document.createElement("b");
+      b.textContent = pair[0];
+      const s = document.createElement("span");
+      s.textContent = pair[1];
+      d.appendChild(b);
+      d.appendChild(s);
+      box.appendChild(d);
+    }
+  }
+
+  function openBrief(withPerk) {
+    const spec = stageSpec(state.wave);
+    state.phase = "brief";
+    state.perkDue = !!withPerk;
+    state.perkPicked = !withPerk;
+    const kind = spec.finale ? "FINALE" : spec.boss ? "BOSS" : spec.challenge ? "CHALLENGE" : "NEXT";
+    $("ovKicker").textContent = "STAGE " + state.wave + "  ·  " + kind;
+    $("ovTitle").textContent = spec.name;
+    $("ovBody").textContent = spec.blurb;
+    fillDebuts(debutsOn(state.wave));
+    $("ovPerk").hidden = !withPerk;
+    $("ovSummary").hidden = true;
+    $("ovHint").hidden = false;
+    $("ovHint").textContent = "Continue, gear up, then start the wave. It will not start on its own.";
+    $("ovChoices").innerHTML = "";
+    if (withPerk) renderPerks();
+    $("ovBtn").hidden = false;
+    $("ovBtn").disabled = !!withPerk;
+    $("ovBtn").textContent = "CONTINUE";
     $("ovRestart").hidden = false;
+    bolts.length = 0;
+    lobs.length = 0;
+    patches.length = 0;
+    $("pauseScreen").classList.add("hidden");
+    $("overlay").classList.add("splash");
+    $("overlay").classList.remove("hidden");
+  }
+
+  function dismissBrief() {
+    if (state.phase !== "brief") return;
+    if (state.perkDue && !state.perkPicked) return;
+    state.phase = "shop";
+    $("overlay").classList.add("hidden");
+  }
+
+  function showEnd(kind) {
+    spits.length = 0;
+    bolts.length = 0;
+    lobs.length = 0;
+    patches.length = 0;
+    $("ovKicker").textContent = kind === "won" ? "CLEARED" : "BREACHED";
+    $("ovTitle").textContent = kind === "won" ? "The gate holds" : "Gate breached";
+    $("ovBody").textContent = kind === "won"
+      ? "One hundred stages. The Graveking is down. The center is still yours."
+      : "The center fell on stage " + state.wave + ", " + stageSpec(state.wave).name + ".";
+    $("ovDebut").hidden = true;
+    $("ovDebut").innerHTML = "";
+    $("ovPerk").hidden = true;
+    $("ovChoices").innerHTML = "";
+    $("ovHint").hidden = true;
+    fillSummary();
+    $("ovBtn").hidden = false;
+    $("ovBtn").disabled = false;
+    $("ovBtn").textContent = "PLAY AGAIN";
+    $("ovRestart").hidden = true;
+    $("pauseScreen").classList.add("hidden");
+    $("overlay").classList.add("splash");
     $("overlay").classList.remove("hidden");
   }
 
   function win() {
+    if (state.phase === "won" || state.phase === "lost") return;
     state.phase = "won";
-    $("ovTitle").textContent = "Compound stands";
-    $("ovBody").textContent = "All 10 waves are down, Graveking included. Base left at " + Math.ceil(state.baseHp) + ".";
-    $("ovChoices").innerHTML = "";
-    $("ovBtn").hidden = false;
-    $("ovRestart").hidden = true;
-    $("overlay").classList.remove("hidden");
+    showEnd("won");
   }
 
   function lose() {
     if (state.phase === "lost" || state.phase === "won") return;
     state.phase = "lost";
     state.baseHp = 0;
-    $("ovTitle").textContent = "Gate breached";
-    $("ovBody").textContent = "The center fell on wave " + state.wave + ". The yard is theirs.";
-    $("ovChoices").innerHTML = "";
-    $("ovBtn").hidden = false;
-    $("ovRestart").hidden = true;
-    $("overlay").classList.remove("hidden");
+    showEnd("lost");
   }
 
-  function restart() {
+  function resetRun() {
     const muted = state.muted;
+    const live = state.runLive;
     units.length = 0;
     enemies.length = 0;
     bolts.length = 0;
@@ -1372,16 +2039,40 @@
     rings.length = 0;
     particles.length = 0;
     floaters.length = 0;
+    spits.length = 0;
     const next = freshState();
     next.muted = muted;
+    next.runLive = live;
     Object.assign(state, next);
     addUnit("vera");
     addUnit("roxie");
     layoutHomes();
+    syncSoundLabels();
+  }
+
+  function startRun() {
+    resetRun();
+    state.runLive = true;
+    $("titleScreen").classList.add("hidden");
     $("overlay").classList.add("hidden");
-    $("ovChoices").innerHTML = "";
-    $("mute").textContent = state.muted ? "OFF" : "SND";
+    $("pauseScreen").classList.add("hidden");
+    $("pauseBtn").textContent = "PAUSE";
     toast("Vera and Roxie hold the yard.");
+  }
+
+  function togglePause() {
+    if (state.phase === "paused") {
+      state.phase = state.pausedFrom || "fight";
+      state.pausedFrom = null;
+      $("pauseScreen").classList.add("hidden");
+      $("pauseBtn").textContent = "PAUSE";
+      return;
+    }
+    if (state.phase !== "fight" && state.phase !== "shop") return;
+    state.pausedFrom = state.phase;
+    state.phase = "paused";
+    $("pauseScreen").classList.remove("hidden");
+    $("pauseBtn").textContent = "RESUME";
   }
 
   function buildRoster() {
@@ -1418,15 +2109,27 @@
     }
   }
 
-  $("next").addEventListener("click", () => { unlock(); startWave(); });
-  $("restart").addEventListener("click", () => { unlock(); restart(); });
-  $("ovBtn").addEventListener("click", () => restart());
-  $("ovRestart").addEventListener("click", () => restart());
-  $("mute").addEventListener("click", () => {
-    state.muted = !state.muted;
-    $("mute").textContent = state.muted ? "OFF" : "SND";
-    if (!state.muted) unlock();
+  $("play").addEventListener("click", () => {
+    unlock();
+    startRun();
+    startMusic();
   });
+  $("titleMute").addEventListener("click", () => { unlock(); onMute(); });
+  $("next").addEventListener("click", () => { unlock(); startWave(); });
+  $("restart").addEventListener("click", () => {
+    unlock();
+    if (state.phase === "title") return;
+    startRun();
+  });
+  $("ovBtn").addEventListener("click", () => {
+    unlock();
+    if (state.phase === "brief") dismissBrief();
+    else if (state.phase === "won" || state.phase === "lost") startRun();
+  });
+  $("ovRestart").addEventListener("click", () => { unlock(); startRun(); });
+  $("pauseBtn").addEventListener("click", () => togglePause());
+  $("resumeBtn").addEventListener("click", () => togglePause());
+  $("mute").addEventListener("click", () => { unlock(); onMute(); });
   document.addEventListener("pointerdown", () => unlock(), { passive: true });
   window.addEventListener("keydown", (ev) => {
     if (ev.repeat) return;
@@ -1439,17 +2142,17 @@
     else if (ev.key === "5") buyUp("wall");
     else if (ev.key === "6") buyUp("aura");
     else if (ev.key === "7") buyUp("turret");
-    else if (ev.key === "r" || ev.key === "R") restart();
-    else if (ev.key === "m" || ev.key === "M") $("mute").click();
+    else if (ev.key === "r" || ev.key === "R") { if (state.phase !== "title") startRun(); }
+    else if (ev.key === "m" || ev.key === "M") onMute();
+    else if (ev.key === "p" || ev.key === "P" || ev.key === "Escape") togglePause();
   });
   if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => resize()).observe(stage);
   else window.addEventListener("resize", resize);
 
-
   loadSprites();
   buildRoster();
   buildUps();
-  restart();
+  syncSoundLabels();
 
   let last = 0;
   function frame(ts) {
@@ -1462,4 +2165,5 @@
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+
 })();

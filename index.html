@@ -12,9 +12,10 @@
     <header>
       <div class="brand">LAST<span>GATE</span><small>HOLD THE COMPOUND</small></div>
       <div class="stats">
-        <div class="pill hp" id="hpPill"><b id="hp">200</b><small>BASE</small><span class="bar"><i id="hpFill"></i></span></div>
+        <div class="pill hp" id="hpPill"><b id="hp">200</b><small id="hpLabel">/ 200 HP</small><span class="bar"><i id="hpFill"></i></span></div>
         <div class="pill gold"><b id="cash">100</b><small>CASH</small></div>
-        <div class="pill wave"><b id="waveNum">1</b><small>/ 10</small></div>
+        <div class="pill wave"><b id="waveNum">1</b><small id="waveOf">/ 100</small></div>
+        <button id="pauseBtn" type="button" aria-label="Pause">PAUSE</button>
       </div>
     </header>
     <div id="main">
@@ -35,7 +36,7 @@
         <div id="roster" aria-label="Hire heroines"></div>
         <h3 class="section">Base upgrades</h3>
         <div id="baseShop" aria-label="Passive base upgrades"></div>
-        <p id="hint">Heroes walk and shoot on their own. Rotters come from every edge. Hold the center for 10 waves.</p>
+        <p id="hint">Heroes walk and shoot on their own. The dead come from every edge. Clear 100 stages. Every tenth is a boss.</p>
         <div id="bar">
           <button id="restart" type="button" class="ghost">RESTART</button>
           <button id="mute" type="button" aria-label="Toggle sound">SND</button>
@@ -43,13 +44,40 @@
       </section>
     </div>
   </div>
+
+  <div id="titleScreen">
+    <div class="titleCard">
+      <p class="kicker">COMPOUND DEFENSE</p>
+      <h1>LAST<br><span>GATE</span></h1>
+      <p class="tagline">Four of them hold the center. The dead come from every side.</p>
+      <button id="play" type="button">PLAY</button>
+      <button id="titleMute" type="button">SOUND ON</button>
+    </div>
+  </div>
+
+  <div id="pauseScreen" class="hidden">
+    <div class="panel">
+      <p class="kicker">HOLD</p>
+      <h2>Paused</h2>
+      <p>The yard waits. Nothing moves until you come back.</p>
+      <button id="resumeBtn" type="button">RESUME</button>
+    </div>
+  </div>
+
   <div id="overlay" class="hidden">
     <div class="panel" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
+      <p id="ovKicker" class="kicker"></p>
       <h2 id="ovTitle"></h2>
       <p id="ovBody"></p>
+      <div id="ovDebut" hidden></div>
+      <p id="ovPerk" hidden>Pick one. It stays for the run.</p>
       <div id="ovChoices"></div>
-      <button id="ovBtn" type="button" hidden>PLAY AGAIN</button>
-      <button id="ovRestart" type="button" class="texty" hidden>Restart run</button>
+      <div id="ovSummary" hidden></div>
+      <p id="ovHint" hidden></p>
+      <div id="ovActions">
+        <button id="ovBtn" type="button" hidden>PLAY AGAIN</button>
+        <button id="ovRestart" type="button" class="texty" hidden>Restart run</button>
+      </div>
     </div>
   </div>
   <script src="js/game.js"></script>

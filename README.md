@@ -1,21 +1,23 @@
 # Last Gate
 
-A phone-first base defense. The compound sits in the center. Zombies walk in from every edge. Your heroines move and shoot. Open `index.html` offline (no build, no network).
+A phone-first compound defense. The gate sits in the center. The dead walk in from every edge. Your heroines move and shoot. Open `index.html` offline. No build, no CDN, no network.
 
 ```bash
 python3 -m http.server 8080
 ```
 
-Then visit `http://localhost:8080`.
+Then visit `http://localhost:8080`. Or just open `index.html` in a browser.
 
 ## How to play
 
-1. The green ring is the base. If it hits 0, you lose. Zombies spawn on all four edges and path straight at it.
-2. You start with Vera, Roxie, and $100. Tap a heroine to hire. The first of each name is the hero. Further copies are the same kit at a lower rank. They walk; they are not towers.
-3. Kills pay cash. Buy Sandbag Wall, Dread Aura, or the Sentry Turret any time during a shop beat or a wave. Levels stick for the run.
-4. Press NEXT WAVE. Clear all 10 waves, including the Graveking, to win. After waves 3, 6, and 9 you pick one free upgrade.
+1. Tap PLAY. You start with Vera, Roxie, and $100. Hire the others when you can. The first of each name is the hero. Further copies are the same kit at a lower rank. They walk and shoot on their own. Squad cap is 10.
+2. Press START WAVE. Zombies come from all four edges toward the gate. Base HP is on the header and on the gate itself. If it hits 0, the run ends.
+3. After a stage, a card names the next one and any new enemy. Pick a perk when it is offered (every 3 stages). Continue, spend cash, then start the wave yourself. It does not auto-start.
+4. Clear stage 100 to win. Every 10th stage is the Graveking. Stage 100 is the finale. Pause and mute sit on the screen.
 
-On a keyboard: `1`–`4` hire, `5` Wall, `6` Aura, `7` Turret, Space sends the wave, `R` restarts, `M` mutes.
+Keyboard: `1`–`4` hire, `5` Wall, `6` Aura, `7` Turret, Space starts the wave, `P` pauses, `R` restarts, `M` mutes.
+
+Sound is a quiet drone made in the browser with the Web Audio API. It starts on PLAY. No music files.
 
 ## Roster
 
@@ -26,11 +28,9 @@ On a keyboard: `1`–`4` hire, `5` Wall, `6` Aura, `7` Turret, Space sends the w
 | Lila Marsh, firebug | $140 | Burn patch. She lobs fire that stays on the ground and cooks whoever stands in it. Extras are Torches (smaller, shorter patch). |
 | Nyx Calder, hex warden | $120 | Hex pulse. Slows a pack. Nyx herself also stuns; a Hexer copy's stun is shorter. |
 
-Squad cap is 10.
-
 ## Base upgrades
 
-Bought with cash. Each has 3 levels. The button shows the level and the next cost.
+Bought with cash, in the shop or during a wave. Each has 3 levels.
 
 | Upgrade | Costs | Effect |
 | --- | --- | --- |
@@ -38,21 +38,25 @@ Bought with cash. Each has 3 levels. The button shows the level and the next cos
 | Dread Aura | $75 / $110 / $155 | Zombies near the gate move at 80% / 66% / 52% speed. |
 | Sentry Turret | $85 / $125 / $175 | The compound shoots the nearest zombie for 11 / 18 / 28 damage. |
 
-## Waves
+## Stages and enemies
 
-1. Shamble — walkers
-2. Pack — more walkers
-3. Strays — walkers and runners
-4. Fast Swarm — challenge: the wave moves faster
-5. Bulwark — walkers and tanks
-6. Crossfire — mixed
-7. Armored Rush — challenge: plated brutes shrug off damage, plus runners
-8. Horde — a walker flood and tanks
-9. Blackout — runners and tanks
-10. Graveking — boss, with an escort
+There are 100 generated stages. Counts, health, and speed climb as you go. A boss or challenge lands every 10th stage (10, 20, … 100). Stage 100 is the finale. Beating it wins the run. From stage 16, a few elites (gold tint, much more health) are mixed into each wave.
 
-After 3, 6, and 9 you pick one of three perks (damage, attack speed, move speed, a heal, a hire discount, range, more base HP, or cash).
+| Enemy | First appears | Behavior |
+| --- | --- | --- |
+| Walker | 1 | The basic dead. Walks in and bites the gate. |
+| Runner | 3 | Lighter and much faster. |
+| Tank | 5 | High health, slow. |
+| Brute | 7 | Armored. Shots glance off. |
+| Graveking | 10, then every 10th | Boss. Huge, hard to slow, brings a court. |
+| Crawler | 12 | Small, fast, and they swarm. |
+| Elite | 16 | Not a species. A tougher tinted copy mixed into later waves. |
+| Spitter | 18 | Stops short of the gate and fires a slow glob at it. |
+| Shrieker | 26 | A wail that speeds up nearby zombies. |
+| Bloater | 34 | Bursts on death. Hurts the gate if it pops close. |
+
+Perks show up on the between-stage card after stages 3, 6, 9, and so on. The same perk can be taken again later in a long run. A loss or a win shows stage reached, kills, and cash earned.
 
 ## Art
 
-Heroines and zombies are the pngs in `assets/`, drawn as circles so the dark photo background is not a rectangle. Do not replace those files from the game. Display type is Passion One (`assets/OFL-PassionOne.txt`).
+Heroines and zombies are the pngs in `assets/`, drawn as circles so the dark photo background is not a rectangle. New enemy types reuse those sprites and are tinted in play. Do not replace those files from the game. Display type is Passion One (`assets/OFL-PassionOne.txt`).
