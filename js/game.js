@@ -268,6 +268,8 @@
   //   assets/base-sprite.png assets/upgrade-wall-sprite.png assets/upgrade-aura-sprite.png assets/upgrade-turret-sprite.png
   // Crawlers, spitters, and shriekers reuse the zombie cutout. Bloaters reuse the brute.
   const sprites = {};
+  const walks = {};
+  const WALK_FRAMES = 4;
   function loadSprites() {
     const files = [
       ["vera", "assets/vera-sprite.png"],
@@ -282,6 +284,13 @@
       ["aura", "assets/upgrade-aura-sprite.png"],
       ["turret", "assets/upgrade-turret-sprite.png"],
     ];
+    for (const key of ["vera", "roxie", "lila", "nyx", "zombie", "brute", "boss"]) {
+      const sheet = new Image();
+      sheet.decoding = "async";
+      sheet.onload = () => { walks[key] = sheet; };
+      sheet.onerror = () => { walks[key] = null; };
+      sheet.src = "assets/" + key + "-walk.png";
+    }
     for (const row of files) {
       const key = row[0];
       const img = new Image();
@@ -1094,7 +1103,14 @@
       }
       return false;
     }
-    const aspect = img.naturalWidth / img.naturalHeight;
+    const sheet = opts.frame != null ? walks[key] : null;
+    const framed = sheet && sheet.complete && sheet.naturalWidth > 0;
+    const src = framed ? sheet : img;
+    const frames = framed ? WALK_FRAMES : 1;
+    const frame = framed ? ((opts.frame % frames) + frames) % frames : 0;
+    const fw = src.naturalWidth / frames;
+    const fh = src.naturalHeight;
+    const aspect = fw / fh;
     let dw, dh, ox, oy;
     if (opts.anchor === "center") {
       if (aspect >= 1) { dw = size; dh = size / aspect; }
@@ -1115,11 +1131,11 @@
     const alpha = opts.alpha == null ? ctx.globalAlpha : opts.alpha;
     ctx.globalAlpha = alpha;
     if (opts.filter && opts.filter !== "none") ctx.filter = opts.filter;
-    ctx.drawImage(img, ox, oy, dw, dh);
+    ctx.drawImage(src, frame * fw, 0, fw, fh, ox, oy, dw, dh);
     if (flash > 0.02) {
       ctx.filter = "brightness(0) invert(1)";
       ctx.globalAlpha = alpha * Math.min(0.9, flash);
-      ctx.drawImage(img, ox, oy, dw, dh);
+      ctx.drawImage(src, frame * fw, 0, fw, fh, ox, oy, dw, dh);
     }
     ctx.restore();
     return true;
@@ -1190,11 +1206,14 @@
     ctx.beginPath();
     ctx.ellipse(x, y + 0.35, height * 0.16, height * 0.045, 0, 0, Math.PI * 2);
     ctx.fill();
+    const face = Math.cos(u.facing || 0) >= 0 ? 1 : -1;
+    const frame = (!moving || reduceMotion) ? 1 : (Math.floor(u.walk * 7) % WALK_FRAMES);
     drawSprite(u.kind, x, y, height, {
-      bob: bob,
-      rot: lean + attack * 0.32 * (Math.cos(u.facing || 0) >= 0 ? 1 : -1),
-      sx: 1 + squash * 0.06,
-      sy: 1 - squash * 0.05,
+      frame: frame,
+      bob: moving ? bob * 0.25 : 0,
+      rot: attack * 0.16 * face,
+      sx: face * (1 + (moving ? squash * 0.03 : 0)),
+      sy: 1,
       backup: (rr) => drawHeroFallback(h, rr),
     });
     if (u.named) {
@@ -1271,11 +1290,15 @@
       ctx.setLineDash([]);
     }
     const flash = e.flash > 0 ? Math.min(1, e.flash / 0.18) : 0;
+    const face = dx >= 0 ? 1 : -1;
+    const rate = e.crawler ? 10 : e.runner ? 8.5 : e.boss ? 4.2 : 5.5;
+    const frame = reduceMotion ? 1 : (Math.floor(e.walk * rate) % WALK_FRAMES);
     drawSprite(e.sprite, x, y, height, {
-      bob: bob,
-      rot: lean + attack * 0.34 * (dx >= 0 ? 1 : -1),
-      sx: 1 + squash * 0.055 + flash * 0.03,
-      sy: 1 - squash * 0.045,
+      frame: frame,
+      bob: bob * 0.2,
+      rot: attack * 0.2 * face,
+      sx: face * (1 + flash * 0.03),
+      sy: 1,
       filter: spriteFilter(e),
       flash: flash,
       backup: (rr) => drawZombieFallback(e, rr),
