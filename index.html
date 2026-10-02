@@ -5,25 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#07080d">
   <title>Last Gate</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=3">
 </head>
 <body>
   <div id="app">
-    <header>
-      <div class="brand">LAST<span>GATE</span><small>HOLD THE COMPOUND</small></div>
-      <div class="stats">
-        <div class="pill hp" id="hpPill"><b id="hp">200</b><small id="hpLabel">/ 200 HP</small><span class="bar"><i id="hpFill"></i></span></div>
-        <div class="pill gold"><b id="cash">100</b><small>CASH</small></div>
-        <div class="pill wave"><b id="waveNum">1</b><small id="waveOf">/ 100</small></div>
+    <div id="stage">
+      <canvas id="game" aria-label="Compound. The base is in the center. Zombies come from every edge."></canvas>
+      <div id="toast" role="status"></div>
+      <header id="topbar">
+        <div class="stats">
+          <div class="pill hp" id="hpPill"><b id="hp">200</b><small id="hpLabel">/ 200 HP</small><span class="bar"><i id="hpFill"></i></span></div>
+          <div class="pill gold"><b id="cash">100</b><small>CASH</small></div>
+          <div class="pill wave"><b id="waveNum">1</b><small id="waveOf">/ 100</small></div>
+        </div>
         <button id="pauseBtn" type="button" aria-label="Pause">PAUSE</button>
-      </div>
-    </header>
-    <div id="main">
-      <div id="stage">
-        <canvas id="game" aria-label="Compound. The base is in the center. Zombies come from every edge."></canvas>
-        <div id="toast" role="status"></div>
-      </div>
+        <button id="mute" type="button" aria-label="Toggle sound">SND</button>
+      </header>
       <section id="dock">
+        <div id="roster" aria-label="Hire heroines"></div>
+        <div id="baseShop" aria-label="Passive base upgrades"></div>
         <div id="waveRow">
           <div class="waveCopy">
             <div class="waveTitle"><span id="waveTag" class="tag"></span><b id="waveName">Shamble</b></div>
@@ -32,14 +32,9 @@
           </div>
           <button id="next" type="button">START WAVE</button>
         </div>
-        <h3 class="section">Squad</h3>
-        <div id="roster" aria-label="Hire heroines"></div>
-        <h3 class="section">Base upgrades</h3>
-        <div id="baseShop" aria-label="Passive base upgrades"></div>
         <p id="hint">Heroes walk and shoot on their own. The dead come from every edge. Clear 100 stages. Every tenth is a boss.</p>
         <div id="bar">
           <button id="restart" type="button" class="ghost">RESTART</button>
-          <button id="mute" type="button" aria-label="Toggle sound">SND</button>
         </div>
       </section>
     </div>
@@ -80,6 +75,6 @@
       </div>
     </div>
   </div>
-  <script src="js/game.js"></script>
+  <script src="js/game.js?v=3"></script>
 </body>
 </html>

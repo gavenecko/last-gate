@@ -9,7 +9,7 @@
   const CAP = 10;
   const FINALE = 100;
   const ORDER = ["vera", "roxie", "lila", "nyx"];
-  const MUSIC_GAIN = 0.26;
+  const MUSIC_GAIN = 0.78;
 
   const HEROES = {
     vera: {
@@ -1728,8 +1728,8 @@
     master.connect(audioCtx.destination);
     const filter = audioCtx.createBiquadFilter();
     filter.type = "lowpass";
-    filter.frequency.value = 480;
-    filter.Q.value = 0.45;
+    filter.frequency.value = 1400;
+    filter.Q.value = 0.4;
     filter.connect(master);
     function osc(freq, gain) {
       const o = audioCtx.createOscillator();
@@ -1742,9 +1742,10 @@
       o.start();
       return { o: o, g: g };
     }
-    const a = osc(73.42, 0.22);
-    osc(110, 0.1);
-    osc(146.83, 0.035);
+    const a = osc(73.42, 0.34);
+    osc(110, 0.2);
+    osc(146.83, 0.14);
+    osc(220, 0.09);
     const lfo = audioCtx.createOscillator();
     lfo.frequency.value = 0.05;
     const lfoG = audioCtx.createGain();
@@ -1776,7 +1777,7 @@
       bp.frequency.value = 280;
       bp.Q.value = 0.65;
       const ng = audioCtx.createGain();
-      ng.gain.value = 0.04;
+      ng.gain.value = 0.09;
       noise.connect(bp);
       bp.connect(ng);
       ng.connect(master);
@@ -1786,12 +1787,15 @@
   }
 
   function startMusic() {
-    if (state.muted || !state.runLive) return;
+    if (state.muted) return;
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
       if (!audioCtx) audioCtx = new AC();
-      if (audioCtx.state === "suspended") audioCtx.resume();
+      if (audioCtx.state === "suspended") {
+        const pending = audioCtx.resume();
+        if (pending && typeof pending.catch === "function") pending.catch(() => {});
+      }
       if (music) { setMusicMuted(false); return; }
       buildMusic();
     } catch (err) { music = null; }
@@ -1854,7 +1858,8 @@
     syncSoundLabels();
     if (state.muted) { setMusicMuted(true); return; }
     unlock();
-    if (state.runLive) startMusic();
+    if (music) { setMusicMuted(false); return; }
+    if (state.runLive || state.phase !== "title") startMusic();
   }
 
   function applyPerk(id) {
@@ -2101,7 +2106,8 @@
       b.type = "button";
       b.className = "up";
       b.dataset.id = id;
-      b.innerHTML = '<span class="mark">' + up.mark + '</span><span class="meta"><b>' + up.name +
+      const label = { wall: "Wall", aura: "Aura", turret: "Turret" }[id] || up.name;
+      b.innerHTML = '<span class="mark">' + up.mark + '</span><span class="meta"><b>' + label +
         '</b><small>' + up.blurb + '</small><em class="lv"></em><i class="fx"></i></span>';
       b.addEventListener("click", () => buyUp(id));
       root.appendChild(b);
@@ -2112,6 +2118,10 @@
   $("play").addEventListener("click", () => {
     unlock();
     startRun();
+    if (audioCtx && audioCtx.state === "suspended") {
+      const pending = audioCtx.resume();
+      if (pending && typeof pending.catch === "function") pending.catch(() => {});
+    }
     startMusic();
   });
   $("titleMute").addEventListener("click", () => { unlock(); onMute(); });
@@ -2130,7 +2140,13 @@
   $("pauseBtn").addEventListener("click", () => togglePause());
   $("resumeBtn").addEventListener("click", () => togglePause());
   $("mute").addEventListener("click", () => { unlock(); onMute(); });
-  document.addEventListener("pointerdown", () => unlock(), { passive: true });
+  document.addEventListener("pointerdown", (ev) => {
+    unlock();
+    if (state.muted) return;
+    const title = $("titleScreen");
+    if (title && !title.classList.contains("hidden") && title.contains(ev.target)) return;
+    startMusic();
+  }, { passive: true });
   window.addEventListener("keydown", (ev) => {
     if (ev.repeat) return;
     if (ev.target && ev.target.tagName === "BUTTON" && (ev.key === " " || ev.code === "Space")) return;

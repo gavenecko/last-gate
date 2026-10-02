@@ -1,6 +1,6 @@
 # Last Gate
 
-A phone-first compound defense. The gate sits in the center. The dead walk in from every edge. Your heroines move and shoot. Open `index.html` offline. No build, no CDN, no network.
+A phone-first compound defense. The gate sits in the center. The dead walk in from every edge. Your heroines move and shoot. The yard is the whole screen: base HP, cash, stage, pause, and mute sit on top of the play area, and hire, base upgrades, and START WAVE sit along the bottom over the field. PLAY on the title screen starts the run and the music. Open `index.html` offline. No build, no CDN, no network.
 
 ```bash
 python3 -m http.server 8080
@@ -11,13 +11,13 @@ Then visit `http://localhost:8080`. Or just open `index.html` in a browser.
 ## How to play
 
 1. Tap PLAY. You start with Vera, Roxie, and $100. Hire the others when you can. The first of each name is the hero. Further copies are the same kit at a lower rank. They walk and shoot on their own. Squad cap is 10.
-2. Press START WAVE. Zombies come from all four edges toward the gate. Base HP is on the header and on the gate itself. If it hits 0, the run ends.
+2. Press START WAVE on the play field. Zombies come from all four edges toward the gate. Base HP is on the top of the yard and on the gate itself. If it hits 0, the run ends.
 3. After a stage, a card names the next one and any new enemy. Pick a perk when it is offered (every 3 stages). Continue, spend cash, then start the wave yourself. It does not auto-start.
-4. Clear stage 100 to win. Every 10th stage is the Graveking. Stage 100 is the finale. Pause and mute sit on the screen.
+4. Clear stage 100 to win. Every 10th stage is the Graveking. Stage 100 is the finale. Pause and mute sit on the top of the play area.
 
 Keyboard: `1`–`4` hire, `5` Wall, `6` Aura, `7` Turret, Space starts the wave, `P` pauses, `R` restarts, `M` mutes.
 
-Sound is a quiet drone made in the browser with the Web Audio API. It starts on PLAY. No music files.
+Sound is a drone made in the browser with the Web Audio API. It starts on PLAY, and on the first tap if the title is skipped, unless sound is off. No music files.
 
 ## Roster
 
