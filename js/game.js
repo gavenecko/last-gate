@@ -2,8 +2,9 @@
   "use strict";
 
   const WORLD_W = 100;
-  const WORLD_H = 132;
-  const BASE = { x: 50, y: 66, r: 8.4 };
+  // 390x844 phone aspect so the yard fills the screen instead of letterboxing.
+  const WORLD_H = WORLD_W * (844 / 390);
+  const BASE = { x: WORLD_W / 2, y: WORLD_H / 2, r: 8.4 };
   const BASE_HP0 = 200;
   const START_CASH = 100;
   const CAP = 10;
@@ -266,26 +267,32 @@
   // background never shows as a rectangle. Drop in a new png and reload.
   //   assets/vera.png assets/roxie.png assets/lila.png assets/nyx.png
   //   assets/zombie.png assets/zombie-brute.png assets/boss.png
+  //   assets/base.png assets/upgrade-wall.png assets/upgrade-aura.png assets/upgrade-turret.png
   // Crawlers, spitters, and shriekers reuse zombie.png. Bloaters reuse the brute.
   const sprites = {};
   function loadSprites() {
     const files = [
-      ["vera", "assets/vera.png", 0.18],
-      ["roxie", "assets/roxie.png", 0.18],
-      ["lila", "assets/lila.png", 0.18],
-      ["nyx", "assets/nyx.png", 0.18],
-      ["zombie", "assets/zombie.png", 0.4],
-      ["brute", "assets/zombie-brute.png", 0.38],
-      ["boss", "assets/boss.png", 0.34],
+      ["vera", "assets/vera.png", 0.18, ""],
+      ["roxie", "assets/roxie.png", 0.18, ""],
+      ["lila", "assets/lila.png", 0.18, ""],
+      ["nyx", "assets/nyx.png", 0.18, ""],
+      ["zombie", "assets/zombie.png", 0.4, ""],
+      ["brute", "assets/zombie-brute.png", 0.38, ""],
+      ["boss", "assets/boss.png", 0.34, ""],
+      ["base", "assets/base.png", 0.5, ""],
+      ["wall", "assets/upgrade-wall.png", 0.5, ""],
+      ["aura", "assets/upgrade-aura.png", 0.5, "glow"],
+      ["turret", "assets/upgrade-turret.png", 0.5, ""],
     ];
     for (const row of files) {
       const key = row[0];
       const src = row[1];
       const anchor = row[2];
+      const mode = row[3];
       const img = new Image();
       img.decoding = "async";
       img.onload = () => {
-        try { sprites[key] = prepareSprite(img, anchor); }
+        try { sprites[key] = prepareSprite(img, anchor, mode); }
         catch (err) { sprites[key] = null; }
       };
       img.onerror = () => { sprites[key] = null; };
@@ -293,7 +300,7 @@
     }
   }
 
-  function prepareSprite(img, anchor) {
+  function prepareSprite(img, anchor, mode) {
     const S = 280;
     const c = document.createElement("canvas");
     c.width = S;
@@ -332,6 +339,14 @@
       if (dr * dr + dg * dg + db * db > thresh) continue;
       d[i + 3] = 0;
       push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1);
+    }
+    if (mode === "glow") {
+      for (let p = 0; p < S * S; p++) {
+        const i = p * 4;
+        const maxc = Math.max(d[i], d[i + 1], d[i + 2]);
+        if (maxc < 26) d[i + 3] = 0;
+        else if (maxc < 54) d[i + 3] = Math.min(d[i + 3], ((maxc - 26) / 28) * 255);
+      }
     }
     let minX = S, minY = S, maxX = 0, maxY = 0, opaque = 0;
     for (let y = 0; y < S; y++) {
@@ -628,7 +643,7 @@
     const dealt = raw * (1 - (e.armor || 0));
     if (dealt <= 0) return;
     e.hp -= dealt;
-    e.flash = 0.1;
+    e.flash = 0.18;
     if (e.hp <= 0) killEnemy(e);
   }
 
@@ -1097,7 +1112,7 @@
   function updateFx(dt) {
     for (const e of enemies) {
       if (e.dead) e.dying -= dt;
-      e.lunge = Math.max(0, (e.lunge || 0) - dt * 5);
+      e.lunge = Math.max(0, (e.lunge || 0) - dt * 3.1);
     }
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
@@ -1123,7 +1138,7 @@
     }
     for (const u of units) {
       u.muzzle = Math.max(0, u.muzzle - dt);
-      u.lunge = Math.max(0, u.lunge - dt * 5.5);
+      u.lunge = Math.max(0, u.lunge - dt * 3.2);
     }
     state.turretFlash = Math.max(0, state.turretFlash - dt);
   }
@@ -1227,22 +1242,25 @@
   function drawUnit(u) {
     const h = HEROES[u.kind];
     const r = u.named ? 5.05 : 4.35;
-    const moving = (u.step || 0) > 0.05 && !reduceMotion;
-    const bob = reduceMotion ? 0 : Math.sin(u.walk * 1.55) * (moving ? 0.5 : 0.1);
-    const breathe = !u.combat && !moving && !reduceMotion ? Math.sin(u.idle * 1.7) * 0.045 : 0;
-    const tilt = moving ? Math.cos(u.facing) * 0.2 : 0;
-    const lx = Math.cos(u.facing) * (u.lunge || 0) * 1.25;
-    const ly = Math.sin(u.facing) * (u.lunge || 0) * 1.25;
-    const x = u.x + lx;
-    const y = u.y + bob + ly;
+    const moving = (u.step || 0) > 0.04 && !reduceMotion;
+    const cycle = u.walk * 2.8;
+    const stride = reduceMotion ? 0 : Math.sin(cycle);
+    const bob = reduceMotion ? 0 : Math.abs(Math.sin(cycle)) * (moving ? 1.25 : 0.16);
+    const breathe = !u.combat && !moving && !reduceMotion ? Math.sin(u.idle * 1.7) * 0.05 : 0;
+    const lean = u.lunge || 0;
+    const lx = Math.cos(u.facing) * lean * 2.35;
+    const ly = Math.sin(u.facing) * lean * 2.35;
+    const sway = stride * (moving ? 0.42 : 0.08);
+    const x = u.x + lx + Math.cos(u.facing + Math.PI / 2) * sway;
+    const y = u.y + bob + ly + Math.sin(u.facing + Math.PI / 2) * sway;
     ctx.fillStyle = "rgba(0,0,0,0.38)";
     ctx.beginPath();
-    ctx.ellipse(u.x, u.y + r * 0.82, r * (moving ? 0.78 : 0.64), r * 0.22, 0, 0, Math.PI * 2);
+    ctx.ellipse(u.x, u.y + r * 0.82, r * (moving ? 0.7 + Math.abs(stride) * 0.18 : 0.62), r * 0.2, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.save();
     ctx.translate(x, y);
-    ctx.rotate(tilt);
-    ctx.scale(1 + breathe * 0.45, 1 + breathe);
+    ctx.rotate((moving ? stride * 0.28 : 0) + lean * 0.62);
+    ctx.scale(1 + (moving ? Math.abs(stride) * 0.1 : breathe * 0.4), 1 - (moving ? Math.abs(stride) * 0.08 : 0) + breathe);
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fillStyle = "#10131b";
@@ -1294,21 +1312,25 @@
     if (e.dead) {
       const k = Math.max(0, e.dying / (e.dyingMax || 0.42));
       ctx.save();
-      ctx.globalAlpha = k;
-      ctx.translate(e.x, e.y + (1 - k) * e.r * 0.8);
-      if (!reduceMotion) ctx.rotate((1 - k) * 0.45 * (e.side || 1));
-      ctx.scale(0.45 + 0.55 * k, 0.3 + 0.7 * k);
+      ctx.globalAlpha = Math.min(1, k * 1.35);
+      ctx.translate(e.x, e.y + (1 - k) * e.r * 0.35);
+      if (!reduceMotion) ctx.rotate((1 - k) * 1.15 * (e.side || 1));
+      const shrink = Math.max(0.04, k);
+      ctx.scale(shrink, shrink * (0.72 + 0.28 * k));
       drawToken(e.sprite, 0, 0, r, (rr) => drawZombieFallback(e, rr));
       ctx.restore();
       return;
     }
-    const bobF = e.crawler ? 2.5 : e.runner ? 2.2 : 1.45;
-    const bobA = reduceMotion ? 0 : e.crawler ? 0.36 : 0.24;
-    const bob = Math.sin(e.walk * bobF) * bobA;
-    const lunge = (e.lunge || 0) * 0.85;
-    const x = e.x + (dx / dist) * lunge;
-    const y = e.y + bob + (dy / dist) * lunge;
-    const tilt = reduceMotion ? 0 : (dx / dist) * (e.crawler ? 0.22 : 0.14);
+    const bobF = e.crawler ? 3.1 : e.runner ? 2.7 : 2.05;
+    const cycle = e.walk * bobF;
+    const stride = reduceMotion ? 0 : Math.sin(cycle);
+    const bobA = reduceMotion ? 0 : e.crawler ? 0.95 : e.runner ? 0.82 : 0.7;
+    const bob = Math.abs(stride) * bobA;
+    const lunge = (e.lunge || 0) * 1.7;
+    const sway = stride * (e.crawler ? 0.55 : 0.38);
+    const x = e.x + (dx / dist) * lunge + (-dy / dist) * sway;
+    const y = e.y + bob + (dy / dist) * lunge + (dx / dist) * sway;
+    const tilt = reduceMotion ? 0 : (dx / dist) * (e.crawler ? 0.16 : 0.1) + stride * 0.32 + (e.lunge || 0) * 0.7;
     ctx.fillStyle = "rgba(0,0,0,0.42)";
     ctx.beginPath();
     ctx.ellipse(e.x, e.y + r * 0.78, r * 0.72, r * 0.22, 0, 0, Math.PI * 2);
@@ -1323,9 +1345,11 @@
       ctx.stroke();
       ctx.setLineDash([]);
     }
+    const hitPop = e.flash > 0 ? 1 + (e.flash / 0.18) * 0.14 : 1;
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(tilt);
+    ctx.scale(hitPop * (1 + Math.abs(stride) * 0.07), hitPop * (1 - Math.abs(stride) * 0.06));
     ctx.filter = spriteFilter(e);
     drawToken(e.sprite, 0, 0, r, (rr) => drawZombieFallback(e, rr));
     ctx.restore();
@@ -1364,10 +1388,11 @@
     }
     if (e.flash > 0) {
       ctx.save();
-      ctx.globalAlpha = Math.min(0.7, e.flash / 0.1);
+      ctx.globalAlpha = Math.min(0.9, e.flash / 0.18);
+      ctx.globalCompositeOperation = "lighter";
       ctx.fillStyle = "#fff";
       ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.arc(x, y, r * 0.92, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -1418,67 +1443,140 @@
     }
   }
 
-  function drawBase() {
+  function drawProp(key, x, y, size, rot) {
+    const spr = sprites[key];
+    if (!spr || !spr.canvas) return false;
+    const img = spr.canvas;
+    const sc = size / Math.max(img.width, img.height);
+    const dw = img.width * sc;
+    const dh = img.height * sc;
+    ctx.save();
+    ctx.translate(x, y);
+    if (rot) ctx.rotate(rot);
+    ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+    ctx.restore();
+    return true;
+  }
+
+  function sandbagSpots() {
+    const lv = state.ups.wall;
+    if (!lv) return [];
+    const spots = [];
+    const n = lv === 1 ? 4 : lv === 2 ? 6 : 8;
+    const size = 4.6 + lv * 0.85;
+    const rad = BASE.r + 2.8 + lv * 0.35;
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + ((i + 0.5) / n) * Math.PI * 2;
+      spots.push({
+        x: BASE.x + Math.cos(a) * rad,
+        y: BASE.y + Math.sin(a) * rad * 0.92,
+        size: size,
+        rot: a + Math.PI / 2,
+        front: Math.sin(a) > 0.05,
+      });
+    }
+    if (lv >= 3) {
+      spots.push({ x: BASE.x - rad - 2.4, y: BASE.y + 1.6, size: size * 0.95, rot: -0.35, front: true });
+      spots.push({ x: BASE.x + rad + 2.4, y: BASE.y + 1.6, size: size * 0.95, rot: 0.35, front: true });
+    }
+    return spots;
+  }
+
+  function drawSandbags(front) {
+    const spots = sandbagSpots();
+    for (let i = 0; i < spots.length; i++) {
+      const s = spots[i];
+      if (s.front !== front) continue;
+      if (!drawProp("wall", s.x, s.y, s.size, s.rot)) {
+        ctx.fillStyle = "#c2a36a";
+        ctx.fillRect(s.x - 1.2, s.y - 0.7, 2.4, 1.4);
+      }
+    }
+  }
+
+  function drawAura() {
     const aura = AURA[state.ups.aura];
-    if (aura) {
+    if (!aura) return;
+    const pulse = reduceMotion ? 1 : 1 + Math.sin(state.time * 2.4) * 0.04;
+    const size = aura.r * 2.25 * pulse;
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    if (!drawProp("aura", BASE.x, BASE.y, size, reduceMotion ? 0 : state.time * 0.4)) {
       ctx.beginPath();
       ctx.arc(BASE.x, BASE.y, aura.r, 0, Math.PI * 2);
-      const pulse = reduceMotion ? 0.3 : 0.25 + Math.sin(state.time * 3) * 0.08;
-      ctx.strokeStyle = "rgba(196,155,255," + pulse + ")";
-      ctx.lineWidth = 0.35;
-      ctx.setLineDash([1.2, 0.85]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-    ctx.beginPath();
-    ctx.arc(BASE.x, BASE.y, BASE.r, 0, Math.PI * 2);
-    ctx.fillStyle = state.baseFlash > 0 ? "#6a3038" : "#2a261c";
-    ctx.fill();
-    ctx.lineWidth = 0.7 + state.ups.wall * 0.45;
-    ctx.strokeStyle = state.ups.wall ? "#d9c08a" : "#6a6254";
-    ctx.stroke();
-    if (state.ups.wall >= 2) {
-      ctx.beginPath();
-      ctx.arc(BASE.x, BASE.y, BASE.r + 0.9, 0, Math.PI * 2);
-      ctx.lineWidth = 0.28;
-      ctx.strokeStyle = "rgba(217,192,138,0.7)";
+      ctx.strokeStyle = "rgba(180,80,255,0.8)";
+      ctx.lineWidth = 1.1;
       ctx.stroke();
     }
-    if (state.ups.turret) {
-      ctx.save();
-      ctx.translate(BASE.x, BASE.y);
-      ctx.rotate(state.turretAng);
-      ctx.fillStyle = "#b7c4d6";
-      ctx.fillRect(BASE.r * 0.15, -0.42, BASE.r * 0.95, 0.84);
-      ctx.fillStyle = "#7f8ea3";
-      ctx.fillRect(BASE.r * 0.95, -0.28, 1.3, 0.56);
-      ctx.restore();
-      if (state.turretFlash > 0) {
+    ctx.restore();
+  }
+
+  function drawTurrets() {
+    const lv = state.ups.turret;
+    if (!lv) return;
+    const size = lv === 1 ? 7.2 : lv === 2 ? 9.2 : 8.4;
+    const dist = BASE.r + 5.6;
+    const ang = state.turretAng || -Math.PI / 2;
+    const spots = [{ a: ang, sc: 1 }];
+    if (lv >= 3) spots.push({ a: ang + Math.PI * 0.85, sc: 0.78 });
+    for (let i = 0; i < spots.length; i++) {
+      const spot = spots[i];
+      const x = BASE.x + Math.cos(spot.a) * dist;
+      const y = BASE.y + Math.sin(spot.a) * dist;
+      if (!drawProp("turret", x, y, size * spot.sc, spot.a + Math.PI / 2)) {
         ctx.save();
-        ctx.translate(BASE.x, BASE.y);
-        ctx.rotate(state.turretAng);
+        ctx.translate(x, y);
+        ctx.rotate(spot.a);
+        ctx.fillStyle = "#9aa8bc";
+        ctx.fillRect(0, -0.5, 2.2, 1);
+        ctx.restore();
+      }
+      if (i === 0 && state.turretFlash > 0) {
+        ctx.save();
         ctx.globalAlpha = Math.min(1, state.turretFlash / 0.08);
         ctx.fillStyle = "#fff4cc";
         ctx.beginPath();
-        ctx.arc(BASE.r * 0.95 + 1.35, 0, 0.7, 0, Math.PI * 2);
+        ctx.arc(x + Math.cos(spot.a) * 1.6, y + Math.sin(spot.a) * 1.6, 0.7, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
     }
+  }
+
+  function drawBase() {
+    drawSandbags(false);
+    const built = drawProp("base", BASE.x, BASE.y + 0.4, BASE.r * 2.55, 0);
+    if (!built) {
+      ctx.beginPath();
+      ctx.arc(BASE.x, BASE.y, BASE.r, 0, Math.PI * 2);
+      ctx.fillStyle = state.baseFlash > 0 ? "#6a3038" : "#2a261c";
+      ctx.fill();
+      ctx.lineWidth = 0.7;
+      ctx.strokeStyle = "#6a6254";
+      ctx.stroke();
+    }
+    if (state.baseFlash > 0) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(0.5, state.baseFlash / 0.18);
+      ctx.fillStyle = "#ff5d6c";
+      ctx.beginPath();
+      ctx.arc(BASE.x, BASE.y, BASE.r * 0.95, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    drawSandbags(true);
+    drawTurrets();
     const frac = Math.max(0, state.baseHp / state.baseMax);
     ctx.beginPath();
-    ctx.arc(BASE.x, BASE.y, BASE.r + 1.7 + state.ups.wall * 0.25, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac);
+    ctx.arc(BASE.x, BASE.y, BASE.r + 4.2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac);
     ctx.strokeStyle = frac < 0.3 ? "#ff5d6c" : "#7dffb3";
-    ctx.lineWidth = 0.85;
+    ctx.lineWidth = 0.7;
     ctx.stroke();
-    ctx.fillStyle = "#f4f1ea";
-    ctx.font = "700 3px Passion One, Impact, sans-serif";
+    ctx.font = "700 2.3px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("GATE", BASE.x, BASE.y - 1.05);
-    ctx.font = "700 2.45px sans-serif";
     ctx.fillStyle = frac < 0.3 ? "#ff8d98" : "#d9ffe8";
-    ctx.fillText(String(Math.max(0, Math.ceil(state.baseHp))), BASE.x, BASE.y + 1.85);
+    ctx.fillText(String(Math.max(0, Math.ceil(state.baseHp))), BASE.x, BASE.y + BASE.r + 5.6);
   }
 
   function resize() {
@@ -1528,6 +1626,7 @@
     ctx.fillRect(0, 0, 5, WORLD_H);
     ctx.fillRect(WORLD_W - 5, 0, 5, WORLD_H);
     drawFence();
+    drawAura();
     for (const p of patches) drawPatch(p);
     for (const e of enemies) {
       if (e.dead && e.dying <= 0) continue;
@@ -2107,8 +2206,8 @@
       b.className = "up";
       b.dataset.id = id;
       const label = { wall: "Wall", aura: "Aura", turret: "Turret" }[id] || up.name;
-      b.innerHTML = '<span class="mark">' + up.mark + '</span><span class="meta"><b>' + label +
-        '</b><small>' + up.blurb + '</small><em class="lv"></em><i class="fx"></i></span>';
+      b.innerHTML = '<span class="mark">' + up.mark + '</span><em class="lv"></em><span class="meta"><b>' + label +
+        '</b><small>' + up.blurb + '</small><i class="fx"></i></span>';
       b.addEventListener("click", () => buyUp(id));
       root.appendChild(b);
       upButtons[id] = b;
@@ -2139,6 +2238,11 @@
   $("ovRestart").addEventListener("click", () => { unlock(); startRun(); });
   $("pauseBtn").addEventListener("click", () => togglePause());
   $("resumeBtn").addEventListener("click", () => togglePause());
+  $("pauseRestart").addEventListener("click", () => {
+    unlock();
+    if (state.phase === "title") return;
+    startRun();
+  });
   $("mute").addEventListener("click", () => { unlock(); onMute(); });
   document.addEventListener("pointerdown", (ev) => {
     unlock();
