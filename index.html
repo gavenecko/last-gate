@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#07080d">
+  <title>Last Gate</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="brand">LAST<span>GATE</span><small>HOLD THE COMPOUND</small></div>
+      <div class="stats">
+        <div class="pill hp" id="hpPill"><b id="hp">200</b><small>BASE</small><span class="bar"><i id="hpFill"></i></span></div>
+        <div class="pill gold"><b id="cash">100</b><small>CASH</small></div>
+        <div class="pill wave"><b id="waveNum">1</b><small>/ 10</small></div>
+      </div>
+    </header>
+    <div id="main">
+      <div id="stage">
+        <canvas id="game" aria-label="Compound. The base is in the center. Zombies come from every edge."></canvas>
+        <div id="toast" role="status"></div>
+      </div>
+      <section id="dock">
+        <div id="waveRow">
+          <div class="waveCopy">
+            <div class="waveTitle"><span id="waveTag" class="tag"></span><b id="waveName">Shamble</b></div>
+            <div id="waveBlurb"></div>
+            <div id="mods"></div>
+          </div>
+          <button id="next" type="button">START WAVE</button>
+        </div>
+        <h3 class="section">Squad</h3>
+        <div id="roster" aria-label="Hire heroines"></div>
+        <h3 class="section">Base upgrades</h3>
+        <div id="baseShop" aria-label="Passive base upgrades"></div>
+        <p id="hint">Heroes walk and shoot on their own. Rotters come from every edge. Hold the center for 10 waves.</p>
+        <div id="bar">
+          <button id="restart" type="button" class="ghost">RESTART</button>
+          <button id="mute" type="button" aria-label="Toggle sound">SND</button>
+        </div>
+      </section>
+    </div>
+  </div>
+  <div id="overlay" class="hidden">
+    <div class="panel" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
+      <h2 id="ovTitle"></h2>
+      <p id="ovBody"></p>
+      <div id="ovChoices"></div>
+      <button id="ovBtn" type="button" hidden>PLAY AGAIN</button>
+      <button id="ovRestart" type="button" class="texty" hidden>Restart run</button>
+    </div>
+  </div>
+  <script src="js/game.js"></script>
+</body>
+</html>
