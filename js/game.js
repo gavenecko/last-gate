@@ -10,25 +10,13 @@
   const CAP = 10;
   const FINALE = 100;
   const ORDER = ["vera", "roxie", "lila", "nyx", "sable", "wren"];
-  const MUSIC_GAIN = 0.9;
-  const GROOVE_BPM = 128;
-  const GROOVE_BEAT = 60 / GROOVE_BPM;
-  // Four bars of eighths. 0 is a rest. Bass sits under the hook.
-  const BASS_LINE = [110, 0, 164.81, 110, 0, 110, 130.81, 164.81, 87.31, 0, 130.81, 87.31, 82.41, 0, 73.42, 82.41];
-  // A-minor hook, four bars. The first two notes repeat so it sticks.
-  // Lead sits an octave under the old hook so the square brightness is gone.
-  const LEAD_LINE = [
-    329.63, 392, 329.63, 261.63, 293.67, 329.63, 440, 392,
-    329.63, 293.67, 261.63, 293.67, 329.63, 392, 329.63, 293.67,
-    261.63, 329.63, 392, 440, 392, 329.63, 293.67, 261.63,
-    293.67, 329.63, 392, 329.63, 293.67, 261.63, 220, 220,
-  ];
-  // Harmony dropped an octave so it stays under the new lead.
-  const HARM_LINE = [
-    261.63, 0, 261.63, 0, 220, 0, 329.63, 0,
-    261.63, 0, 196, 0, 261.63, 0, 261.63, 0,
-    196, 0, 293.67, 0, 329.63, 0, 220, 0,
-    220, 0, 293.67, 0, 220, 0, 174.61, 0,
+  const TRACKS = [
+    "assets/music/scrap-tension.mp3",
+    "assets/music/scrap-tension-2.mp3",
+    "assets/music/survival-loop.mp3",
+    "assets/music/survival-loop-2.mp3",
+    "assets/music/tick-tock-defense.mp3",
+    "assets/music/tick-tock-defense-2.mp3",
   ];
 
   const HEROES = {
@@ -527,6 +515,8 @@
   let view = { ox: 0, oy: 0, s: 1 };
   let audioCtx = null;
   let music = null;
+  let musicSrc = "";
+  let noiseBuf = null;
   let meta = loadMeta();
   let pickedRegion = "yard";
   let toastTimer = 0;
@@ -2102,61 +2092,59 @@
     } catch (err) { /* ignore */ }
   }
 
-  function setMusicMuted(muted) {
-    if (!music || !audioCtx) return;
-    const t = audioCtx.currentTime || 0;
-    try {
-      music.master.gain.cancelScheduledValues(t);
-      if (muted) music.master.gain.setValueAtTime(0.0001, t);
-      else music.master.gain.setTargetAtTime(MUSIC_GAIN, t, 0.06);
-    } catch (err) {
-      music.master.gain.value = muted ? 0.0001 : MUSIC_GAIN;
+  function pickTrack(avoid) {
+    const pool = [];
+    for (let i = 0; i < TRACKS.length; i++) {
+      if (TRACKS[i] !== avoid) pool.push(TRACKS[i]);
     }
+    const choices = pool.length ? pool : TRACKS;
+    return choices[(Math.random() * choices.length) | 0];
   }
 
-  function buildMusic() {
-    const master = audioCtx.createGain();
-    master.gain.value = state.muted ? 0.0001 : MUSIC_GAIN;
-    master.connect(audioCtx.destination);
-    const bassFilter = audioCtx.createBiquadFilter();
-    bassFilter.type = "lowpass";
-    bassFilter.frequency.value = 420;
-    bassFilter.Q.value = 0.7;
-    bassFilter.connect(master);
-    const leadFilter = audioCtx.createBiquadFilter();
-    leadFilter.type = "lowpass";
-    leadFilter.frequency.value = 1400;
-    leadFilter.Q.value = 0.6;
-    leadFilter.connect(master);
-    let noiseBuf = null;
-    try {
-      noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
-      const data = noiseBuf.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    } catch (err) { noiseBuf = null; }
-    music = {
-      master: master,
-      bassFilter: bassFilter,
-      leadFilter: leadFilter,
-      noiseBuf: noiseBuf,
-      nextTime: audioCtx.currentTime + 0.05,
-      step: 0,
-    };
+  function ensureMusicEl() {
+    if (music) return music;
+    music = new Audio();
+    music.preload = "auto";
+    music.loop = false;
+    music.addEventListener("ended", () => {
+      const next = pickTrack(musicSrc);
+      cueTrack(next, true);
+    });
+    return music;
+  }
+
+  function cueTrack(src, autoplay) {
+    const el = ensureMusicEl();
+    musicSrc = src;
+    el.src = src;
+    el.volume = state.muted ? 0 : 0.5;
+    if (!autoplay || state.muted || state.phase === "title" || state.phase === "paused") {
+      el.pause();
+      return;
+    }
+    const pending = el.play();
+    if (pending && typeof pending.catch === "function") pending.catch(() => {});
+  }
+
+  function setMusicMuted(muted) {
+    if (!music) return;
+    music.volume = muted ? 0 : 0.5;
+    if (muted) music.pause();
   }
 
   function startMusic() {
     if (state.muted) return;
-    try {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return;
-      if (!audioCtx) audioCtx = new AC();
-      if (audioCtx.state === "suspended") {
-        const pending = audioCtx.resume();
-        if (pending && typeof pending.catch === "function") pending.catch(() => {});
-      }
-      if (music) { setMusicMuted(false); return; }
-      buildMusic();
-    } catch (err) { music = null; }
+    if (!music || !musicSrc) {
+      cueTrack(pickTrack(""), true);
+      return;
+    }
+    music.volume = 0.5;
+    if (state.phase === "title" || state.phase === "paused") {
+      music.pause();
+      return;
+    }
+    const pending = music.play();
+    if (pending && typeof pending.catch === "function") pending.catch(() => {});
   }
 
   function playTone(freq, when, dur, peak) {
@@ -2169,7 +2157,7 @@
       f.frequency.value = 1700;
       o.type = "sine";
       o.frequency.value = freq;
-      const dest = music && music.master ? music.master : audioCtx.destination;
+      const dest = audioCtx.destination;
       g.gain.setValueAtTime(0.0001, when);
       g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), when + Math.min(0.12, dur * 0.25));
       g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
@@ -2234,13 +2222,25 @@
     o.stop(when + dur + 0.02);
   }
 
+  function ensureNoise() {
+    if (noiseBuf || !audioCtx) return noiseBuf;
+    try {
+      const buf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      noiseBuf = buf;
+    } catch (err) { noiseBuf = null; }
+    return noiseBuf;
+  }
+
   function sfxNoise(when, dur, peak, filterType, freq, q) {
-    if (!music || !music.noiseBuf) {
+    const buf = ensureNoise();
+    if (!buf) {
       sfxOsc(when, freq > 1500 ? 1200 : 180, Math.min(0.1, dur), peak * 0.65, "triangle");
       return;
     }
     const src = audioCtx.createBufferSource();
-    src.buffer = music.noiseBuf;
+    src.buffer = buf;
     const f = audioCtx.createBiquadFilter();
     f.type = filterType;
     f.frequency.value = freq;
@@ -2289,93 +2289,23 @@
     } catch (err) { /* ignore */ }
   }
 
-  function grooveTone(when, freq, dur, peak, type, dest) {
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    o.type = type;
-    o.frequency.setValueAtTime(freq, when);
-    g.gain.setValueAtTime(0.0001, when);
-    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), when + Math.min(0.03, dur * 0.25));
-    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
-    o.connect(g);
-    g.connect(dest);
-    o.start(when);
-    o.stop(when + dur + 0.02);
-  }
-
-  function grooveKick(when) {
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    o.type = "sine";
-    o.frequency.setValueAtTime(168, when);
-    o.frequency.exponentialRampToValueAtTime(46, when + 0.09);
-    g.gain.setValueAtTime(0.0001, when);
-    g.gain.exponentialRampToValueAtTime(0.72, when + 0.008);
-    g.gain.exponentialRampToValueAtTime(0.0001, when + 0.18);
-    o.connect(g);
-    g.connect(music.master);
-    o.start(when);
-    o.stop(when + 0.2);
-  }
-
-  function grooveNoise(when, dur, peak, type, freq, q) {
-    if (!music.noiseBuf) return;
-    const src = audioCtx.createBufferSource();
-    src.buffer = music.noiseBuf;
-    const f = audioCtx.createBiquadFilter();
-    f.type = type;
-    f.frequency.value = freq;
-    f.Q.value = q;
-    const g = audioCtx.createGain();
-    g.gain.setValueAtTime(Math.max(0.0002, peak), when);
-    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
-    src.connect(f);
-    f.connect(g);
-    g.connect(music.master);
-    src.start(when);
-    src.stop(when + dur + 0.02);
-  }
-
-  function scheduleGroove(when, step) {
-    const eighth = GROOVE_BEAT / 2;
-    const inBar = step % 8;
-    if (inBar === 0 || inBar === 3 || inBar === 4) grooveKick(when);
-    if (inBar === 2 || inBar === 6) grooveNoise(when, 0.12, 0.42, "bandpass", 1900, 0.7);
-    grooveNoise(when, 0.03, inBar % 2 ? 0.04 : 0.09, "highpass", 6500, 0.6);
-    if (inBar === 0) {
-      grooveTone(when, 220, eighth * 1.3, 0.07, "sawtooth", music.leadFilter);
-      grooveTone(when, 261.63, eighth * 1.3, 0.05, "sawtooth", music.leadFilter);
-      grooveTone(when, 329.63, eighth * 1.3, 0.045, "triangle", music.leadFilter);
+  function musicTick() {
+    if (!music || !musicSrc) return;
+    if (state.phase === "title" || state.phase === "paused") {
+      if (!music.paused) music.pause();
+      return;
     }
-    const bass = BASS_LINE[step % BASS_LINE.length];
-    if (bass) {
-      grooveTone(when, bass, eighth * 0.9, 0.28, "square", music.bassFilter);
-      if (stageSpec(state.wave).boss) grooveTone(when, bass / 2, eighth * 0.7, 0.18, "sine", music.master);
+    const audible = state.phase === "shop" || state.phase === "fight" || state.phase === "brief" || state.phase === "won" || state.phase === "lost";
+    if (!audible) return;
+    if (state.muted) {
+      music.volume = 0;
+      if (!music.paused) music.pause();
+      return;
     }
-    const lead = LEAD_LINE[step % LEAD_LINE.length];
-    if (lead) grooveTone(when, lead, eighth * 0.88, 0.22, "triangle", music.leadFilter);
-    const harm = HARM_LINE[step % HARM_LINE.length];
-    if (harm) grooveTone(when, harm, eighth * 0.8, 0.08, "triangle", music.leadFilter);
-  }
-
-  function musicTick(dt) {
-    if (!music || state.muted || !audioCtx) return;
-    if (state.phase === "paused" || state.phase === "title") return;
-    if (dt < 0) return;
-    const eighth = GROOVE_BEAT / 2;
-    const now = audioCtx.currentTime;
-    if (music.nextTime < now - 0.02) {
-      const skip = Math.ceil((now - music.nextTime) / eighth);
-      music.step = (music.step + skip) % 32;
-      music.nextTime += skip * eighth;
-    }
-    const horizon = now + 0.25;
-    let guard = 0;
-    while (music.nextTime < horizon && guard < 8) {
-      try { scheduleGroove(music.nextTime, music.step); } catch (err) { /* skip a step */ }
-      music.step = (music.step + 1) % 32;
-      music.nextTime += eighth;
-      guard++;
+    music.volume = 0.5;
+    if (music.paused) {
+      const pending = music.play();
+      if (pending && typeof pending.catch === "function") pending.catch(() => {});
     }
   }
 
@@ -2389,8 +2319,7 @@
     syncSoundLabels();
     if (state.muted) { setMusicMuted(true); return; }
     unlock();
-    if (music) { setMusicMuted(false); return; }
-    if (state.runLive || state.phase !== "title") startMusic();
+    if (state.runLive && state.phase !== "title") startMusic();
   }
 
   function applyPerk(id) {
@@ -2663,6 +2592,7 @@
     pickedRegion = "yard";
     state.phase = "title";
     state.runLive = false;
+    if (music) music.pause();
     hideMenus();
     $("overlay").classList.add("hidden");
     clearSplashArt();
