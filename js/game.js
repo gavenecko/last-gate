@@ -16,17 +16,19 @@
   // Four bars of eighths. 0 is a rest. Bass sits under the hook.
   const BASS_LINE = [110, 0, 164.81, 110, 0, 110, 130.81, 164.81, 87.31, 0, 130.81, 87.31, 82.41, 0, 73.42, 82.41];
   // A-minor hook, four bars. The first two notes repeat so it sticks.
+  // Lead sits an octave under the old hook so the square brightness is gone.
   const LEAD_LINE = [
-    659.25, 783.99, 659.25, 523.25, 587.33, 659.25, 880, 783.99,
-    659.25, 587.33, 523.25, 587.33, 659.25, 783.99, 659.25, 587.33,
-    523.25, 659.25, 783.99, 880, 783.99, 659.25, 587.33, 523.25,
-    587.33, 659.25, 783.99, 659.25, 587.33, 523.25, 440, 440,
+    329.63, 392, 329.63, 261.63, 293.67, 329.63, 440, 392,
+    329.63, 293.67, 261.63, 293.67, 329.63, 392, 329.63, 293.67,
+    261.63, 329.63, 392, 440, 392, 329.63, 293.67, 261.63,
+    293.67, 329.63, 392, 329.63, 293.67, 261.63, 220, 220,
   ];
+  // Harmony dropped an octave so it stays under the new lead.
   const HARM_LINE = [
-    523.25, 0, 523.25, 0, 440, 0, 659.25, 0,
-    523.25, 0, 392, 0, 523.25, 0, 523.25, 0,
-    392, 0, 587.33, 0, 659.25, 0, 440, 0,
-    440, 0, 587.33, 0, 440, 0, 349.23, 0,
+    261.63, 0, 261.63, 0, 220, 0, 329.63, 0,
+    261.63, 0, 196, 0, 261.63, 0, 261.63, 0,
+    196, 0, 293.67, 0, 329.63, 0, 220, 0,
+    220, 0, 293.67, 0, 220, 0, 174.61, 0,
   ];
 
   const HEROES = {
@@ -171,12 +173,31 @@
     return bits.join(" ");
   }
 
+  function regionOf(n) {
+    if (n >= 51) return "chapel";
+    if (n >= 21) return "marsh";
+    return "yard";
+  }
+
+  function regionHpMul(n) {
+    if (n >= 51) return 1.3;
+    if (n >= 21) return 1.15;
+    return 1;
+  }
+
   function hpMul(n, isBoss) {
+    let mul;
     if (isBoss) {
-      if (n >= FINALE) return 3.8;
-      return 1 + Math.max(0, n - 10) * 0.02;
+      if (n >= FINALE) mul = 3.8;
+      else mul = 1 + Math.max(0, n - 10) * 0.02;
+    } else {
+      mul = 1 + Math.max(0, n - 1) * 0.037;
     }
-    return 1 + Math.max(0, n - 1) * 0.037;
+    // Late waves. Stages 1-15 stay on the base curve (both extras are 1).
+    mul *= 1 + Math.max(0, n - 15) * 0.012;
+    mul *= 1 + Math.max(0, n - 39) * 0.018;
+    mul *= regionHpMul(n);
+    return mul;
   }
 
   function speedMul(n) {
@@ -229,9 +250,42 @@
       if (n >= 13) add("shrieker", 1, 2, 3.4);
       if (n >= 17) add("bloater", 2, 2.2, 4.6);
     }
+    const scaleType = (type, mul) => {
+      for (const g of groups) {
+        if (g.type !== type || g.type === "boss") continue;
+        g.n = Math.max(1, Math.round(g.n * mul));
+      }
+    };
+    const hasType = (type) => {
+      for (const g of groups) if (g.type === type) return true;
+      return false;
+    };
+    // Marsh and chapel shift the mix. Bosses stay on the tenth stages only.
+    if (n >= 21 && n < 51) {
+      scaleType("crawler", 1.5);
+      scaleType("spitter", 1.45);
+      scaleType("bloater", 1.4);
+      if (!hasType("crawler")) add("crawler", 6, 0.3, 0.2);
+      if (!hasType("spitter")) add("spitter", 2, 1.6, 1);
+      if (!hasType("bloater")) add("bloater", 2, 2, 1.4);
+    }
+    if (n >= 51) {
+      scaleType("shrieker", 1.6);
+      scaleType("brute", 1.5);
+      if (!hasType("shrieker")) add("shrieker", 2, 2, 1);
+      if (!hasType("brute")) add("brute", 2, 1.4, 1.1);
+    }
+    if (n > 25) {
+      if (n >= 51) add("shrieker", 2, 2.1, 0.6);
+      else add("crawler", 4, 0.3, 0.25);
+    }
+    if (n > 60) {
+      if (n >= 51) add("brute", 2, 1.5, 1.2);
+      else add("bloater", 2, 2, 1.4);
+    }
     let total = 0;
     for (const g of groups) total += g.n;
-    const capN = 60;
+    const capN = Math.min(110, 36 + Math.floor(n * 0.7));
     if (total > capN) {
       const scale = capN / total;
       for (const g of groups) {
@@ -282,6 +336,81 @@
   const MEND_RATE = [0, 1.2, 2.2, 3.4];
   const MINES = [null, { every: 2.6, range: 30, dmg: 24 }, { every: 2.1, range: 36, dmg: 40 }, { every: 1.7, range: 42, dmg: 58 }];
   const UP_IDS = ["wall", "aura", "turret", "spikes", "mend", "mines"];
+
+  const SKILL_COST = [80, 140, 220];
+  const SKILL_NODES = {
+    vera: [
+      { name: "Keen Eye", blurb: "+18% damage" },
+      { name: "Fast Bolt", blurb: "+16% attack rate" },
+      { name: "Long Glass", blurb: "+12% range" },
+    ],
+    roxie: [
+      { name: "Buck and Ball", blurb: "+18% damage" },
+      { name: "Pump", blurb: "+16% attack rate" },
+      { name: "Extra Pellet", blurb: "The blast hits one more target" },
+    ],
+    lila: [
+      { name: "Hotter Mix", blurb: "+18% damage" },
+      { name: "Quicker Wick", blurb: "+16% attack rate" },
+      { name: "Long Burn", blurb: "The fire patch lasts longer" },
+    ],
+    nyx: [
+      { name: "Hex Mark", blurb: "+18% damage" },
+      { name: "Rapid Hex", blurb: "+16% attack rate" },
+      { name: "Deep Hex", blurb: "Slow and stun bite harder" },
+    ],
+    sable: [
+      { name: "Tight Group", blurb: "+18% damage" },
+      { name: "Fast Hands", blurb: "+16% attack rate" },
+      { name: "Fourth Shot", blurb: "The volley fires one more round" },
+    ],
+    wren: [
+      { name: "Heavy Haft", blurb: "+18% damage" },
+      { name: "Quick Thrust", blurb: "+16% attack rate" },
+      { name: "Hard Cleave", blurb: "The swing hits harder" },
+    ],
+  };
+  const LAB_MAX = 8;
+  const LAB_TRACKS = [
+    { id: "power", name: "Power", blurb: "+7% heroine damage per level. Stacks with skills." },
+    { id: "tempo", name: "Tempo", blurb: "+5% heroine attack rate per level." },
+    { id: "gate", name: "Gate", blurb: "+20 max HP and +$2 starting cash per level. Next run." },
+  ];
+  const META_KEY = "last-gate-meta";
+
+  function defaultMeta() {
+    return { ash: 0, power: 0, tempo: 0, gate: 0, regions: { yard: true, marsh: false, chapel: false } };
+  }
+
+  function loadMeta() {
+    try {
+      const raw = localStorage.getItem(META_KEY);
+      const meta = defaultMeta();
+      if (!raw) return meta;
+      const data = JSON.parse(raw);
+      if (!data || typeof data !== "object") return meta;
+      meta.ash = Math.max(0, data.ash | 0);
+      meta.power = clamp(data.power | 0, 0, LAB_MAX);
+      meta.tempo = clamp(data.tempo | 0, 0, LAB_MAX);
+      meta.gate = clamp(data.gate | 0, 0, LAB_MAX);
+      if (data.regions && typeof data.regions === "object") {
+        meta.regions.marsh = !!data.regions.marsh;
+        meta.regions.chapel = !!data.regions.chapel;
+      }
+      return meta;
+    } catch (err) {
+      return defaultMeta();
+    }
+  }
+
+  function saveMeta() {
+    try { localStorage.setItem(META_KEY, JSON.stringify(meta)); }
+    catch (err) { /* keep playing on defaults */ }
+  }
+
+  function labCost(level) {
+    return 12 * ((level | 0) + 1);
+  }
 
   const PERKS = [
     { id: "dmg", name: "Hot Barrels", short: "DMG+", desc: "All heroines deal 20% more damage." },
@@ -379,6 +508,10 @@
       mineCd: 2.6,
       toldSable: false,
       toldWren: false,
+      skills: { vera: 0, roxie: 0, lila: 0, nyx: 0, sable: 0, wren: 0 },
+      toldMarsh: false,
+      toldChapel: false,
+      startRegion: "yard",
     };
   }
   const state = freshState();
@@ -394,6 +527,8 @@
   let view = { ox: 0, oy: 0, s: 1 };
   let audioCtx = null;
   let music = null;
+  let meta = loadMeta();
+  let pickedRegion = "yard";
   let toastTimer = 0;
   const rosterButtons = {};
   const upButtons = {};
@@ -410,23 +545,52 @@
   function statsOf(u) {
     const h = HEROES[u.kind];
     const low = u.named ? 1 : 0.74;
+    const rank = (state.skills && state.skills[u.kind]) || 0;
+    const skillDmg = rank >= 1 ? 1.18 : 1;
+    const skillRate = rank >= 2 ? 1.16 : 1;
+    const labDmg = 1 + (meta.power || 0) * 0.07;
+    const labRate = 1 + (meta.tempo || 0) * 0.05;
+    let range = h.range * (u.named ? 1 : 0.88) * state.rangeMult;
+    let seek = h.seek * state.rangeMult;
+    let patchTime = (h.patchTime || 2.4) * (u.named ? 1 : 0.75);
+    let slow = h.slow || 0.5;
+    let slowTime = (h.slowTime || 2) * (u.named ? 1 : 0.8);
+    let stun = u.named ? (h.stun || 0) : (h.stunExtra || 0);
+    let cap = u.named ? (h.cap || 5) : (h.capExtra || 3);
+    let volley = 3;
+    let cleave = u.named ? 1.25 : 1;
+    if (rank >= 3 && u.kind === "vera") {
+      range *= 1.12;
+      seek *= 1.12;
+    }
+    if (rank >= 3 && u.kind === "roxie") cap += 1;
+    if (rank >= 3 && u.kind === "lila") patchTime *= 1.45;
+    if (rank >= 3 && u.kind === "nyx") {
+      slow = Math.max(0.18, slow * 0.8);
+      stun *= 1.35;
+      slowTime *= 1.2;
+    }
+    if (rank >= 3 && u.kind === "sable") volley = 4;
+    if (rank >= 3 && u.kind === "wren") cleave *= 1.2;
     return {
       kind: h.attack,
       accent: h.accent,
-      dmg: h.dmg * low * state.dmgMult,
-      range: h.range * (u.named ? 1 : 0.88) * state.rangeMult,
-      rate: h.rate * (u.named ? 1 : 0.9) * state.rateMult,
+      dmg: h.dmg * low * state.dmgMult * skillDmg * labDmg,
+      range: range,
+      rate: h.rate * (u.named ? 1 : 0.9) * state.rateMult * skillRate * labRate,
       move: h.move * (u.named ? 1 : 0.92) * state.moveMult,
       leash: h.leash,
-      seek: h.seek * state.rangeMult,
+      seek: seek,
       post: h.post,
       aoe: (h.aoe || 0) * (u.named ? 1 : 0.78),
-      patch: (h.patch || 0) * low * state.dmgMult,
-      patchTime: (h.patchTime || 2.4) * (u.named ? 1 : 0.75),
-      slow: h.slow || 0.5,
-      slowTime: (h.slowTime || 2) * (u.named ? 1 : 0.8),
-      stun: u.named ? (h.stun || 0) : (h.stunExtra || 0),
-      cap: u.named ? (h.cap || 5) : (h.capExtra || 3),
+      patch: (h.patch || 0) * low * state.dmgMult * skillDmg * labDmg,
+      patchTime: patchTime,
+      slow: slow,
+      slowTime: slowTime,
+      stun: stun,
+      cap: cap,
+      volley: volley,
+      cleave: cleave,
     };
   }
 
@@ -512,6 +676,7 @@
     if (n >= 75) want = 4;
     else if (n >= 50) want = 3;
     else if (n >= 30) want = 2;
+    if (n >= 51) want += 1;
     for (let i = pool.length - 1; i > 0; i--) {
       const j = (Math.random() * (i + 1)) | 0;
       const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
@@ -575,6 +740,7 @@
     if (proto.boss && state.wave === FINALE) foe.r *= 1.1;
     enemies.push(foe);
     state.spawned++;
+    playGroan(!!proto.boss);
   }
 
   function startWave() {
@@ -694,6 +860,7 @@
     u.lunge = 1;
     u.facing = Math.atan2(target.y - u.y, target.x - u.x);
     state.shots++;
+    playShot(s.kind);
     if (s.kind === "snipe") {
       let dmg = s.dmg;
       if (target.max > 0 && target.hp > target.max * 0.5) dmg *= u.named ? 1.35 : 1.15;
@@ -737,7 +904,12 @@
       const ang = Math.atan2(target.y - u.y, target.x - u.x);
       const px = -Math.sin(ang);
       const py = Math.cos(ang);
-      const spreads = [-1.6, 0, 1.6];
+      const nShots = s.volley || 3;
+      const spreads = [];
+      const span = 3.2;
+      for (let i = 0; i < nShots; i++) {
+        spreads.push(nShots === 1 ? 0 : -span / 2 + (span * i) / (nShots - 1));
+      }
       for (let i = 0; i < spreads.length; i++) {
         const off = spreads[i];
         const bx = u.x + px * off;
@@ -745,7 +917,7 @@
         bolts.push({ x: bx, y: by, ox: bx, oy: by, targetId: target.id, dmg: s.dmg, color: s.accent });
       }
     } else if (s.kind === "cleave") {
-      const mult = u.named ? 1.25 : 1;
+      const mult = s.cleave || (u.named ? 1.25 : 1);
       const ang = Math.atan2(target.y - u.y, target.x - u.x);
       let n = 0;
       for (const e of enemies) {
@@ -1119,15 +1291,24 @@
     for (let i = 0; i < enemies.length; i++) if (!enemies[i].dead) return;
     const cleared = state.wave;
     const bonus = 8 + cleared * 3;
+    const specCleared = stageSpec(cleared);
     state.cash += bonus;
     state.earned += bonus;
-    if (stageSpec(cleared).challenge) {
+    if (specCleared.challenge) {
       state.cash += 35;
       state.earned += 35;
     }
+    let ashGain = 3;
+    if (specCleared.boss) ashGain = 8;
+    else if (specCleared.challenge) ashGain = 5;
+    meta.ash = (meta.ash || 0) + ashGain;
+    if (cleared >= 20) meta.regions.marsh = true;
+    if (cleared >= 50) meta.regions.chapel = true;
+    saveMeta();
     state.log.push("w" + cleared + " hp" + Math.round(state.baseHp) + " $" + state.cash + " u" + units.length);
-    toast("Stage " + cleared + " down +$" + bonus);
-    if (stageSpec(cleared).challenge) toast("Challenge pay +$35");
+    let msg = "Stage " + cleared + " down +$" + bonus + " +" + ashGain + " ash";
+    if (specCleared.challenge) msg += "  challenge +$35";
+    toast(msg);
     blip(240, 0.08, "sine", 0.03);
     if (cleared >= FINALE) { win(); return; }
     state.wave = cleared + 1;
@@ -1309,7 +1490,7 @@
   function drawUnit(u) {
     const h = HEROES[u.kind];
     const height = heroHeight(u);
-    const moving = (u.step || 0) > 0.04 && !reduceMotion;
+    const moving = (u.step || 0) > 0.04;
     const cycle = u.walk * 2.8;
     const stride = reduceMotion ? 0 : Math.sin(cycle);
     const bob = reduceMotion ? 0 : -Math.abs(stride) * (moving ? 0.85 : 0.12);
@@ -1323,11 +1504,11 @@
     ctx.ellipse(x, y + 0.35, height * 0.16, height * 0.045, 0, 0, Math.PI * 2);
     ctx.fill();
     const face = Math.cos(u.facing || 0) >= 0 ? 1 : -1;
-    const rate = moving ? 9 : 4.6;
+    const rate = moving ? 4.2 : 2.0;
     const frame = Math.floor(state.time * rate + u.walk * 3) % WALK_FRAMES;
     drawSprite(u.kind, x, y, height, {
       frame: frame,
-      bob: -Math.abs(Math.sin(state.time * rate * Math.PI)) * (moving ? 0.7 : 0.28),
+      bob: reduceMotion ? 0 : -Math.abs(Math.sin(state.time * rate * Math.PI)) * (moving ? 0.7 : 0.28),
       rot: attack * 0.22 * face,
       sx: face,
       sy: 1,
@@ -1408,11 +1589,11 @@
     }
     const flash = e.flash > 0 ? Math.min(1, e.flash / 0.18) : 0;
     const face = dx >= 0 ? 1 : -1;
-    const rate = e.crawler ? 11 : e.runner ? 10 : e.boss ? 5.2 : 7.2;
+    const rate = e.crawler ? 4.5 : e.runner ? 4.0 : e.boss ? 2.2 : 3.0;
     const frame = Math.floor(state.time * rate + (e.walk || 0)) % WALK_FRAMES;
     drawSprite(e.sprite, x, y, height, {
       frame: frame,
-      bob: -Math.abs(Math.sin(state.time * rate * Math.PI)) * (e.crawler ? 0.85 : 0.55),
+      bob: reduceMotion ? 0 : -Math.abs(Math.sin(state.time * rate * Math.PI)) * (e.crawler ? 0.85 : 0.55),
       rot: attack * 0.22 * face,
       sx: face * (1 + flash * 0.03),
       sy: 1,
@@ -1944,7 +2125,7 @@
     bassFilter.connect(master);
     const leadFilter = audioCtx.createBiquadFilter();
     leadFilter.type = "lowpass";
-    leadFilter.frequency.value = 3400;
+    leadFilter.frequency.value = 1400;
     leadFilter.Q.value = 0.6;
     leadFilter.connect(master);
     let noiseBuf = null;
@@ -2015,6 +2196,99 @@
     playTone(880, now + 0.12, 0.32, 0.045);
   }
 
+  let shotBusy = [];
+  let groanAt = 0;
+
+  function sfxOk() {
+    return !!(audioCtx && !state.muted);
+  }
+
+  function reserveShot() {
+    const now = audioCtx.currentTime || 0;
+    let live = 0;
+    const keep = [];
+    for (let i = 0; i < shotBusy.length; i++) {
+      if (shotBusy[i] > now) { keep.push(shotBusy[i]); live++; }
+    }
+    shotBusy = keep;
+    if (live >= 4) return false;
+    shotBusy.push(now + 0.12);
+    return true;
+  }
+
+  function sfxEnv(g, when, dur, peak) {
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), when + Math.min(0.015, dur * 0.3));
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  }
+
+  function sfxOsc(when, freq, dur, peak, type) {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type || "sine";
+    o.frequency.setValueAtTime(freq, when);
+    sfxEnv(g, when, dur, peak);
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    o.start(when);
+    o.stop(when + dur + 0.02);
+  }
+
+  function sfxNoise(when, dur, peak, filterType, freq, q) {
+    if (!music || !music.noiseBuf) {
+      sfxOsc(when, freq > 1500 ? 1200 : 180, Math.min(0.1, dur), peak * 0.65, "triangle");
+      return;
+    }
+    const src = audioCtx.createBufferSource();
+    src.buffer = music.noiseBuf;
+    const f = audioCtx.createBiquadFilter();
+    f.type = filterType;
+    f.frequency.value = freq;
+    f.Q.value = q;
+    const g = audioCtx.createGain();
+    sfxEnv(g, when, dur, peak);
+    src.connect(f);
+    f.connect(g);
+    g.connect(audioCtx.destination);
+    src.start(when);
+    src.stop(when + dur + 0.02);
+  }
+
+  function playShot(kind) {
+    if (!sfxOk() || !reserveShot()) return;
+    const now = audioCtx.currentTime || 0;
+    try {
+      if (kind === "snipe") {
+        sfxOsc(now, 1420 + Math.random() * 180, 0.04, 0.07, "square");
+        sfxNoise(now, 0.035, 0.045, "highpass", 2400, 0.7);
+      } else if (kind === "blast") {
+        sfxNoise(now, 0.1, 0.08, "lowpass", 420, 0.55);
+        sfxOsc(now, 96, 0.08, 0.045, "triangle");
+      } else if (kind === "patch") {
+        sfxNoise(now, 0.11, 0.055, "bandpass", 640, 0.45);
+      } else if (kind === "volley") {
+        sfxOsc(now, 1040 + Math.random() * 90, 0.028, 0.06, "square");
+      } else if (kind === "cleave") {
+        sfxOsc(now, 74, 0.09, 0.08, "sine");
+      } else {
+        sfxNoise(now, 0.04, 0.07, "highpass", 1500, 0.5);
+      }
+    } catch (err) { /* ignore */ }
+  }
+
+  function playGroan(deep) {
+    if (!sfxOk()) return;
+    const now = audioCtx.currentTime || 0;
+    if (!deep && now < groanAt) return;
+    if (!deep) groanAt = now + 0.7;
+    try {
+      const freq = deep ? rand(46, 64) : rand(70, 110);
+      const dur = deep ? 0.22 : 0.14;
+      sfxOsc(now, freq, dur, deep ? 0.055 : 0.045, "sawtooth");
+      sfxNoise(now, dur, 0.03, "lowpass", 220, 0.6);
+    } catch (err) { /* ignore */ }
+  }
+
   function grooveTone(when, freq, dur, peak, type, dest) {
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
@@ -2079,7 +2353,7 @@
       if (stageSpec(state.wave).boss) grooveTone(when, bass / 2, eighth * 0.7, 0.18, "sine", music.master);
     }
     const lead = LEAD_LINE[step % LEAD_LINE.length];
-    if (lead) grooveTone(when, lead, eighth * 0.88, 0.22, "square", music.leadFilter);
+    if (lead) grooveTone(when, lead, eighth * 0.88, 0.22, "triangle", music.leadFilter);
     const harm = HARM_LINE[step % HARM_LINE.length];
     if (harm) grooveTone(when, harm, eighth * 0.8, 0.08, "triangle", music.leadFilter);
   }
@@ -2216,13 +2490,36 @@
     }
   }
 
+  function announceRegion(n) {
+    if (n >= 51) {
+      if (state.toldChapel) return false;
+      state.toldChapel = true;
+      state.toldMarsh = true;
+      toast("The Chapel");
+      state.banner = { title: "The Chapel", sub: "Shriekers, brutes, and gold elites.", life: 2.6 };
+      return true;
+    }
+    if (n >= 21) {
+      if (state.toldMarsh) return false;
+      state.toldMarsh = true;
+      toast("The Marsh");
+      state.banner = { title: "The Marsh", sub: "Crawlers, spitters, and bloaters.", life: 2.6 };
+      return true;
+    }
+    return false;
+  }
+
   function openBrief(withPerk) {
     const spec = stageSpec(state.wave);
+    const entered = announceRegion(state.wave);
+    hideMenus();
     state.phase = "brief";
     state.perkDue = !!withPerk;
     state.perkPicked = !withPerk;
     const kind = spec.finale ? "FINALE" : spec.boss ? "BOSS" : spec.challenge ? "CHALLENGE" : "NEXT";
-    $("ovKicker").textContent = "STAGE " + state.wave + "  ·  " + kind;
+    if (entered && state.wave >= 51) $("ovKicker").textContent = "THE CHAPEL  ·  STAGE " + state.wave;
+    else if (entered && state.wave >= 21) $("ovKicker").textContent = "THE MARSH  ·  STAGE " + state.wave;
+    else $("ovKicker").textContent = "STAGE " + state.wave + "  ·  " + kind;
     $("ovTitle").textContent = spec.name;
     $("ovBody").textContent = spec.blurb;
     fillDebuts(debutsOn(state.wave));
@@ -2252,6 +2549,7 @@
   }
 
   function showEnd(kind) {
+    hideMenus();
     spits.length = 0;
     bolts.length = 0;
     lobs.length = 0;
@@ -2307,23 +2605,58 @@
     next.muted = muted;
     next.runLive = live;
     Object.assign(state, next);
+    applyMetaStats();
     addUnit("vera");
     addUnit("roxie");
     layoutHomes();
     syncSoundLabels();
   }
 
-  function startRun() {
+  function applyMetaStats() {
+    const gate = clamp(meta.gate || 0, 0, LAB_MAX);
+    state.baseMax = BASE_HP0 + gate * 20;
+    state.baseHp = state.baseMax;
+    state.cash = START_CASH + gate * 2;
+  }
+
+  function hideMenus() {
+    $("skillScreen").classList.add("hidden");
+    $("labScreen").classList.add("hidden");
+  }
+
+  function startRun(region) {
+    let safe = "yard";
+    const which = region || pickedRegion || "yard";
+    if (which === "marsh" && meta.regions.marsh) safe = "marsh";
+    if (which === "chapel" && meta.regions.chapel) safe = "chapel";
+    pickedRegion = safe;
     resetRun();
+    const startN = safe === "chapel" ? 51 : safe === "marsh" ? 21 : 1;
+    state.wave = startN;
+    state.startRegion = safe;
     state.runLive = true;
-    state.toldSable = false;
-    state.toldWren = false;
+    if (startN >= 4) state.toldSable = true;
+    if (startN >= 6) state.toldWren = true;
     state.mineCd = 2.6;
+    hideMenus();
     $("titleScreen").classList.add("hidden");
     $("overlay").classList.add("hidden");
     $("pauseScreen").classList.add("hidden");
     $("pauseBtn").textContent = "PAUSE";
-    toast("Vera and Roxie hold the yard.");
+    if (startN >= 51) announceRegion(startN);
+    else if (startN >= 21) announceRegion(startN);
+    else toast("Vera and Roxie hold the yard.");
+  }
+
+  function showTitle() {
+    pickedRegion = "yard";
+    state.phase = "title";
+    state.runLive = false;
+    hideMenus();
+    $("overlay").classList.add("hidden");
+    $("pauseScreen").classList.add("hidden");
+    $("titleScreen").classList.remove("hidden");
+    renderRegions();
   }
 
   function togglePause() {
@@ -2335,6 +2668,7 @@
       return;
     }
     if (state.phase !== "fight" && state.phase !== "shop") return;
+    hideMenus();
     state.pausedFrom = state.phase;
     state.phase = "paused";
     $("pauseScreen").classList.remove("hidden");
@@ -2376,9 +2710,159 @@
     }
   }
 
+  function renderRegions() {
+    const row = $("regionRow");
+    if (!row) return;
+    const options = [{ id: "yard", name: "The Yard" }];
+    if (meta.regions.marsh) options.push({ id: "marsh", name: "The Marsh" });
+    if (meta.regions.chapel) options.push({ id: "chapel", name: "The Chapel" });
+    row.innerHTML = "";
+    if (options.length < 2) {
+      row.hidden = true;
+      return;
+    }
+    row.hidden = false;
+    for (let i = 0; i < options.length; i++) {
+      const opt = options[i];
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "regionPick" + (opt.id === pickedRegion ? " on" : "");
+      b.textContent = opt.name;
+      b.addEventListener("click", () => {
+        pickedRegion = opt.id;
+        renderRegions();
+      });
+      row.appendChild(b);
+    }
+  }
+
+  function renderSkills() {
+    const box = $("skillList");
+    box.innerHTML = "";
+    for (const id of ORDER) {
+      const hero = HEROES[id];
+      const hired = units.some((u) => u.kind === id);
+      const open = state.wave >= (hero.unlock || 1);
+      if (!hired && !open) continue;
+      const rank = (state.skills && state.skills[id]) || 0;
+      const card = document.createElement("div");
+      card.className = "skillCard";
+      const title = document.createElement("b");
+      title.textContent = hero.short + (hired ? "" : "  ·  not hired");
+      card.appendChild(title);
+      const nodes = document.createElement("div");
+      nodes.className = "skillNodes";
+      const tree = SKILL_NODES[id];
+      for (let i = 0; i < tree.length; i++) {
+        const line = document.createElement("div");
+        line.className = i < rank ? "got" : "";
+        const cost = i < rank ? "owned" : "$" + SKILL_COST[i];
+        line.textContent = (i + 1) + ". " + tree[i].name + " — " + tree[i].blurb + " (" + cost + ")";
+        nodes.appendChild(line);
+      }
+      card.appendChild(nodes);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "miniBuy";
+      if (rank >= 3) {
+        btn.disabled = true;
+        btn.textContent = "MAXED";
+      } else {
+        const cost = SKILL_COST[rank];
+        btn.textContent = "BUY " + tree[rank].name + "  ·  $" + cost;
+        btn.disabled = !canShop() || state.cash < cost;
+        btn.addEventListener("click", () => buySkill(id));
+      }
+      card.appendChild(btn);
+      box.appendChild(card);
+    }
+    if (!box.children.length) {
+      const empty = document.createElement("p");
+      empty.textContent = "Nobody to train yet.";
+      box.appendChild(empty);
+    }
+  }
+
+  function buySkill(kind) {
+    if (!canShop()) { toast("Not during this screen"); return; }
+    const rank = (state.skills && state.skills[kind]) || 0;
+    if (rank >= 3) return;
+    const cost = SKILL_COST[rank];
+    if (state.cash < cost) { toast("Need $" + cost); return; }
+    state.cash -= cost;
+    state.skills[kind] = rank + 1;
+    const node = SKILL_NODES[kind][rank];
+    toast(HEROES[kind].short + " · " + node.name);
+    blip(480, 0.06, "triangle", 0.03);
+    renderSkills();
+  }
+
+  function renderLab() {
+    const box = $("labList");
+    box.innerHTML = "";
+    const ash = document.createElement("p");
+    ash.className = "ashLine";
+    ash.textContent = meta.ash + " ash";
+    box.appendChild(ash);
+    for (let i = 0; i < LAB_TRACKS.length; i++) {
+      const track = LAB_TRACKS[i];
+      const lv = meta[track.id] || 0;
+      const card = document.createElement("div");
+      card.className = "skillCard";
+      const title = document.createElement("b");
+      title.textContent = track.name + "  ·  LV " + lv + " / " + LAB_MAX;
+      card.appendChild(title);
+      const blurb = document.createElement("p");
+      blurb.textContent = track.blurb;
+      card.appendChild(blurb);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "miniBuy";
+      if (lv >= LAB_MAX) {
+        btn.disabled = true;
+        btn.textContent = "MAXED";
+      } else {
+        const cost = labCost(lv);
+        btn.textContent = "BUY  ·  " + cost + " ASH";
+        btn.disabled = meta.ash < cost;
+        btn.addEventListener("click", () => buyLab(track.id));
+      }
+      card.appendChild(btn);
+      box.appendChild(card);
+    }
+  }
+
+  function buyLab(id) {
+    const lv = meta[id] || 0;
+    if (lv >= LAB_MAX) return;
+    const cost = labCost(lv);
+    if ((meta.ash || 0) < cost) { toast("Need " + cost + " ash"); return; }
+    meta.ash -= cost;
+    meta[id] = lv + 1;
+    saveMeta();
+    let label = id;
+    for (let i = 0; i < LAB_TRACKS.length; i++) if (LAB_TRACKS[i].id === id) label = LAB_TRACKS[i].name;
+    toast(label + " LV " + meta[id]);
+    blip(360, 0.07, "triangle", 0.03);
+    renderLab();
+  }
+
+  function openSkills() {
+    if (state.phase === "title" || state.phase === "won" || state.phase === "lost" || state.phase === "brief") return;
+    $("labScreen").classList.add("hidden");
+    renderSkills();
+    $("skillScreen").classList.remove("hidden");
+  }
+
+  function openLab() {
+    $("skillScreen").classList.add("hidden");
+    renderLab();
+    $("labScreen").classList.remove("hidden");
+  }
+
   $("play").addEventListener("click", () => {
     unlock();
-    startRun();
+    startRun(pickedRegion);
     if (audioCtx && audioCtx.state === "suspended") {
       const pending = audioCtx.resume();
       if (pending && typeof pending.catch === "function") pending.catch(() => {});
@@ -2395,7 +2879,7 @@
   $("ovBtn").addEventListener("click", () => {
     unlock();
     if (state.phase === "brief") dismissBrief();
-    else if (state.phase === "won" || state.phase === "lost") startRun();
+    else if (state.phase === "won" || state.phase === "lost") showTitle();
   });
   $("ovRestart").addEventListener("click", () => { unlock(); startRun(); });
   $("pauseBtn").addEventListener("click", () => togglePause());
@@ -2406,9 +2890,14 @@
     startRun();
   });
   $("mute").addEventListener("click", () => { unlock(); onMute(); });
+  $("skillsBtn").addEventListener("click", () => { unlock(); openSkills(); });
+  $("labBtn").addEventListener("click", () => { unlock(); openLab(); });
+  $("titleLab").addEventListener("click", () => { unlock(); openLab(); });
+  $("skillClose").addEventListener("click", () => { $("skillScreen").classList.add("hidden"); });
+  $("labClose").addEventListener("click", () => { $("labScreen").classList.add("hidden"); });
   document.addEventListener("pointerdown", (ev) => {
     unlock();
-    if (state.muted) return;
+    if (state.muted || !state.runLive) return;
     const title = $("titleScreen");
     if (title && !title.classList.contains("hidden") && title.contains(ev.target)) return;
     startMusic();
@@ -2434,6 +2923,7 @@
   loadSprites();
   buildRoster();
   buildUps();
+  renderRegions();
   syncSoundLabels();
 
   let last = 0;
