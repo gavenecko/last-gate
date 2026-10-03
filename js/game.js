@@ -9,45 +9,64 @@
   const START_CASH = 100;
   const CAP = 10;
   const FINALE = 100;
-  const ORDER = ["vera", "roxie", "lila", "nyx"];
+  const ORDER = ["vera", "roxie", "lila", "nyx", "sable", "wren"];
   const MUSIC_GAIN = 0.78;
+  const GROOVE_BPM = 108;
+  const GROOVE_BEAT = 60 / GROOVE_BPM;
+  // A2 A2 C3 D3 F2 E2 D3 C3
+  const BASS_LINE = [110, 110, 130.81, 146.83, 87.31, 82.41, 146.83, 130.81];
+  // A minor pentatonic, two bars of eighths. 0 is a rest.
+  const LEAD_LINE = [440, 523.25, 659.25, 0, 587.33, 523.25, 440, 392, 440, 0, 523.25, 587.33, 659.25, 587.33, 523.25, 440];
 
   const HEROES = {
     vera: {
       name: "Vera Voss", extra: "Spotter", short: "Vera", role: "Rifle Sniper",
       tag: "Deadeye snipe", cost: 110, accent: "#e7c56a", attack: "snipe",
       dmg: 64, range: 37, rate: 0.7, move: 13.5, leash: 34, post: 19.5, seek: 48,
+      unlock: 1,
     },
     roxie: {
       name: "Roxie Kane", extra: "Brawler", short: "Roxie", role: "Shotgun Brawler",
       tag: "Buckshot blast", cost: 80, accent: "#ff4d9a", attack: "blast",
       dmg: 17, range: 14, rate: 1.55, move: 17, leash: 17, post: 12.2, seek: 20,
-      aoe: 5.3, cap: 5, capExtra: 3,
+      aoe: 5.3, cap: 5, capExtra: 3, unlock: 1,
     },
     lila: {
       name: "Lila Marsh", extra: "Torch", short: "Lila", role: "Firebug",
       tag: "Burn patch", cost: 140, accent: "#ff9a3c", attack: "patch",
       dmg: 12, range: 24, rate: 0.58, move: 14, leash: 27, post: 16, seek: 32,
-      aoe: 6.6, patch: 22, patchTime: 2.9,
+      aoe: 6.6, patch: 22, patchTime: 2.9, unlock: 1,
     },
     nyx: {
       name: "Nyx Calder", extra: "Hexer", short: "Nyx", role: "Hex Warden",
       tag: "Slow / stun pulse", cost: 120, accent: "#c49bff", attack: "pulse",
       dmg: 8, range: 24, rate: 0.82, move: 15, leash: 28, post: 16.2, seek: 32,
-      aoe: 6.4, slow: 0.46, slowTime: 2.15, stun: 0.5, stunExtra: 0.22,
+      aoe: 6.4, slow: 0.46, slowTime: 2.15, stun: 0.5, stunExtra: 0.22, unlock: 1,
+    },
+    sable: {
+      name: "Sable Quinn", extra: "Gunner", short: "Sable", role: "Pistol Gunner",
+      tag: "Three-shot volley", cost: 90, accent: "#7ec8ff", attack: "volley",
+      dmg: 11, range: 22, rate: 1.35, move: 16, leash: 24, post: 15, seek: 28,
+      unlock: 4,
+    },
+    wren: {
+      name: "Wren Holt", extra: "Lancer", short: "Wren", role: "Spear Lancer",
+      tag: "Close cleave", cost: 75, accent: "#9be36a", attack: "cleave",
+      dmg: 28, range: 9.5, rate: 1.25, move: 18, leash: 14, post: 10.5, seek: 16,
+      aoe: 4.2, unlock: 6,
     },
   };
 
   const ENEMIES = {
     walker: { sprite: "zombie", hp: 40, speed: 7.2, r: 2.65, reward: 6, bite: 4, biteEvery: 0.95, armor: 0, slowRes: 0 },
-    runner: { sprite: "zombie", hp: 28, speed: 12.6, r: 2.25, reward: 8, bite: 3, biteEvery: 0.6, armor: 0, slowRes: 0.08, runner: true },
+    runner: { sprite: "runner", hp: 28, speed: 12.6, r: 2.25, reward: 8, bite: 3, biteEvery: 0.6, armor: 0, slowRes: 0.08, runner: true },
     tank: { sprite: "brute", hp: 170, speed: 4.05, r: 3.45, reward: 16, bite: 8, biteEvery: 1.05, armor: 0.12, slowRes: 0.28 },
     brute: { sprite: "brute", hp: 128, speed: 5.5, r: 3.25, reward: 14, bite: 6, biteEvery: 0.9, armor: 0.34, slowRes: 0.2, armored: true },
     boss: { sprite: "boss", hp: 1680, speed: 3.9, r: 5.9, reward: 80, bite: 18, biteEvery: 0.8, armor: 0.2, slowRes: 0.62, boss: true },
-    crawler: { sprite: "zombie", hp: 18, speed: 15.4, r: 1.95, reward: 4, bite: 2, biteEvery: 0.55, armor: 0, slowRes: 0.05, crawler: true },
-    spitter: { sprite: "zombie", hp: 54, speed: 6.1, r: 2.7, reward: 11, bite: 3, biteEvery: 1.1, armor: 0, slowRes: 0.1, spitter: true, spit: 7, spitEvery: 2.45, spitRange: 28, spitSpeed: 8.2 },
-    shrieker: { sprite: "zombie", hp: 76, speed: 6.5, r: 2.85, reward: 15, bite: 4, biteEvery: 1, armor: 0, slowRes: 0.16, shrieker: true, shriek: 1.42, shriekR: 12 },
-    bloater: { sprite: "brute", hp: 124, speed: 4.25, r: 3.75, reward: 18, bite: 6, biteEvery: 1.05, armor: 0.06, slowRes: 0.22, bloater: true, explode: 16, explodeR: 13 },
+    crawler: { sprite: "crawler", hp: 18, speed: 15.4, r: 1.95, reward: 4, bite: 2, biteEvery: 0.55, armor: 0, slowRes: 0.05, crawler: true },
+    spitter: { sprite: "spitter", hp: 54, speed: 6.1, r: 2.7, reward: 11, bite: 3, biteEvery: 1.1, armor: 0, slowRes: 0.1, spitter: true, spit: 7, spitEvery: 2.45, spitRange: 28, spitSpeed: 8.2 },
+    shrieker: { sprite: "shrieker", hp: 76, speed: 6.5, r: 2.85, reward: 15, bite: 4, biteEvery: 1, armor: 0, slowRes: 0.16, shrieker: true, shriek: 1.42, shriekR: 12 },
+    bloater: { sprite: "bloater", hp: 124, speed: 4.25, r: 3.75, reward: 18, bite: 6, biteEvery: 1.05, armor: 0.06, slowRes: 0.22, bloater: true, explode: 16, explodeR: 13 },
   };
 
   const TYPE_NAME = {
@@ -61,11 +80,11 @@
     { stage: 5, type: "tank", name: "Tank", line: "Tanks. Thick, slow, and hard to drop." },
     { stage: 7, type: "brute", name: "Brute", line: "Brutes. Plated. Shots glance off." },
     { stage: 10, type: "boss", name: "Graveking", line: "The Graveking. A boss. He does not come alone." },
-    { stage: 12, type: "crawler", name: "Crawler", line: "Crawlers. Small, fast, and they swarm." },
-    { stage: 16, type: "elite", name: "Elite", line: "Elites. Tinted gold, with a lot more health." },
-    { stage: 18, type: "spitter", name: "Spitter", line: "Spitters. They stop and lob a slow glob at the gate." },
-    { stage: 26, type: "shrieker", name: "Shrieker", line: "Shriekers. The wail makes nearby dead hurry." },
-    { stage: 34, type: "bloater", name: "Bloater", line: "Bloaters. They burst on death, and the gate takes it if they pop close." },
+    { stage: 6, type: "crawler", name: "Crawler", line: "Crawlers. Small, fast, and they swarm." },
+    { stage: 9, type: "spitter", name: "Spitter", line: "Spitters. They stop and lob a slow glob at the gate." },
+    { stage: 11, type: "elite", name: "Elite", line: "Elites. Tinted gold, with a lot more health." },
+    { stage: 13, type: "shrieker", name: "Shrieker", line: "Shriekers. The wail makes nearby dead hurry." },
+    { stage: 17, type: "bloater", name: "Bloater", line: "Bloaters. They burst on death, and the gate takes it if they pop close." },
   ];
 
   const EARLY_META = {
@@ -74,10 +93,10 @@
     3: { name: "Strays", blurb: "Runners break ahead of the walkers." },
     4: { name: "Fast Swarm", blurb: "Challenge: the whole wave is sprinting." },
     5: { name: "Bulwark", blurb: "Tanks shoulder through the pack." },
-    6: { name: "Crossfire", blurb: "Every kind, from every side." },
+    6: { name: "Crossfire", blurb: "Crawlers swarm in with the rest of the pack." },
     7: { name: "Armored Rush", blurb: "Challenge: plated brutes. Shots glance off." },
     8: { name: "Horde", blurb: "They do not stop coming." },
-    9: { name: "Blackout", blurb: "Runners and iron in the dark." },
+    9: { name: "Blackout", blurb: "Spitters lob from the dark with runners and iron." },
     10: { name: "Graveking", blurb: "Boss: the Graveking and his court." },
   };
 
@@ -87,10 +106,10 @@
     3: [{ type: "walker", n: 6, every: 0.85 }, { type: "runner", n: 6, every: 0.95, delay: 1.8 }],
     4: [{ type: "runner", n: 12, every: 0.46 }, { type: "walker", n: 5, every: 0.7, delay: 0.8 }],
     5: [{ type: "walker", n: 8, every: 0.7 }, { type: "tank", n: 3, every: 2.2, delay: 1.4 }],
-    6: [{ type: "runner", n: 8, every: 0.5 }, { type: "walker", n: 8, every: 0.62, delay: 0.3 }, { type: "tank", n: 2, every: 2.8, delay: 2 }],
+    6: [{ type: "crawler", n: 12, every: 0.3 }, { type: "runner", n: 6, every: 0.5, delay: 0.35 }, { type: "walker", n: 6, every: 0.62, delay: 0.4 }, { type: "tank", n: 2, every: 2.8, delay: 2 }],
     7: [{ type: "brute", n: 6, every: 1.2 }, { type: "runner", n: 8, every: 0.5, delay: 1 }],
     8: [{ type: "walker", n: 22, every: 0.32 }, { type: "tank", n: 3, every: 2.4, delay: 1.6 }],
-    9: [{ type: "runner", n: 14, every: 0.36 }, { type: "tank", n: 4, every: 1.8, delay: 0.8 }],
+    9: [{ type: "spitter", n: 4, every: 1.5, delay: 0.5 }, { type: "runner", n: 10, every: 0.36 }, { type: "tank", n: 3, every: 1.8, delay: 0.8 }],
     10: [{ type: "walker", n: 8, every: 0.5 }, { type: "boss", n: 1, every: 1, delay: 3.2 }, { type: "runner", n: 8, every: 0.48, delay: 4.5 }, { type: "brute", n: 2, every: 1.6, delay: 5.5 }],
   };
 
@@ -177,27 +196,27 @@
       if (c <= 0) return;
       groups.push({ type: type, n: c, every: Math.max(0.22, every), delay: delay || 0 });
     };
-    const crawlerFeature = n === 12 || n % 4 === 0 || n % 10 === 2;
-    const spitFeature = n === 18 || n % 5 === 3 || n % 10 === 8;
-    const shriekFeature = n === 26 || n % 6 === 2 || n % 10 === 6;
-    const bloatFeature = n === 34 || n % 7 === 6 || n % 10 === 4;
+    const crawlerFeature = n === 6 || n % 4 === 0 || n % 10 === 2;
+    const spitFeature = n === 9 || n % 5 === 3 || n % 10 === 8;
+    const shriekFeature = n === 13 || n % 6 === 2 || n % 10 === 6;
+    const bloatFeature = n === 17 || n % 7 === 6 || n % 10 === 4;
     add("walker", 8 + n * 0.2, 0.74 - late * 0.34, 0);
     add("runner", 3 + n * 0.09, 0.58 - late * 0.22, 0.7);
     if (n % 2 === 1 || n % 10 === 0) add("tank", 1 + n / 24, 2.05, 1.3);
     if (n % 10 === 7 || n % 10 === 9 || n % 10 === 0 || n % 10 === 5) add("brute", 1 + n / 22, 1.4, 1.05);
-    if (n >= 12 && crawlerFeature) add("crawler", n === 12 ? 16 : 7 + n * 0.07, 0.28, 0.25);
-    else if (n >= 12) add("crawler", 4 + n * 0.03, 0.36, 0.5);
-    if (n >= 18 && spitFeature) add("spitter", n === 18 ? 4 : 2 + n / 32, 1.65, 1.7);
-    else if (n > 18) add("spitter", 1 + n / 40, 1.8, 2.2);
-    if (n >= 26 && shriekFeature) add("shrieker", n === 26 ? 3 : 1 + n / 42, 2.15, 1.15);
-    else if (n > 26) add("shrieker", 1, 2.4, 1.6);
-    if (n >= 34 && bloatFeature) add("bloater", n === 34 ? 4 : 1 + n / 30, 1.95, 2);
-    else if (n > 34) add("bloater", 1, 2.3, 2.4);
+    if (n >= 6 && crawlerFeature) add("crawler", n === 6 ? 16 : 7 + n * 0.07, 0.28, 0.25);
+    else if (n >= 6) add("crawler", 4 + n * 0.03, 0.36, 0.5);
+    if (n >= 9 && spitFeature) add("spitter", n === 9 ? 4 : 2 + n / 32, 1.65, 1.7);
+    else if (n > 9) add("spitter", 1 + n / 40, 1.8, 2.2);
+    if (n >= 13 && shriekFeature) add("shrieker", n === 13 ? 3 : 1 + n / 42, 2.15, 1.15);
+    else if (n > 13) add("shrieker", 1, 2.4, 1.6);
+    if (n >= 17 && bloatFeature) add("bloater", n === 17 ? 4 : 1 + n / 30, 1.95, 2);
+    else if (n > 17) add("bloater", 1, 2.3, 2.4);
     if (n % 10 === 0) {
       add("boss", 1, 1, 3);
       add("runner", 6 + n * 0.03, 0.4, 4);
-      if (n >= 26) add("shrieker", 1, 2, 3.4);
-      if (n >= 34) add("bloater", 2, 2.2, 4.6);
+      if (n >= 13) add("shrieker", 1, 2, 3.4);
+      if (n >= 17) add("bloater", 2, 2.2, 4.6);
     }
     let total = 0;
     for (const g of groups) total += g.n;
@@ -241,10 +260,17 @@
     wall: { name: "Sandbag Wall", mark: "W", blurb: "Armor. The base takes less damage.", costs: [65, 95, 140], max: 3 },
     aura: { name: "Dread Aura", mark: "A", blurb: "Zombies slow down near the gate.", costs: [75, 110, 155], max: 3 },
     turret: { name: "Sentry Turret", mark: "T", blurb: "A gun on the compound fires by itself.", costs: [85, 125, 175], max: 3 },
+    spikes: { name: "Bite Spikes", mark: "S", blurb: "Biters take damage when they hit the gate.", costs: [70, 100, 145], max: 3 },
+    mend: { name: "Field Mend", mark: "M", blurb: "The gate slowly heals.", costs: [60, 90, 130], max: 3 },
+    mines: { name: "Yard Mines", mark: "N", blurb: "A mine pops the nearest zombie.", costs: [90, 130, 180], max: 3 },
   };
   const WALL_CUT = [0, 0.18, 0.32, 0.46];
   const AURA = [null, { r: 13.5, slow: 0.8 }, { r: 16.5, slow: 0.66 }, { r: 20, slow: 0.52 }];
   const TURRET = [null, { dmg: 11, rate: 1.15, range: 26 }, { dmg: 18, rate: 1.45, range: 30 }, { dmg: 28, rate: 1.75, range: 34 }];
+  const SPIKE_DMG = [0, 8, 14, 22];
+  const MEND_RATE = [0, 1.2, 2.2, 3.4];
+  const MINES = [null, { every: 2.6, range: 30, dmg: 24 }, { every: 2.1, range: 36, dmg: 40 }, { every: 1.7, range: 42, dmg: 58 }];
+  const UP_IDS = ["wall", "aura", "turret", "spikes", "mend", "mines"];
 
   const PERKS = [
     { id: "dmg", name: "Hot Barrels", short: "DMG+", desc: "All heroines deal 20% more damage." },
@@ -266,7 +292,7 @@
   //   assets/vera-sprite.png assets/roxie-sprite.png assets/lila-sprite.png assets/nyx-sprite.png
   //   assets/zombie-sprite.png assets/zombie-brute-sprite.png assets/boss-sprite.png
   //   assets/base-sprite.png assets/upgrade-wall-sprite.png assets/upgrade-aura-sprite.png assets/upgrade-turret-sprite.png
-  // Crawlers, spitters, and shriekers reuse the zombie cutout. Bloaters reuse the brute.
+  // Walk sheets are 4-frame strips. Missing sheets fall back to the static sprite, then the drawn backup.
   const sprites = {};
   const walks = {};
   const WALK_FRAMES = 4;
@@ -276,6 +302,8 @@
       ["roxie", "assets/roxie-sprite.png"],
       ["lila", "assets/lila-sprite.png"],
       ["nyx", "assets/nyx-sprite.png"],
+      ["sable", "assets/sable-sprite.png"],
+      ["wren", "assets/wren-sprite.png"],
       ["zombie", "assets/zombie-sprite.png"],
       ["brute", "assets/zombie-brute-sprite.png"],
       ["boss", "assets/boss-sprite.png"],
@@ -284,7 +312,7 @@
       ["aura", "assets/upgrade-aura-sprite.png"],
       ["turret", "assets/upgrade-turret-sprite.png"],
     ];
-    for (const key of ["vera", "roxie", "lila", "nyx", "zombie", "brute", "boss"]) {
+    for (const key of ["vera", "roxie", "lila", "nyx", "sable", "wren", "zombie", "brute", "boss", "runner", "crawler", "spitter", "shrieker", "bloater"]) {
       const sheet = new Image();
       sheet.decoding = "async";
       sheet.onload = () => { walks[key] = sheet; };
@@ -307,6 +335,7 @@
   const lobs = [];
   const patches = [];
   const flashes = [];
+  const sweeps = [];
   const rings = [];
   const particles = [];
   const floaters = [];
@@ -322,7 +351,7 @@
       earned: 0,
       baseHp: BASE_HP0,
       baseMax: BASE_HP0,
-      ups: { wall: 0, aura: 0, turret: 0 },
+      ups: { wall: 0, aura: 0, turret: 0, spikes: 0, mend: 0, mines: 0 },
       dmgMult: 1, rateMult: 1, moveMult: 1, rangeMult: 1,
       sale: 0,
       mods: {},
@@ -336,6 +365,9 @@
       perkDue: false, perkPicked: true,
       spawnQ: [], offer: [],
       turretCd: 0.2, turretAng: -Math.PI / 2, turretFlash: 0,
+      mineCd: 2.6,
+      toldSable: false,
+      toldWren: false,
     };
   }
   const state = freshState();
@@ -425,6 +457,9 @@
 
   function buy(id) {
     if (!canShop()) return;
+    const hero = HEROES[id];
+    if (!hero) return;
+    if (state.wave < (hero.unlock || 1)) { toast("Locked until stage " + hero.unlock); return; }
     if (units.length >= CAP) { toast("Squad is full"); return; }
     const cost = priceOf(id);
     if (state.cash < cost) { toast("Need $" + cost); return; }
@@ -459,7 +494,7 @@
   }
 
   function markElites(q, n) {
-    if (n < 16) return;
+    if (n < 11) return;
     const pool = [];
     for (let i = 0; i < q.length; i++) if (q[i].type !== "boss") pool.push(i);
     let want = 1;
@@ -687,6 +722,37 @@
           if (stun > 0.05) e.stunT = Math.max(e.stunT, stun);
         }
       }
+    } else if (s.kind === "volley") {
+      const ang = Math.atan2(target.y - u.y, target.x - u.x);
+      const px = -Math.sin(ang);
+      const py = Math.cos(ang);
+      const spreads = [-1.6, 0, 1.6];
+      for (let i = 0; i < spreads.length; i++) {
+        const off = spreads[i];
+        const bx = u.x + px * off;
+        const by = u.y + py * off;
+        bolts.push({ x: bx, y: by, ox: bx, oy: by, targetId: target.id, dmg: s.dmg, color: s.accent });
+      }
+    } else if (s.kind === "cleave") {
+      const mult = u.named ? 1.25 : 1;
+      const ang = Math.atan2(target.y - u.y, target.x - u.x);
+      let n = 0;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        const nearT = Math.hypot(e.x - target.x, e.y - target.y) <= s.aoe;
+        const nearU = Math.hypot(e.x - u.x, e.y - u.y) <= s.range + 1;
+        if (nearT && nearU) {
+          hurtEnemy(e, s.dmg * mult);
+          flashes.push({ x: e.x, y: e.y, sx: u.x, sy: u.y, life: 0.12, max: 0.12, color: s.accent });
+          n++;
+        }
+      }
+      if (!n) flashes.push({ x: target.x, y: target.y, sx: u.x, sy: u.y, life: 0.1, max: 0.1, color: s.accent });
+      sweeps.push({
+        x: u.x, y: u.y, a0: ang - 1.05, a1: ang + 1.05,
+        r: Math.max(3.2, Math.min(s.range, (s.aoe || 4) + 1.4)),
+        life: 0.18, max: 0.18, color: s.accent,
+      });
     }
   }
 
@@ -895,6 +961,8 @@
           if (e.biteCd <= 0) {
             e.biteCd = e.biteEvery;
             e.lunge = 1;
+            const spike = SPIKE_DMG[state.ups.spikes] || 0;
+            if (spike > 0) hurtEnemy(e, spike);
             hurtBase(e.bite);
             if (state.phase !== "fight") return;
           }
@@ -934,6 +1002,33 @@
         if (state.phase !== "fight") return;
       }
     }
+  }
+
+  function updateMend(dt) {
+    const rate = MEND_RATE[state.ups.mend] || 0;
+    if (rate <= 0) return;
+    if (state.phase !== "shop" && state.phase !== "fight") return;
+    if (state.baseHp >= state.baseMax) return;
+    state.baseHp = Math.min(state.baseMax, state.baseHp + rate * dt);
+  }
+
+  function updateMines(dt) {
+    const spec = MINES[state.ups.mines];
+    if (!spec || state.phase !== "fight") return;
+    state.mineCd -= dt;
+    if (state.mineCd > 0) return;
+    state.mineCd = spec.every;
+    let best = null;
+    let bestD = spec.range;
+    for (const e of enemies) {
+      if (e.dead) continue;
+      const d = Math.hypot(e.x - BASE.x, e.y - BASE.y);
+      if (d < bestD) { bestD = d; best = e; }
+    }
+    if (!best) return;
+    hurtEnemy(best, spec.dmg);
+    rings.push({ x: best.x, y: best.y, r: 0.3, max: 2.4, life: 0.22, color: "#ff5d6c" });
+    burst(best.x, best.y, "#ff5d6c", 6, 5);
   }
 
   function updateTurret(dt) {
@@ -1015,8 +1110,13 @@
     const bonus = 8 + cleared * 3;
     state.cash += bonus;
     state.earned += bonus;
+    if (stageSpec(cleared).challenge) {
+      state.cash += 35;
+      state.earned += 35;
+    }
     state.log.push("w" + cleared + " hp" + Math.round(state.baseHp) + " $" + state.cash + " u" + units.length);
     toast("Stage " + cleared + " down +$" + bonus);
+    if (stageSpec(cleared).challenge) toast("Challenge pay +$35");
     blip(240, 0.08, "sine", 0.03);
     if (cleared >= FINALE) { win(); return; }
     state.wave = cleared + 1;
@@ -1044,6 +1144,10 @@
     for (let i = flashes.length - 1; i >= 0; i--) {
       flashes[i].life -= dt;
       if (flashes[i].life <= 0) flashes.splice(i, 1);
+    }
+    for (let i = sweeps.length - 1; i >= 0; i--) {
+      sweeps[i].life -= dt;
+      if (sweeps[i].life <= 0) sweeps.splice(i, 1);
     }
     for (let i = rings.length - 1; i >= 0; i--) {
       rings[i].life -= dt;
@@ -1077,10 +1181,15 @@
       if (state.phase === "fight") updatePatches(dt);
       if (state.phase === "fight") updateUnits(dt);
       if (state.phase === "fight") updateTurret(dt);
+      if (state.phase === "fight") updateMines(dt);
+      if (state.phase === "fight") updateMend(dt);
       if (state.phase === "fight") updateBolts(dt);
       if (state.phase === "fight") updateLobs(dt);
       if (state.phase === "fight") checkClear();
-    } else if (state.phase === "shop" || state.phase === "brief") {
+    } else if (state.phase === "shop") {
+      updateMend(dt);
+      updateUnits(dt);
+    } else if (state.phase === "brief") {
       updateUnits(dt);
     }
     updateFx(dt);
@@ -1093,8 +1202,10 @@
   function drawSprite(key, x, y, size, opts) {
     opts = opts || {};
     const img = sprites[key];
-    const ready = img && img.complete && img.naturalWidth > 0;
-    if (!ready) {
+    const sheet = opts.frame != null ? walks[key] : null;
+    const framed = sheet && sheet.complete && sheet.naturalWidth > 0;
+    const staticReady = img && img.complete && img.naturalWidth > 0;
+    if (!framed && !staticReady) {
       if (opts.backup) {
         ctx.save();
         ctx.translate(x, opts.anchor === "center" ? y : y - size * 0.45);
@@ -1103,8 +1214,6 @@
       }
       return false;
     }
-    const sheet = opts.frame != null ? walks[key] : null;
-    const framed = sheet && sheet.complete && sheet.naturalWidth > 0;
     const src = framed ? sheet : img;
     const frames = framed ? WALK_FRAMES : 1;
     const frame = framed ? ((opts.frame % frames) + frames) % frames : 0;
@@ -1173,10 +1282,6 @@
   function spriteFilter(e) {
     let f = "";
     if (e.type === "tank") f = "brightness(0.78)";
-    else if (e.type === "crawler") f = "hue-rotate(78deg) saturate(1.35) brightness(1.05)";
-    else if (e.type === "spitter") f = "hue-rotate(46deg) saturate(1.5) brightness(1.08)";
-    else if (e.type === "shrieker") f = "hue-rotate(235deg) saturate(1.25) brightness(1.08)";
-    else if (e.type === "bloater") f = "hue-rotate(12deg) saturate(1.45) brightness(0.92)";
     if (e.elite) f = (f ? f + " " : "") + "sepia(0.55) saturate(1.7) brightness(1.12)";
     return f || "none";
   }
@@ -1452,8 +1557,58 @@
     }
   }
 
+  function drawSpikes() {
+    const lv = state.ups.spikes;
+    if (!lv) return;
+    const n = 10 + lv * 4;
+    const inner = BASE.r + 0.35;
+    const outer = inner + 1.15 + lv * 0.28;
+    ctx.strokeStyle = "rgba(214, 196, 160, 0.9)";
+    ctx.lineWidth = 0.28;
+    ctx.lineCap = "butt";
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + 0.15;
+      ctx.beginPath();
+      ctx.moveTo(BASE.x + Math.cos(a) * inner, BASE.y + Math.sin(a) * inner);
+      ctx.lineTo(BASE.x + Math.cos(a) * outer, BASE.y + Math.sin(a) * outer);
+      ctx.stroke();
+    }
+  }
+
+  function drawMend() {
+    const lv = state.ups.mend;
+    if (!lv) return;
+    const pulse = reduceMotion ? 1 : 1 + Math.sin(state.time * 2.1) * 0.05;
+    ctx.beginPath();
+    ctx.arc(BASE.x, BASE.y, (BASE.r + 2.4) * pulse, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(125, 255, 179, " + (0.16 + lv * 0.07) + ")";
+    ctx.lineWidth = 0.55;
+    ctx.stroke();
+  }
+
+  function drawMines() {
+    const lv = state.ups.mines;
+    if (!lv) return;
+    const n = lv >= 3 ? 4 : 3;
+    const rad = BASE.r + 7.2;
+    for (let i = 0; i < n; i++) {
+      const a = -0.55 + (i / n) * Math.PI * 2;
+      const x = BASE.x + Math.cos(a) * rad;
+      const y = BASE.y + Math.sin(a) * rad * 0.86;
+      ctx.fillStyle = "#14160f";
+      ctx.beginPath();
+      ctx.arc(x, y, 0.95, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#c42e36";
+      ctx.beginPath();
+      ctx.arc(x, y, 0.28, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
   function drawBase() {
     drawSandbags(false);
+    drawMines();
     const built = drawSprite("base", BASE.x, BASE.y + BASE.r * 0.15, BASE.r * 2.7, {
       anchor: "center",
       flash: state.baseFlash > 0 ? Math.min(0.85, state.baseFlash / 0.18) : 0,
@@ -1489,6 +1644,8 @@
     ctx.textBaseline = "middle";
     ctx.fillStyle = frac < 0.3 ? "#ff8d98" : "#d9ffe8";
     ctx.fillText(String(Math.max(0, Math.ceil(state.baseHp))), BASE.x, BASE.y + BASE.r + 5.6);
+    drawSpikes();
+    drawMend();
   }
 
   function resize() {
@@ -1578,6 +1735,14 @@
       ctx.lineTo(f.x, f.y);
       ctx.stroke();
     }
+    for (const sw of sweeps) {
+      ctx.globalAlpha = Math.max(0, sw.life / sw.max);
+      ctx.strokeStyle = sw.color;
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.arc(sw.x, sw.y, sw.r, sw.a0, sw.a1);
+      ctx.stroke();
+    }
     ctx.globalAlpha = 1;
     for (const ring of rings) {
       ctx.globalAlpha = Math.max(0, ring.life / 0.4);
@@ -1618,7 +1783,11 @@
   function upEffect(id, lv) {
     if (id === "wall") return lv ? "Hits on the base are " + [0, 18, 32, 46][lv] + "% softer" : "Not built";
     if (id === "aura") return lv ? "Nearby dead move at " + [0, 80, 66, 52][lv] + "% speed" : "Not built";
-    return lv ? "Sentry hits for " + [0, 11, 18, 28][lv] : "Not built";
+    if (id === "turret") return lv ? "Sentry hits for " + [0, 11, 18, 28][lv] : "Not built";
+    if (id === "spikes") return lv ? "Biters take " + SPIKE_DMG[lv] + " when they hit" : "Not built";
+    if (id === "mend") return lv ? "Gate heals " + MEND_RATE[lv] + " HP/s" : "Not built";
+    if (id === "mines") return lv ? "A mine every " + MINES[lv].every + "s" : "Not built";
+    return "Not built";
   }
 
   function modLine() {
@@ -1629,6 +1798,20 @@
       parts.push(c > 1 ? p.short + " x" + c : p.short);
     }
     return parts.join("  ·  ");
+  }
+
+  function announceHires() {
+    if (state.phase !== "shop") return;
+    if (state.wave >= 6 && !state.toldWren) {
+      state.toldWren = true;
+      state.toldSable = true;
+      toast("Wren can be hired");
+      return;
+    }
+    if (state.wave >= 4 && !state.toldSable) {
+      state.toldSable = true;
+      toast("Sable can be hired");
+    }
   }
 
   function syncHud() {
@@ -1666,7 +1849,10 @@
     for (const id of ORDER) {
       const btn = rosterButtons[id];
       const cost = priceOf(id);
-      btn.querySelector(".price").textContent = state.sale ? "SALE $" + cost : "$" + cost;
+      const need = HEROES[id].unlock || 1;
+      const gated = state.wave < need;
+      btn.disabled = gated;
+      btn.querySelector(".price").textContent = gated ? "Stage " + need : (state.sale ? "SALE $" + cost : "$" + cost);
       const owned = units.filter((u) => u.kind === id);
       const named = owned.some((u) => u.named);
       const extras = owned.length - (named ? 1 : 0);
@@ -1675,9 +1861,10 @@
       else if (named) own = "Hero on field";
       else if (extras) own = extras + " on field";
       btn.querySelector(".own").textContent = own;
-      btn.classList.toggle("broke", locked || units.length >= CAP || state.cash < cost);
+      btn.classList.toggle("broke", !gated && (locked || units.length >= CAP || state.cash < cost));
     }
-    for (const id of ["wall", "aura", "turret"]) {
+    announceHires();
+    for (const id of UP_IDS) {
       const btn = upButtons[id];
       const lv = state.ups[id];
       const up = BASE_UPS[id];
@@ -1727,7 +1914,8 @@
     const t = audioCtx.currentTime || 0;
     try {
       music.master.gain.cancelScheduledValues(t);
-      music.master.gain.setTargetAtTime(muted ? 0.0001 : MUSIC_GAIN, t, 0.06);
+      if (muted) music.master.gain.setValueAtTime(0.0001, t);
+      else music.master.gain.setTargetAtTime(MUSIC_GAIN, t, 0.06);
     } catch (err) {
       music.master.gain.value = muted ? 0.0001 : MUSIC_GAIN;
     }
@@ -1737,64 +1925,30 @@
     const master = audioCtx.createGain();
     master.gain.value = state.muted ? 0.0001 : MUSIC_GAIN;
     master.connect(audioCtx.destination);
-    const filter = audioCtx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = 1400;
-    filter.Q.value = 0.4;
-    filter.connect(master);
-    function osc(freq, gain) {
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.type = "sine";
-      o.frequency.value = freq;
-      g.gain.value = gain;
-      o.connect(g);
-      g.connect(filter);
-      o.start();
-      return { o: o, g: g };
-    }
-    const a = osc(73.42, 0.34);
-    osc(110, 0.2);
-    osc(146.83, 0.14);
-    osc(220, 0.09);
-    const lfo = audioCtx.createOscillator();
-    lfo.frequency.value = 0.05;
-    const lfoG = audioCtx.createGain();
-    lfoG.gain.value = 0.045;
-    lfo.connect(lfoG);
-    lfoG.connect(a.g.gain);
-    lfo.start();
-    const drift = audioCtx.createOscillator();
-    drift.frequency.value = 0.028;
-    const driftG = audioCtx.createGain();
-    driftG.gain.value = 0.3;
-    drift.connect(driftG);
-    driftG.connect(a.o.frequency);
-    drift.start();
+    const bassFilter = audioCtx.createBiquadFilter();
+    bassFilter.type = "lowpass";
+    bassFilter.frequency.value = 420;
+    bassFilter.Q.value = 0.7;
+    bassFilter.connect(master);
+    const leadFilter = audioCtx.createBiquadFilter();
+    leadFilter.type = "lowpass";
+    leadFilter.frequency.value = 1600;
+    leadFilter.Q.value = 0.6;
+    leadFilter.connect(master);
+    let noiseBuf = null;
     try {
-      const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
-      const data = buf.getChannelData(0);
-      let last = 0;
-      for (let i = 0; i < data.length; i++) {
-        const white = Math.random() * 2 - 1;
-        last = last * 0.97 + white * 0.03;
-        data[i] = last * 2.2;
-      }
-      const noise = audioCtx.createBufferSource();
-      noise.buffer = buf;
-      noise.loop = true;
-      const bp = audioCtx.createBiquadFilter();
-      bp.type = "bandpass";
-      bp.frequency.value = 280;
-      bp.Q.value = 0.65;
-      const ng = audioCtx.createGain();
-      ng.gain.value = 0.09;
-      noise.connect(bp);
-      bp.connect(ng);
-      ng.connect(master);
-      noise.start();
-    } catch (err) { /* drone still plays */ }
-    music = { master: master, nextHigh: 3.2 + Math.random() * 2.5 };
+      noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+      const data = noiseBuf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    } catch (err) { noiseBuf = null; }
+    music = {
+      master: master,
+      bassFilter: bassFilter,
+      leadFilter: leadFilter,
+      noiseBuf: noiseBuf,
+      nextTime: audioCtx.currentTime + 0.05,
+      step: 0,
+    };
   }
 
   function startMusic() {
@@ -1849,13 +2003,89 @@
     playTone(880, now + 0.12, 0.32, 0.045);
   }
 
+  function grooveTone(when, freq, dur, peak, type, dest) {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, when);
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), when + Math.min(0.03, dur * 0.25));
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    o.connect(g);
+    g.connect(dest);
+    o.start(when);
+    o.stop(when + dur + 0.02);
+  }
+
+  function grooveKick(when) {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(168, when);
+    o.frequency.exponentialRampToValueAtTime(46, when + 0.09);
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(0.72, when + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + 0.18);
+    o.connect(g);
+    g.connect(music.master);
+    o.start(when);
+    o.stop(when + 0.2);
+  }
+
+  function grooveNoise(when, dur, peak, type, freq, q) {
+    if (!music.noiseBuf) return;
+    const src = audioCtx.createBufferSource();
+    src.buffer = music.noiseBuf;
+    const f = audioCtx.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = freq;
+    f.Q.value = q;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(Math.max(0.0002, peak), when);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    src.connect(f);
+    f.connect(g);
+    g.connect(music.master);
+    src.start(when);
+    src.stop(when + dur + 0.02);
+  }
+
+  function scheduleGroove(when, step) {
+    const eighth = GROOVE_BEAT / 2;
+    const beat = (step / 2) | 0;
+    const inBar = step % 8;
+    if (inBar === 0 || inBar === 4) grooveKick(when);
+    if (inBar === 2 || inBar === 6) grooveNoise(when, 0.14, 0.28, "bandpass", 1800, 0.8);
+    grooveNoise(when, 0.035, 0.055, "highpass", 7200, 0.7);
+    if (step % 2 === 0) {
+      const bass = BASS_LINE[beat % BASS_LINE.length];
+      grooveTone(when, bass, GROOVE_BEAT * 0.86, 0.2, "square", music.bassFilter);
+      if (stageSpec(state.wave).boss) {
+        grooveTone(when, bass / 2, GROOVE_BEAT * 0.55, 0.16, "sine", music.master);
+      }
+    }
+    const lead = LEAD_LINE[step % LEAD_LINE.length];
+    if (lead) grooveTone(when, lead, eighth * 0.92, 0.26, "triangle", music.leadFilter);
+  }
+
   function musicTick(dt) {
     if (!music || state.muted || !audioCtx) return;
     if (state.phase === "paused" || state.phase === "title") return;
-    music.nextHigh -= dt;
-    if (music.nextHigh <= 0) {
-      music.nextHigh = 6.5 + Math.random() * 7;
-      softTone();
+    if (dt < 0) return;
+    const eighth = GROOVE_BEAT / 2;
+    const now = audioCtx.currentTime;
+    if (music.nextTime < now - 0.02) {
+      const skip = Math.ceil((now - music.nextTime) / eighth);
+      music.step = (music.step + skip) % 16;
+      music.nextTime += skip * eighth;
+    }
+    const horizon = now + 0.25;
+    let guard = 0;
+    while (music.nextTime < horizon && guard < 8) {
+      try { scheduleGroove(music.nextTime, music.step); } catch (err) { /* skip a step */ }
+      music.step = (music.step + 1) % 16;
+      music.nextTime += eighth;
+      guard++;
     }
   }
 
@@ -2052,6 +2282,7 @@
     lobs.length = 0;
     patches.length = 0;
     flashes.length = 0;
+    sweeps.length = 0;
     rings.length = 0;
     particles.length = 0;
     floaters.length = 0;
@@ -2069,6 +2300,9 @@
   function startRun() {
     resetRun();
     state.runLive = true;
+    state.toldSable = false;
+    state.toldWren = false;
+    state.mineCd = 2.6;
     $("titleScreen").classList.add("hidden");
     $("overlay").classList.add("hidden");
     $("pauseScreen").classList.add("hidden");
@@ -2111,13 +2345,13 @@
   function buildUps() {
     const root = $("baseShop");
     root.innerHTML = "";
-    for (const id of ["wall", "aura", "turret"]) {
+    for (const id of UP_IDS) {
       const up = BASE_UPS[id];
       const b = document.createElement("button");
       b.type = "button";
       b.className = "up";
       b.dataset.id = id;
-      const label = { wall: "Wall", aura: "Aura", turret: "Turret" }[id] || up.name;
+      const label = { wall: "Wall", aura: "Aura", turret: "Turret", spikes: "Spikes", mend: "Mend", mines: "Mines" }[id] || up.name;
       b.innerHTML = '<span class="mark">' + up.mark + '</span><em class="lv"></em><span class="meta"><b>' + label +
         '</b><small>' + up.blurb + '</small><i class="fx"></i></span>';
       b.addEventListener("click", () => buyUp(id));

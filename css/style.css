@@ -266,13 +266,18 @@ button { font: inherit; color: inherit; }
 
 #roster {
   min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
   gap: 3px;
-  flex: 1.4 1 0;
+  flex: 1.45 1 0;
   min-width: 0;
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: hidden;
+  touch-action: pan-x;
+  scrollbar-width: none;
 }
+#roster::-webkit-scrollbar { display: none; }
 
 .hire, .up {
   display: flex;
@@ -288,17 +293,18 @@ button { font: inherit; color: inherit; }
   width: auto;
 }
 .hire { flex-direction: column; gap: 0; min-height: 0; overflow: hidden; }
-.hire:active, .up:active { transform: scale(0.98); }
+.hire:active:not(:disabled), .up:active { transform: scale(0.98); }
 .hire.broke, .up.broke { opacity: 0.55; }
+.hire:disabled { opacity: 0.45; }
 
 .face {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
+  width: 18px;
+  height: 22px;
+  border-radius: 4px;
   flex: none;
   background-color: #141820;
   background-repeat: no-repeat;
-  background-size: 230%;
+  background-size: cover;
   background-position: center 12%;
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.12);
 }
@@ -306,6 +312,12 @@ button { font: inherit; color: inherit; }
 .hire[data-id="roxie"] .face { box-shadow: inset 0 0 0 2px #ff4d9a; }
 .hire[data-id="lila"] .face { box-shadow: inset 0 0 0 2px #ffb04a; }
 .hire[data-id="nyx"] .face { box-shadow: inset 0 0 0 2px #c49bff; }
+.hire[data-id="sable"] .face { box-shadow: inset 0 0 0 2px #7ec8ff; }
+.hire[data-id="wren"] .face { box-shadow: inset 0 0 0 2px #9be36a; }
+.hire {
+  flex: 0 0 52px;
+  width: 52px;
+}
 
 .meta { min-width: 0; display: flex; flex-direction: column; gap: 0; align-items: center; width: 100%; }
 .hire .meta b {
@@ -320,14 +332,22 @@ button { font: inherit; color: inherit; }
 .price { color: var(--gold); font-weight: 800; font-size: 9px; line-height: 1; }
 
 #baseShop {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
   gap: 3px;
-  flex: 0.95 1 0;
+  flex: 1 1 0;
   min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  touch-action: pan-x;
+  scrollbar-width: none;
 }
+#baseShop::-webkit-scrollbar { display: none; }
 .up {
   position: relative;
+  flex: 0 0 40px;
+  width: 40px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -354,6 +374,16 @@ button { font: inherit; color: inherit; }
 .up[data-id="wall"] .mark { background-image: url("../assets/upgrade-wall.png"); }
 .up[data-id="aura"] .mark { background-image: url("../assets/upgrade-aura.png"); }
 .up[data-id="turret"] .mark { background-image: url("../assets/upgrade-turret.png"); }
+.up[data-id="spikes"] .mark,
+.up[data-id="mend"] .mark,
+.up[data-id="mines"] .mark {
+  font-family: "Passion One", Impact, sans-serif;
+  font-size: 16px;
+  line-height: 26px;
+  text-align: center;
+  color: var(--text);
+  background-image: none;
+}
 .up .meta { display: none; }
 .up .lv {
   position: absolute;
@@ -663,7 +693,8 @@ button { font: inherit; color: inherit; }
 @media (max-width: 360px) {
   .pill b { font-size: 14px; }
   .pill small { font-size: 8px; }
-  .face { width: 22px; height: 22px; }
+  .face { width: 18px; height: 22px; }
+  .hire { flex-basis: 46px; width: 46px; }
   #next { flex-basis: 74px; width: 74px; font-size: 13px; }
   #topbar { padding-left: 4px; padding-right: 4px; gap: 3px; }
   #playStrip { height: 46px; }
