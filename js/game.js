@@ -2537,8 +2537,15 @@
     lobs.length = 0;
     patches.length = 0;
     $("pauseScreen").classList.add("hidden");
-    $("overlay").classList.add("splash");
-    $("overlay").classList.remove("hidden");
+    const ov = $("overlay");
+    ov.dataset.art = (spec.boss || spec.finale) ? "boss" : state.wave >= 51 ? "chapel" : state.wave >= 21 ? "marsh" : "yard";
+    ov.classList.add("splash");
+    ov.classList.remove("hidden");
+  }
+
+  function clearSplashArt() {
+    const ov = $("overlay");
+    if (ov.classList.contains("hidden") || !ov.classList.contains("splash")) delete ov.dataset.art;
   }
 
   function dismissBrief() {
@@ -2546,6 +2553,7 @@
     if (state.perkDue && !state.perkPicked) return;
     state.phase = "shop";
     $("overlay").classList.add("hidden");
+    clearSplashArt();
   }
 
   function showEnd(kind) {
@@ -2570,8 +2578,10 @@
     $("ovBtn").textContent = "PLAY AGAIN";
     $("ovRestart").hidden = true;
     $("pauseScreen").classList.add("hidden");
-    $("overlay").classList.add("splash");
-    $("overlay").classList.remove("hidden");
+    const ov = $("overlay");
+    ov.dataset.art = kind === "won" ? "boss" : "yard";
+    ov.classList.add("splash");
+    ov.classList.remove("hidden");
   }
 
   function win() {
@@ -2641,6 +2651,7 @@
     hideMenus();
     $("titleScreen").classList.add("hidden");
     $("overlay").classList.add("hidden");
+    clearSplashArt();
     $("pauseScreen").classList.add("hidden");
     $("pauseBtn").textContent = "PAUSE";
     if (startN >= 51) announceRegion(startN);
@@ -2654,6 +2665,7 @@
     state.runLive = false;
     hideMenus();
     $("overlay").classList.add("hidden");
+    clearSplashArt();
     $("pauseScreen").classList.add("hidden");
     $("titleScreen").classList.remove("hidden");
     renderRegions();
