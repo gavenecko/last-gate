@@ -10,13 +10,24 @@
   const CAP = 10;
   const FINALE = 100;
   const ORDER = ["vera", "roxie", "lila", "nyx", "sable", "wren"];
-  const MUSIC_GAIN = 0.78;
-  const GROOVE_BPM = 108;
+  const MUSIC_GAIN = 0.9;
+  const GROOVE_BPM = 128;
   const GROOVE_BEAT = 60 / GROOVE_BPM;
-  // A2 A2 C3 D3 F2 E2 D3 C3
-  const BASS_LINE = [110, 110, 130.81, 146.83, 87.31, 82.41, 146.83, 130.81];
-  // A minor pentatonic, two bars of eighths. 0 is a rest.
-  const LEAD_LINE = [440, 523.25, 659.25, 0, 587.33, 523.25, 440, 392, 440, 0, 523.25, 587.33, 659.25, 587.33, 523.25, 440];
+  // Four bars of eighths. 0 is a rest. Bass sits under the hook.
+  const BASS_LINE = [110, 0, 164.81, 110, 0, 110, 130.81, 164.81, 87.31, 0, 130.81, 87.31, 82.41, 0, 73.42, 82.41];
+  // A-minor hook, four bars. The first two notes repeat so it sticks.
+  const LEAD_LINE = [
+    659.25, 783.99, 659.25, 523.25, 587.33, 659.25, 880, 783.99,
+    659.25, 587.33, 523.25, 587.33, 659.25, 783.99, 659.25, 587.33,
+    523.25, 659.25, 783.99, 880, 783.99, 659.25, 587.33, 523.25,
+    587.33, 659.25, 783.99, 659.25, 587.33, 523.25, 440, 440,
+  ];
+  const HARM_LINE = [
+    523.25, 0, 523.25, 0, 440, 0, 659.25, 0,
+    523.25, 0, 392, 0, 523.25, 0, 523.25, 0,
+    392, 0, 587.33, 0, 659.25, 0, 440, 0,
+    440, 0, 587.33, 0, 440, 0, 349.23, 0,
+  ];
 
   const HEROES = {
     vera: {
@@ -1312,12 +1323,13 @@
     ctx.ellipse(x, y + 0.35, height * 0.16, height * 0.045, 0, 0, Math.PI * 2);
     ctx.fill();
     const face = Math.cos(u.facing || 0) >= 0 ? 1 : -1;
-    const frame = (!moving || reduceMotion) ? 1 : (Math.floor(u.walk * 7) % WALK_FRAMES);
+    const rate = moving ? 9 : 4.6;
+    const frame = Math.floor(state.time * rate + u.walk * 3) % WALK_FRAMES;
     drawSprite(u.kind, x, y, height, {
       frame: frame,
-      bob: moving ? bob * 0.25 : 0,
-      rot: attack * 0.16 * face,
-      sx: face * (1 + (moving ? squash * 0.03 : 0)),
+      bob: -Math.abs(Math.sin(state.time * rate * Math.PI)) * (moving ? 0.7 : 0.28),
+      rot: attack * 0.22 * face,
+      sx: face,
       sy: 1,
       backup: (rr) => drawHeroFallback(h, rr),
     });
@@ -1396,12 +1408,12 @@
     }
     const flash = e.flash > 0 ? Math.min(1, e.flash / 0.18) : 0;
     const face = dx >= 0 ? 1 : -1;
-    const rate = e.crawler ? 10 : e.runner ? 8.5 : e.boss ? 4.2 : 5.5;
-    const frame = reduceMotion ? 1 : (Math.floor(e.walk * rate) % WALK_FRAMES);
+    const rate = e.crawler ? 11 : e.runner ? 10 : e.boss ? 5.2 : 7.2;
+    const frame = Math.floor(state.time * rate + (e.walk || 0)) % WALK_FRAMES;
     drawSprite(e.sprite, x, y, height, {
       frame: frame,
-      bob: bob * 0.2,
-      rot: attack * 0.2 * face,
+      bob: -Math.abs(Math.sin(state.time * rate * Math.PI)) * (e.crawler ? 0.85 : 0.55),
+      rot: attack * 0.22 * face,
       sx: face * (1 + flash * 0.03),
       sy: 1,
       filter: spriteFilter(e),
@@ -1932,7 +1944,7 @@
     bassFilter.connect(master);
     const leadFilter = audioCtx.createBiquadFilter();
     leadFilter.type = "lowpass";
-    leadFilter.frequency.value = 1600;
+    leadFilter.frequency.value = 3400;
     leadFilter.Q.value = 0.6;
     leadFilter.connect(master);
     let noiseBuf = null;
@@ -2052,20 +2064,24 @@
 
   function scheduleGroove(when, step) {
     const eighth = GROOVE_BEAT / 2;
-    const beat = (step / 2) | 0;
     const inBar = step % 8;
-    if (inBar === 0 || inBar === 4) grooveKick(when);
-    if (inBar === 2 || inBar === 6) grooveNoise(when, 0.14, 0.28, "bandpass", 1800, 0.8);
-    grooveNoise(when, 0.035, 0.055, "highpass", 7200, 0.7);
-    if (step % 2 === 0) {
-      const bass = BASS_LINE[beat % BASS_LINE.length];
-      grooveTone(when, bass, GROOVE_BEAT * 0.86, 0.2, "square", music.bassFilter);
-      if (stageSpec(state.wave).boss) {
-        grooveTone(when, bass / 2, GROOVE_BEAT * 0.55, 0.16, "sine", music.master);
-      }
+    if (inBar === 0 || inBar === 3 || inBar === 4) grooveKick(when);
+    if (inBar === 2 || inBar === 6) grooveNoise(when, 0.12, 0.42, "bandpass", 1900, 0.7);
+    grooveNoise(when, 0.03, inBar % 2 ? 0.04 : 0.09, "highpass", 6500, 0.6);
+    if (inBar === 0) {
+      grooveTone(when, 220, eighth * 1.3, 0.07, "sawtooth", music.leadFilter);
+      grooveTone(when, 261.63, eighth * 1.3, 0.05, "sawtooth", music.leadFilter);
+      grooveTone(when, 329.63, eighth * 1.3, 0.045, "triangle", music.leadFilter);
+    }
+    const bass = BASS_LINE[step % BASS_LINE.length];
+    if (bass) {
+      grooveTone(when, bass, eighth * 0.9, 0.28, "square", music.bassFilter);
+      if (stageSpec(state.wave).boss) grooveTone(when, bass / 2, eighth * 0.7, 0.18, "sine", music.master);
     }
     const lead = LEAD_LINE[step % LEAD_LINE.length];
-    if (lead) grooveTone(when, lead, eighth * 0.92, 0.26, "triangle", music.leadFilter);
+    if (lead) grooveTone(when, lead, eighth * 0.88, 0.22, "square", music.leadFilter);
+    const harm = HARM_LINE[step % HARM_LINE.length];
+    if (harm) grooveTone(when, harm, eighth * 0.8, 0.08, "triangle", music.leadFilter);
   }
 
   function musicTick(dt) {
@@ -2076,14 +2092,14 @@
     const now = audioCtx.currentTime;
     if (music.nextTime < now - 0.02) {
       const skip = Math.ceil((now - music.nextTime) / eighth);
-      music.step = (music.step + skip) % 16;
+      music.step = (music.step + skip) % 32;
       music.nextTime += skip * eighth;
     }
     const horizon = now + 0.25;
     let guard = 0;
     while (music.nextTime < horizon && guard < 8) {
       try { scheduleGroove(music.nextTime, music.step); } catch (err) { /* skip a step */ }
-      music.step = (music.step + 1) % 16;
+      music.step = (music.step + 1) % 32;
       music.nextTime += eighth;
       guard++;
     }
