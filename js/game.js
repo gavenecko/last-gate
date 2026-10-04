@@ -185,12 +185,16 @@
     mul *= 1 + Math.max(0, n - 15) * 0.012;
     mul *= 1 + Math.max(0, n - 39) * 0.018;
     mul *= regionHpMul(n);
+    // Extra bulk from the late yard onward. Stages 1-17 are unchanged by these.
+    if (n >= 18) mul *= 1.22;
+    if (n >= 30) mul *= 1.18;
     return mul;
   }
 
   function speedMul(n) {
     let s = 1 + Math.min(0.32, Math.max(0, n - 1) * 0.0026);
     if (n % 10 === 4) s += 0.24;
+    if (n >= 21 && n < 51) s *= 1.08;
     return s;
   }
 
@@ -271,9 +275,14 @@
       if (n >= 51) add("brute", 2, 1.5, 1.2);
       else add("bloater", 2, 2, 1.4);
     }
+    // Extra pack from 22. Stacks with the crawler pack that already starts after 25.
+    if (n >= 22) {
+      if (n % 2 === 0) add("runner", 4, 0.42, 0.35);
+      else add("crawler", 4, 0.32, 0.3);
+    }
     let total = 0;
     for (const g of groups) total += g.n;
-    const capN = Math.min(110, 36 + Math.floor(n * 0.7));
+    const capN = Math.min(130, 40 + Math.floor(n * 0.85));
     if (total > capN) {
       const scale = capN / total;
       for (const g of groups) {
@@ -310,20 +319,22 @@
   }
 
   const BASE_UPS = {
-    wall: { name: "Sandbag Wall", mark: "W", blurb: "Armor. The base takes less damage.", costs: [65, 95, 140], max: 3 },
-    aura: { name: "Dread Aura", mark: "A", blurb: "Zombies slow down near the gate.", costs: [75, 110, 155], max: 3 },
-    turret: { name: "Sentry Turret", mark: "T", blurb: "A gun on the compound fires by itself.", costs: [85, 125, 175], max: 3 },
-    spikes: { name: "Bite Spikes", mark: "S", blurb: "Biters take damage when they hit the gate.", costs: [70, 100, 145], max: 3 },
-    mend: { name: "Field Mend", mark: "M", blurb: "The gate slowly heals.", costs: [60, 90, 130], max: 3 },
-    mines: { name: "Yard Mines", mark: "N", blurb: "A mine pops the nearest zombie.", costs: [90, 130, 180], max: 3 },
+    wall: { name: "Sandbag Wall", mark: "W", blurb: "Armor. The base takes less damage.", costs: [65, 95, 140, 210, 280], max: 5 },
+    aura: { name: "Dread Aura", mark: "A", blurb: "Zombies slow down near the gate.", costs: [75, 110, 155, 233, 310], max: 5 },
+    turret: { name: "Sentry Turret", mark: "T", blurb: "A gun on the compound fires by itself.", costs: [85, 125, 175, 263, 350], max: 5 },
+    spikes: { name: "Bite Spikes", mark: "S", blurb: "Biters take damage when they hit the gate.", costs: [70, 100, 145, 218, 290], max: 5 },
+    mend: { name: "Field Mend", mark: "M", blurb: "The gate slowly heals.", costs: [60, 90, 130, 195, 260], max: 5 },
+    mines: { name: "Yard Mines", mark: "N", blurb: "A mine pops the nearest zombie.", costs: [90, 130, 180, 270, 360], max: 5 },
+    ammo: { name: "Ammo Stock", mark: "B", blurb: "Every heroine hits a little harder.", costs: [100, 150, 210, 280], max: 4 },
+    squad: { name: "Squad Call", mark: "C", blurb: "Room for two more heroines.", costs: [120, 180, 260], max: 3 },
   };
-  const WALL_CUT = [0, 0.18, 0.32, 0.46];
-  const AURA = [null, { r: 13.5, slow: 0.8 }, { r: 16.5, slow: 0.66 }, { r: 20, slow: 0.52 }];
-  const TURRET = [null, { dmg: 11, rate: 1.15, range: 26 }, { dmg: 18, rate: 1.45, range: 30 }, { dmg: 28, rate: 1.75, range: 34 }];
-  const SPIKE_DMG = [0, 8, 14, 22];
-  const MEND_RATE = [0, 1.2, 2.2, 3.4];
-  const MINES = [null, { every: 2.6, range: 30, dmg: 24 }, { every: 2.1, range: 36, dmg: 40 }, { every: 1.7, range: 42, dmg: 58 }];
-  const UP_IDS = ["wall", "aura", "turret", "spikes", "mend", "mines"];
+  const WALL_CUT = [0, 0.18, 0.32, 0.46, 0.54, 0.60];
+  const AURA = [null, { r: 13.5, slow: 0.8 }, { r: 16.5, slow: 0.66 }, { r: 20, slow: 0.52 }, { r: 22, slow: 0.44 }, { r: 23.5, slow: 0.39 }];
+  const TURRET = [null, { dmg: 11, rate: 1.15, range: 26 }, { dmg: 18, rate: 1.45, range: 30 }, { dmg: 28, rate: 1.75, range: 34 }, { dmg: 34, rate: 1.93, range: 36.5 }, { dmg: 38, rate: 2.05, range: 38.5 }];
+  const SPIKE_DMG = [0, 8, 14, 22, 27, 31];
+  const MEND_RATE = [0, 1.2, 2.2, 3.4, 4.2, 4.8];
+  const MINES = [null, { every: 2.6, range: 30, dmg: 24 }, { every: 2.1, range: 36, dmg: 40 }, { every: 1.7, range: 42, dmg: 58 }, { every: 1.45, range: 46, dmg: 68 }, { every: 1.3, range: 49, dmg: 76 }];
+  const UP_IDS = ["wall", "aura", "turret", "spikes", "mend", "mines", "ammo", "squad"];
 
   const SKILL_COST = [80, 140, 220];
   const SKILL_FORK = {
@@ -363,7 +374,7 @@
     ],
   };
   const JOBS = { vera: "Sniper", roxie: "Shotgun", lila: "Fire", nyx: "Hex", sable: "Pistols", wren: "Spear" };
-  const LAB_MAX = 8;
+  const LAB_MAX = 12;
   const LAB_TRACKS = [
     { id: "power", name: "Power", blurb: "+7% heroine damage per level. Stacks with skills." },
     { id: "tempo", name: "Tempo", blurb: "+5% heroine attack rate per level." },
@@ -485,7 +496,8 @@
       earned: 0,
       baseHp: BASE_HP0,
       baseMax: BASE_HP0,
-      ups: { wall: 0, aura: 0, turret: 0, spikes: 0, mend: 0, mines: 0 },
+      ups: { wall: 0, aura: 0, turret: 0, spikes: 0, mend: 0, mines: 0, ammo: 0, squad: 0 },
+      lossAsh: 0,
       dmgMult: 1, rateMult: 1, moveMult: 1, rangeMult: 1,
       sale: 0,
       mods: {},
@@ -548,6 +560,7 @@
     const fork = (state.fork && state.fork[u.kind]) || "";
     const skillDmg = rank >= 1 ? 1.18 : 1;
     const skillRate = rank >= 2 && fork === "tempo" ? 1.16 : 1;
+    const ammoDmg = Math.pow(1.08, (state.ups && state.ups.ammo) || 0);
     const labDmg = 1 + (meta.power || 0) * 0.07;
     const labRate = 1 + (meta.tempo || 0) * 0.05;
     let range = h.range * (u.named ? 1 : 0.88) * state.rangeMult;
@@ -576,7 +589,7 @@
     return {
       kind: h.attack,
       accent: h.accent,
-      dmg: h.dmg * low * state.dmgMult * skillDmg * labDmg,
+      dmg: h.dmg * low * state.dmgMult * skillDmg * labDmg * ammoDmg,
       range: range,
       rate: h.rate * (u.named ? 1 : 0.9) * state.rateMult * skillRate * labRate,
       move: h.move * (u.named ? 1 : 0.92) * state.moveMult,
@@ -584,7 +597,7 @@
       seek: seek,
       post: h.post,
       aoe: (h.aoe || 0) * (u.named ? 1 : 0.78),
-      patch: (h.patch || 0) * low * state.dmgMult * skillDmg * labDmg,
+      patch: (h.patch || 0) * low * state.dmgMult * skillDmg * labDmg * ammoDmg,
       patchTime: patchTime,
       slow: slow,
       slowTime: slowTime,
@@ -631,12 +644,16 @@
     }
   }
 
+  function squadCap() {
+    return CAP + ((state.ups && state.ups.squad) || 0) * 2;
+  }
+
   function buy(id) {
     if (!canShop()) return;
     const hero = HEROES[id];
     if (!hero) return;
     if (state.wave < (hero.unlock || 1)) { toast("Locked until stage " + hero.unlock); return; }
-    if (units.length >= CAP) { toast("Squad is full"); return; }
+    if (units.length >= squadCap()) { toast("Squad is full"); return; }
     const cost = priceOf(id);
     if (state.cash < cost) { toast("Need $" + cost); return; }
     state.cash -= cost;
@@ -1690,7 +1707,7 @@
     const lv = state.ups.wall;
     if (!lv) return [];
     const spots = [];
-    const n = lv === 1 ? 4 : lv === 2 ? 6 : 8;
+    const n = lv <= 1 ? 4 : lv === 2 ? 6 : 8 + Math.max(0, lv - 3) * 2;
     const size = 4.6 + lv * 0.85;
     const rad = BASE.r + 2.8 + lv * 0.35;
     for (let i = 0; i < n; i++) {
@@ -1706,6 +1723,10 @@
     if (lv >= 3) {
       spots.push({ x: BASE.x - rad - 2.4, y: BASE.y + 1.6, size: size * 0.95, rot: -0.35, front: true });
       spots.push({ x: BASE.x + rad + 2.4, y: BASE.y + 1.6, size: size * 0.95, rot: 0.35, front: true });
+    }
+    if (lv >= 5) {
+      spots.push({ x: BASE.x, y: BASE.y - rad - 2.2, size: size * 0.9, rot: 0, front: false });
+      spots.push({ x: BASE.x, y: BASE.y + rad + 2.2, size: size * 0.9, rot: 0, front: true });
     }
     return spots;
   }
@@ -1742,11 +1763,12 @@
   function drawTurrets() {
     const lv = state.ups.turret;
     if (!lv) return;
-    const size = lv === 1 ? 7.2 : lv === 2 ? 9.2 : 8.4;
+    const size = lv === 1 ? 7.2 : lv === 2 ? 9.2 : lv >= 5 ? 9.6 : lv >= 4 ? 9 : 8.4;
     const dist = BASE.r + 5.6;
     const ang = state.turretAng || -Math.PI / 2;
     const spots = [{ a: ang, sc: 1 }];
     if (lv >= 3) spots.push({ a: ang + Math.PI * 0.85, sc: 0.78 });
+    if (lv >= 5) spots.push({ a: ang + Math.PI * 1.55, sc: 0.7 });
     for (let i = 0; i < spots.length; i++) {
       const spot = spots[i];
       const x = BASE.x + Math.cos(spot.a) * dist;
@@ -1803,7 +1825,7 @@
   function drawMines() {
     const lv = state.ups.mines;
     if (!lv) return;
-    const n = lv >= 3 ? 4 : 3;
+    const n = lv >= 5 ? 6 : lv >= 4 ? 5 : lv >= 3 ? 4 : 3;
     const rad = BASE.r + 7.2;
     for (let i = 0; i < n; i++) {
       const a = -0.55 + (i / n) * Math.PI * 2;
@@ -2027,12 +2049,15 @@
   }
 
   function upEffect(id, lv) {
-    if (id === "wall") return lv ? "Hits on the base are " + [0, 18, 32, 46][lv] + "% softer" : "Not built";
-    if (id === "aura") return lv ? "Nearby dead move at " + [0, 80, 66, 52][lv] + "% speed" : "Not built";
-    if (id === "turret") return lv ? "Sentry hits for " + [0, 11, 18, 28][lv] : "Not built";
-    if (id === "spikes") return lv ? "Biters take " + SPIKE_DMG[lv] + " when they hit" : "Not built";
-    if (id === "mend") return lv ? "Gate heals " + MEND_RATE[lv] + " HP/s" : "Not built";
-    if (id === "mines") return lv ? "A mine every " + MINES[lv].every + "s" : "Not built";
+    if (!lv) return "Not built";
+    if (id === "wall") return "Hits on the base are " + Math.round((WALL_CUT[lv] || 0) * 100) + "% softer";
+    if (id === "aura") return AURA[lv] ? "Nearby dead move at " + Math.round(AURA[lv].slow * 100) + "% speed" : "Not built";
+    if (id === "turret") return TURRET[lv] ? "Sentry hits for " + TURRET[lv].dmg : "Not built";
+    if (id === "spikes") return "Biters take " + SPIKE_DMG[lv] + " when they hit";
+    if (id === "mend") return "Gate heals " + MEND_RATE[lv] + " HP/s";
+    if (id === "mines") return MINES[lv] ? "A mine every " + MINES[lv].every + "s" : "Not built";
+    if (id === "ammo") return "Heroine damage x" + Math.pow(1.08, lv).toFixed(2);
+    if (id === "squad") return "Squad cap " + (CAP + lv * 2);
     return "Not built";
   }
 
@@ -2065,6 +2090,7 @@
     $("hp").textContent = String(hpNow);
     $("hpLabel").textContent = "/ " + state.baseMax + " HP";
     $("cash").textContent = String(state.cash);
+    $("ash").textContent = String(meta.ash || 0);
     $("waveNum").textContent = String(state.wave);
     $("waveOf").textContent = "/ " + FINALE;
     const frac = state.baseMax > 0 ? Math.max(0, state.baseHp / state.baseMax) : 0;
@@ -2108,7 +2134,7 @@
       else if (named) own = "Hero on field";
       else if (extras) own = extras + " on field";
       btn.querySelector(".own").textContent = own;
-      btn.classList.toggle("broke", !gated && (locked || units.length >= CAP || state.cash < cost));
+      btn.classList.toggle("broke", !gated && (locked || units.length >= squadCap() || state.cash < cost));
     }
     announceHires();
     for (const id of UP_IDS) {
@@ -2633,7 +2659,7 @@
     $("ovTitle").textContent = kind === "won" ? "The gate holds" : "Gate breached";
     $("ovBody").textContent = kind === "won"
       ? "One hundred stages. The Graveking is down. The center is still yours."
-      : "The center fell on stage " + state.wave + ", " + stageSpec(state.wave).name + ".";
+      : "The center fell on stage " + state.wave + ", " + stageSpec(state.wave).name + ". +" + (state.lossAsh || 0) + " ash";
     $("ovDebut").hidden = true;
     $("ovDebut").innerHTML = "";
     $("ovPerk").hidden = true;
@@ -2659,6 +2685,10 @@
 
   function lose() {
     if (state.phase === "lost" || state.phase === "won") return;
+    const ashGain = Math.max(4, Math.floor(state.wave * 0.5));
+    meta.ash = (meta.ash || 0) + ashGain;
+    saveMeta();
+    state.lossAsh = ashGain;
     state.phase = "lost";
     state.baseHp = 0;
     showEnd("lost");
@@ -2819,7 +2849,7 @@
       b.type = "button";
       b.className = "up";
       b.dataset.id = id;
-      const label = { wall: "Wall", aura: "Aura", turret: "Turret", spikes: "Spikes", mend: "Mend", mines: "Mines" }[id] || up.name;
+      const label = { wall: "Wall", aura: "Aura", turret: "Turret", spikes: "Spikes", mend: "Mend", mines: "Mines", ammo: "Ammo", squad: "Squad" }[id] || up.name;
       b.innerHTML = '<span class="mark">' + up.mark + '</span><em class="lv"></em><span class="meta"><b>' + label +
         '</b><small>' + up.blurb + '</small><i class="fx"></i></span>';
       b.addEventListener("click", () => buyUp(id));
