@@ -9,6 +9,7 @@
   const START_CASH = 100;
   const CAP = 10;
   const FINALE = 100;
+  const SPLASH_COUNT = 24;
   const ORDER = ["vera", "roxie", "lila", "nyx", "sable", "wren"];
   const TRACKS = [
     "assets/music/scrap-tension.mp3",
@@ -2751,6 +2752,16 @@
     return false;
   }
 
+  let lastSplash = 0;
+
+  function setRandomSplash(ov) {
+    let splash = 1 + Math.floor(Math.random() * SPLASH_COUNT);
+    if (splash === lastSplash) splash = splash % SPLASH_COUNT + 1;
+    lastSplash = splash;
+    const file = "splash-" + String(splash).padStart(2, "0") + ".jpg";
+    ov.querySelector(".panel").style.setProperty("--splash", 'url("assets/splashes/' + file + '")');
+  }
+
   function openBrief(withPerk) {
     const spec = stageSpec(state.wave);
     const entered = announceRegion(state.wave);
@@ -2789,6 +2800,7 @@
     $("pauseScreen").classList.add("hidden");
     const ov = $("overlay");
     ov.dataset.art = (spec.boss || spec.finale) ? "boss" : state.wave >= 51 ? "chapel" : state.wave >= 21 ? "marsh" : "yard";
+    setRandomSplash(ov);
     ov.classList.add("splash");
     ov.classList.remove("hidden");
   }
@@ -2831,6 +2843,7 @@
     $("pauseScreen").classList.add("hidden");
     const ov = $("overlay");
     ov.dataset.art = kind === "won" ? "boss" : "yard";
+    setRandomSplash(ov);
     ov.classList.add("splash");
     ov.classList.remove("hidden");
   }
