@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#07080d">
   <title>Last Gate</title>
-  <link rel="stylesheet" href="css/style.css?v=14">
+  <link rel="stylesheet" href="css/style.css?v=15">
 </head>
 <body>
   <div id="app">
@@ -88,6 +88,16 @@
     </div>
   </div>
 
+  <div id="restartConfirm" class="hidden" role="dialog" aria-modal="true" aria-labelledby="restartConfirmPrompt">
+    <div class="panel">
+      <p id="restartConfirmPrompt">Are you sure you want to restart?</p>
+      <div class="restartConfirmActions">
+        <button id="restartConfirmYes" type="button">Yes</button>
+        <button id="restartConfirmNo" type="button" class="texty">No</button>
+      </div>
+    </div>
+  </div>
+
   <div id="overlay" class="hidden">
     <div class="panel" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
       <p id="ovKicker" class="kicker"></p>
@@ -104,6 +114,6 @@
       </div>
     </div>
   </div>
-  <script src="js/game.js?v=14"></script>
+  <script src="js/game.js?v=15"></script>
 </body>
 </html>

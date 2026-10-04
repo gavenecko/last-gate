@@ -777,6 +777,44 @@ button { font: inherit; color: inherit; }
   padding: 18px;
 }
 #pauseScreen.hidden { display: none; }
+#restartConfirm {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 100;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  background: rgba(4, 5, 10, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+#restartConfirm.hidden { display: none; }
+#restartConfirm .panel { max-width: 360px; }
+#restartConfirmPrompt { color: var(--text); margin: 0 0 12px; }
+.restartConfirmActions { display: flex; gap: 8px; }
+.restartConfirmActions button {
+  flex: 1;
+  min-height: 48px;
+  border-radius: 12px;
+  border: 0;
+  font-family: "Passion One", Impact, sans-serif;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+}
+#restartConfirmYes {
+  background: linear-gradient(180deg, #ff6fa4, #ff3d78);
+  color: #1a0a12;
+}
+#restartConfirmNo {
+  margin-top: 0;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
 #resumeBtn {
   display: block;
   width: 100%;

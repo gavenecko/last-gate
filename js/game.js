@@ -2942,6 +2942,25 @@
     $("labScreen").classList.add("hidden");
   }
 
+  function requestRestart() {
+    if (state.phase === "title" || !state.runLive) return;
+    const confirm = $("restartConfirm");
+    if (!confirm.classList.contains("hidden")) return;
+    confirm.classList.remove("hidden");
+  }
+
+  function confirmRestart() {
+    const confirm = $("restartConfirm");
+    if (confirm.classList.contains("hidden")) return;
+    confirm.classList.add("hidden");
+    unlock();
+    startRun();
+  }
+
+  function cancelRestart() {
+    $("restartConfirm").classList.add("hidden");
+  }
+
   function startRun(region) {
     let safe = "yard";
     const which = region || pickedRegion || "yard";
@@ -3270,21 +3289,21 @@
   $("next").addEventListener("click", () => { unlock(); startWave(); });
   $("restart").addEventListener("click", () => {
     unlock();
-    if (state.phase === "title") return;
-    startRun();
+    requestRestart();
   });
   $("ovBtn").addEventListener("click", () => {
     unlock();
     if (state.phase === "brief") dismissBrief();
     else if (state.phase === "won" || state.phase === "lost") showTitle();
   });
-  $("ovRestart").addEventListener("click", () => { unlock(); startRun(); });
+  $("ovRestart").addEventListener("click", () => { unlock(); requestRestart(); });
+  $("restartConfirmYes").addEventListener("click", () => confirmRestart());
+  $("restartConfirmNo").addEventListener("click", () => cancelRestart());
   $("pauseBtn").addEventListener("click", () => togglePause());
   $("resumeBtn").addEventListener("click", () => togglePause());
   $("pauseRestart").addEventListener("click", () => {
     unlock();
-    if (state.phase === "title") return;
-    startRun();
+    requestRestart();
   });
   $("mute").addEventListener("click", () => { unlock(); onMute(); });
   $("skillsBtn").addEventListener("click", () => { unlock(); openSkills(); });
@@ -3310,7 +3329,7 @@
     else if (ev.key === "5") buyUp("wall");
     else if (ev.key === "6") buyUp("aura");
     else if (ev.key === "7") buyUp("turret");
-    else if (ev.key === "r" || ev.key === "R") { if (state.phase !== "title") startRun(); }
+    else if (ev.key === "r" || ev.key === "R") { requestRestart(); }
     else if (ev.key === "m" || ev.key === "M") onMute();
     else if (ev.key === "p" || ev.key === "P" || ev.key === "Escape") togglePause();
   });
