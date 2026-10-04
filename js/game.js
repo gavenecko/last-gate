@@ -437,7 +437,7 @@
   //   assets/vera-sprite.png assets/roxie-sprite.png assets/lila-sprite.png assets/nyx-sprite.png
   //   assets/zombie-sprite.png assets/zombie-brute-sprite.png assets/boss-sprite.png
   //   assets/base-sprite.png assets/upgrade-wall-sprite.png assets/upgrade-aura-sprite.png assets/upgrade-turret-sprite.png
-  // Walk sheets are 4-frame strips. Missing sheets fall back to the static sprite, then the drawn backup.
+  // Walk sheets are 4-frame strips. Missing sheets fall back to the static sprite; if neither image is ready, only the caller's ground shadow remains.
   const sprites = {};
   const walks = {};
   const WALK_FRAMES = 4;
@@ -447,8 +447,8 @@
       ["roxie", "assets/roxie-sprite.png"],
       ["lila", "assets/lila-sprite.png"],
       ["nyx", "assets/nyx-sprite.png"],
-      ["sable", "assets/sable-sprite.png"],
-      ["wren", "assets/wren-sprite.png"],
+      ["sable", "assets/sable.png"],
+      ["wren", "assets/wren.png"],
       ["zombie", "assets/zombie-sprite.png"],
       ["brute", "assets/zombie-brute-sprite.png"],
       ["boss", "assets/boss-sprite.png"],
@@ -1433,12 +1433,6 @@
     const framed = sheet && sheet.complete && sheet.naturalWidth > 0;
     const staticReady = img && img.complete && img.naturalWidth > 0;
     if (!framed && !staticReady) {
-      if (opts.backup) {
-        ctx.save();
-        ctx.translate(x, opts.anchor === "center" ? y : y - size * 0.45);
-        opts.backup(size * 0.42);
-        ctx.restore();
-      }
       return false;
     }
     const src = framed ? sheet : img;
@@ -1482,35 +1476,6 @@
     return true;
   }
 
-  function drawHeroFallback(h, r) {
-    ctx.fillStyle = h.accent;
-    ctx.beginPath();
-    ctx.arc(0, -r * 0.2, r * 0.62, Math.PI * 1.05, Math.PI * 1.95);
-    ctx.fill();
-    ctx.fillStyle = "#f0c2a8";
-    ctx.beginPath();
-    ctx.arc(0, -r * 0.08, r * 0.36, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#1b1a22";
-    ctx.fillRect(-r * 0.42, r * 0.22, r * 0.84, r * 0.5);
-    ctx.fillStyle = h.accent;
-    ctx.fillRect(-r * 0.48, r * 0.2, r * 0.96, r * 0.18);
-  }
-
-  function drawZombieFallback(e, r) {
-    ctx.fillStyle = e.boss ? "#5c4d6e" : e.bloater ? "#6a5a32" : e.crawler ? "#4e6a38" : "#6a7264";
-    ctx.beginPath();
-    ctx.ellipse(0, r * 0.18, r * 0.52, r * 0.62, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = e.spitter ? "#d6e27a" : "#9aa18c";
-    ctx.beginPath();
-    ctx.arc(0, -r * 0.32, r * 0.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#ff2a3a";
-    ctx.fillRect(-r * 0.18, -r * 0.4, r * 0.1, r * 0.08);
-    ctx.fillRect(r * 0.08, -r * 0.38, r * 0.1, r * 0.08);
-  }
-
   function spriteFilter(e) {
     let f = "";
     if (e.type === "tank") f = "brightness(0.78)";
@@ -1544,7 +1509,7 @@
     ctx.ellipse(x, y + 0.35, height * 0.16, height * 0.045, 0, 0, Math.PI * 2);
     ctx.fill();
     const face = Math.cos(u.facing || 0) >= 0 ? 1 : -1;
-    const rate = moving ? 4.2 : 2.0;
+    const rate = moving ? 1.4 : 0.67;
     const frame = Math.floor(state.time * rate + u.walk * 3) % WALK_FRAMES;
     drawSprite(u.kind, x, y, height, {
       frame: frame,
@@ -1552,7 +1517,6 @@
       rot: attack * 0.22 * face,
       sx: face,
       sy: 1,
-      backup: (rr) => drawHeroFallback(h, rr),
     });
     if (u.named) {
       ctx.fillStyle = h.accent;
@@ -1599,7 +1563,6 @@
         alpha: Math.min(1, k * 1.25),
         rot: reduceMotion ? 0 : (1 - k) * (Math.PI / 2) * (e.side || 1),
         filter: spriteFilter(e),
-        backup: (rr) => drawZombieFallback(e, rr),
       });
       return;
     }
@@ -1640,7 +1603,6 @@
       filter: spriteFilter(e),
       flash: flash,
       hit: true,
-      backup: (rr) => drawZombieFallback(e, rr),
     });
     if (e.spitter && e.spitCd < 0.45) {
       ctx.fillStyle = "#eaff9a";
@@ -3032,6 +2994,7 @@
       img.className = "face";
       img.alt = "";
       img.draggable = false;
+      img.onerror = () => { img.style.display = "none"; };
       img.src = "assets/" + id + ".png";
       const metaEl = document.createElement("span");
       metaEl.className = "meta";
