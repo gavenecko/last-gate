@@ -1497,9 +1497,10 @@
     const h = HEROES[u.kind];
     const height = heroHeight(u);
     const moving = (u.step || 0) > 0.04;
-    const cycle = u.walk * 2.8;
-    const stride = reduceMotion ? 0 : Math.sin(cycle);
-    const bob = reduceMotion ? 0 : -Math.abs(stride) * (moving ? 0.85 : 0.12);
+    const strideLen = 7;
+    const cycle = moving ? u.walk / strideLen : state.time * 0.45;
+    const stride = reduceMotion ? 0 : Math.sin(cycle * Math.PI);
+    const bob = reduceMotion ? 0 : -Math.abs(stride) * (moving ? 0.55 : 0.12);
     const attack = u.lunge || 0;
     const lean = (moving ? 0.2 : 0) * Math.cos(u.facing || 0);
     const squash = moving ? Math.abs(stride) : 0;
@@ -1510,11 +1511,10 @@
     ctx.ellipse(x, y + 0.35, height * 0.16, height * 0.045, 0, 0, Math.PI * 2);
     ctx.fill();
     const face = Math.cos(u.facing || 0) >= 0 ? 1 : -1;
-    const rate = moving ? 1.4 : 0.67;
-    const frame = Math.floor(state.time * rate + u.walk * 3) % WALK_FRAMES;
+    const frame = Math.floor(moving ? u.walk / strideLen : state.time * 0.45) % WALK_FRAMES;
     drawSprite(u.kind, x, y, height, {
       frame: frame,
-      bob: reduceMotion ? 0 : -Math.abs(Math.sin(state.time * rate * Math.PI)) * (moving ? 0.7 : 0.28),
+      bob: reduceMotion ? 0 : -Math.abs(Math.sin((moving ? u.walk / strideLen : state.time * 0.45) * Math.PI)) * (moving ? 0.45 : 0.2),
       rot: attack * 0.22 * face,
       sx: face,
       sy: 1,
