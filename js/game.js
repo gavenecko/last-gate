@@ -908,7 +908,10 @@
         dmg: s.dmg, aoe: s.aoe, patch: s.patch, patchTime: s.patchTime,
       });
     } else if (s.kind === "pulse") {
-      rings.push({ x: target.x, y: target.y, r: 0.4, max: s.aoe, life: 0.32, color: s.accent });
+      rings.push({
+        x: target.x, y: target.y, ox: u.x, oy: u.y,
+        r: 0.4, max: s.aoe, life: 0.32, color: s.accent, hex: true,
+      });
       for (const e of enemies) {
         if (e.dead) continue;
         if (Math.hypot(e.x - target.x, e.y - target.y) <= s.aoe + e.r * 0.2) {
@@ -1645,13 +1648,7 @@
       ctx.arc(x + (dx / dist) * (height * 0.22), y - height * 0.42, 0.45, 0, Math.PI * 2);
       ctx.fill();
     }
-    if (e.slowT > 0 || e.stunT > 0) {
-      ctx.strokeStyle = e.stunT > 0 ? "rgba(255,255,255,0.9)" : "rgba(196,155,255,0.9)";
-      ctx.lineWidth = 0.28;
-      ctx.beginPath();
-      ctx.arc(x, y - height * 0.5, height * 0.22, 0, Math.PI * 2);
-      ctx.stroke();
-    }
+    if (e.slowT > 0 || e.stunT > 0) drawHexMark(x, y - height * 0.55, height * 0.2, e.stunT > 0);
     const barW = Math.min(height * 0.7, 8);
     const hx = x - barW / 2;
     const hy = y - height - 1.05;
@@ -1668,15 +1665,198 @@
     }
   }
 
-  function drawPatch(p) {
-    const flick = reduceMotion ? 1 : 0.9 + Math.sin(state.time * 9 + p.x) * 0.1;
+  function strokeHex(x, y, rad, rot) {
     ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r * flick, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255,110,24," + (0.22 + 0.18 * Math.max(0, p.life / p.max)) + ")";
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,190,70,0.75)";
-    ctx.lineWidth = 0.22;
+    for (let i = 0; i < 6; i++) {
+      const a = rot + (i / 6) * Math.PI * 2;
+      const px = x + Math.cos(a) * rad;
+      const py = y + Math.sin(a) * rad;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  }
+
+  function drawHexMark(x, y, rad, stun) {
+    const rot = reduceMotion ? -Math.PI / 2 : state.time * (stun ? 3.1 : 1.35);
+    ctx.save();
+    ctx.globalAlpha = stun ? 0.92 : 0.74;
+    ctx.strokeStyle = stun ? "rgba(255,255,255,0.95)" : "rgba(196,155,255,0.92)";
+    ctx.lineWidth = 0.15;
+    strokeHex(x, y, rad, rot);
     ctx.stroke();
+    ctx.globalAlpha = 0.82;
+    ctx.strokeStyle = "rgba(255,255,255,0.95)";
+    ctx.lineWidth = 0.07;
+    strokeHex(x, y, rad * 0.55, rot + Math.PI / 6);
+    ctx.stroke();
+    ctx.fillStyle = stun ? "#ffffff" : "#efe4ff";
+    ctx.beginPath();
+    ctx.arc(x, y, rad * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+    for (let i = 0; i < 3; i++) {
+      const a = rot * 1.6 + i * 2.094;
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = i === 1 ? "#ffffff" : "#c49bff";
+      ctx.beginPath();
+      ctx.arc(x + Math.cos(a) * rad * 0.78, y + Math.sin(a) * rad * 0.78, 0.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawMagicRing(ring) {
+    const lifeA = Math.max(0, ring.life / 0.4);
+    const rad = Math.max(0.35, Math.min(ring.max, ring.r));
+    const rot = reduceMotion ? 0 : state.time * 2.4;
+    ctx.save();
+    ctx.globalAlpha = lifeA * 0.32;
+    ctx.strokeStyle = "rgba(196,155,255,0.85)";
+    ctx.lineWidth = 0.18;
+    ctx.beginPath();
+    ctx.arc(ring.x, ring.y, rad * 1.14, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = lifeA * 0.9;
+    ctx.strokeStyle = "#f3eaff";
+    ctx.lineWidth = 0.26;
+    strokeHex(ring.x, ring.y, rad, rot);
+    ctx.stroke();
+    ctx.globalAlpha = lifeA * 0.8;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 0.1;
+    strokeHex(ring.x, ring.y, rad * 0.58, -rot * 0.65);
+    ctx.stroke();
+    ctx.globalAlpha = lifeA * 0.88;
+    ctx.fillStyle = "#f7f2ff";
+    ctx.beginPath();
+    ctx.arc(ring.x, ring.y, Math.max(0.16, rad * 0.07), 0, Math.PI * 2);
+    ctx.fill();
+    for (let i = 0; i < 4; i++) {
+      const a = rot * 1.7 + i * (Math.PI / 2);
+      const sr = rad * (0.38 + 0.42 * (0.5 + 0.5 * Math.sin(state.time * 6 + i)));
+      ctx.globalAlpha = lifeA * 0.78;
+      ctx.fillStyle = i % 2 ? "#ffffff" : "#c49bff";
+      ctx.beginPath();
+      ctx.arc(ring.x + Math.cos(a) * sr, ring.y + Math.sin(a) * sr, 0.14, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (ring.ox != null) {
+      const dx = ring.x - ring.ox;
+      const dy = ring.y - ring.oy;
+      const dist = Math.hypot(dx, dy) || 1;
+      const len = Math.min(3.1, dist);
+      const nx = dx / dist;
+      const ny = dy / dist;
+      for (let i = 1; i <= 4; i++) {
+        const k = i / 4;
+        const spin = Math.sin(state.time * 14 + i * 1.25) * 0.32 * (1 - k);
+        const px = ring.x - nx * len * (1 - k) - ny * spin;
+        const py = ring.y - ny * len * (1 - k) + nx * spin;
+        ctx.globalAlpha = lifeA * (0.18 + k * 0.5);
+        ctx.fillStyle = k > 0.7 ? "#ffffff" : "#b794f6";
+        ctx.beginPath();
+        ctx.arc(px, py, 0.1 + k * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawPatch(p) {
+    const life = Math.max(0, Math.min(1, p.life / (p.max || 1)));
+    const t = state.time;
+    const sway = reduceMotion ? 0 : 1;
+    const tall = 0.28 + 0.72 * life;
+    const dim = 0.22 + 0.78 * life;
+    const r = p.r * (0.7 + 0.3 * life);
+    ctx.save();
+    ctx.globalAlpha = 0.68 * dim;
+    ctx.fillStyle = "#4a1608";
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, r * 1.12, r * 0.48, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.38 * dim;
+    ctx.fillStyle = "#c2410c";
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, r * 0.72, r * 0.28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const tongues = 6;
+    for (let i = 0; i < tongues; i++) {
+      const phase = t * (6.4 + i * 0.33) + i * 1.27 + p.x * 0.17;
+      const s1 = Math.sin(phase);
+      const s2 = Math.sin(phase * 0.63 + 1.4);
+      const ang = (i / tongues) * Math.PI * 2;
+      const bx = p.x + Math.cos(ang) * r * 0.34 + s2 * 0.25 * sway;
+      const by = p.y + Math.sin(ang) * r * 0.16;
+      const lean = s1 * r * 0.18 * sway;
+      const h = r * (0.55 + 0.85 * tall) * (0.72 + 0.28 * (0.5 + 0.5 * s2));
+      const half = r * (0.1 + 0.06 * (0.5 + 0.5 * s1));
+      const tipX = bx + lean;
+      const tipY = by - h;
+      const midY = by - h * 0.48;
+      ctx.beginPath();
+      ctx.moveTo(bx - half, by);
+      ctx.quadraticCurveTo(bx - half * 0.2 + lean * 0.3, midY, tipX, tipY);
+      ctx.quadraticCurveTo(bx + half * 0.2 + lean * 0.3, midY, bx + half, by);
+      ctx.closePath();
+      ctx.globalAlpha = (0.32 + 0.2 * (0.5 + 0.5 * s1)) * dim;
+      ctx.fillStyle = "#9a1c0e";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(bx - half * 0.62, by - h * 0.08);
+      ctx.quadraticCurveTo(bx + lean * 0.45, midY - h * 0.05, tipX, tipY + h * 0.18);
+      ctx.quadraticCurveTo(bx + lean * 0.2, midY, bx + half * 0.62, by - h * 0.08);
+      ctx.closePath();
+      ctx.globalAlpha = 0.4 * dim;
+      ctx.fillStyle = "#ff6a1a";
+      ctx.fill();
+      ctx.globalAlpha = 0.48 * dim;
+      ctx.fillStyle = "#ffd15a";
+      ctx.beginPath();
+      ctx.ellipse(tipX, tipY + h * 0.22, half * 0.28, Math.max(0.08, h * 0.1), 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const pulse = 0.85 + (reduceMotion ? 0.15 : 0.15 * Math.sin(t * 12 + p.y));
+    ctx.globalAlpha = 0.52 * dim;
+    ctx.fillStyle = "#ff9a32";
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y - r * 0.12 * tall, r * 0.22 * pulse, r * 0.34 * tall * pulse, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.7 * dim;
+    ctx.fillStyle = "#fff1b0";
+    ctx.beginPath();
+    ctx.arc(p.x, p.y - r * 0.22 * tall, Math.max(0.12, r * 0.08 * pulse), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawLob(p) {
+    const dur = p.dur || 0.2;
+    const k = Math.min(1, p.t / dur);
+    const n = 4;
+    ctx.save();
+    for (let i = n; i >= 1; i--) {
+      const kk = Math.max(0, k - i * 0.07);
+      const x = p.sx + (p.tx - p.sx) * kk;
+      const y = p.sy + (p.ty - p.sy) * kk - Math.sin(kk * Math.PI) * 5;
+      const fade = 1 - i / (n + 1);
+      ctx.globalAlpha = 0.16 + fade * 0.42;
+      ctx.fillStyle = i >= 3 ? "#8e160c" : i === 2 ? "#ff5a18" : "#ffb04a";
+      ctx.beginPath();
+      ctx.arc(x, y, 0.22 + fade * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = "#ff7a22";
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 0.82, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#ffe7a0";
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
 
   function drawFence() {
@@ -1970,19 +2150,23 @@
     }
     drawBase();
     for (const b of bolts) {
+      ctx.globalAlpha = 0.42;
       ctx.strokeStyle = b.color;
-      ctx.lineWidth = 0.42;
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(b.ox, b.oy);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      ctx.globalAlpha = 0.95;
+      ctx.strokeStyle = "#fff4dc";
+      ctx.lineWidth = 0.22;
       ctx.beginPath();
       ctx.moveTo(b.ox, b.oy);
       ctx.lineTo(b.x, b.y);
       ctx.stroke();
     }
-    for (const p of lobs) {
-      ctx.fillStyle = "#ffb04a";
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 0.65, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    ctx.globalAlpha = 1;
+    for (const p of lobs) drawLob(p);
     for (const p of spits) {
       ctx.fillStyle = "rgba(214,255,106,0.35)";
       ctx.beginPath();
@@ -2012,12 +2196,15 @@
     }
     ctx.globalAlpha = 1;
     for (const ring of rings) {
-      ctx.globalAlpha = Math.max(0, ring.life / 0.4);
-      ctx.strokeStyle = ring.color;
-      ctx.lineWidth = 0.32;
-      ctx.beginPath();
-      ctx.arc(ring.x, ring.y, Math.min(ring.max, ring.r), 0, Math.PI * 2);
-      ctx.stroke();
+      if (ring.hex) drawMagicRing(ring);
+      else {
+        ctx.globalAlpha = Math.max(0, ring.life / 0.4);
+        ctx.strokeStyle = ring.color;
+        ctx.lineWidth = 0.32;
+        ctx.beginPath();
+        ctx.arc(ring.x, ring.y, Math.min(ring.max, ring.r), 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
     ctx.globalAlpha = 1;
     for (const u of units) drawUnit(u);
@@ -2289,23 +2476,25 @@
       if (shotBusy[i] > now) { keep.push(shotBusy[i]); live++; }
     }
     shotBusy = keep;
-    if (live >= 4) return false;
-    shotBusy.push(now + 0.12);
+    if (live >= 8) return false;
+    shotBusy.push(now + 0.16);
     return true;
   }
 
-  function sfxEnv(g, when, dur, peak) {
+  function sfxEnv(g, when, dur, peak, attack) {
+    const atk = Math.max(0.004, Math.min(attack == null ? Math.min(0.012, dur * 0.28) : attack, dur * 0.6));
     g.gain.setValueAtTime(0.0001, when);
-    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), when + Math.min(0.015, dur * 0.3));
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), when + atk);
     g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
   }
 
-  function sfxOsc(when, freq, dur, peak, type) {
+  function sfxOsc(when, freq, dur, peak, type, dropTo, attack) {
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
     o.type = type || "sine";
-    o.frequency.setValueAtTime(freq, when);
-    sfxEnv(g, when, dur, peak);
+    o.frequency.setValueAtTime(Math.max(1, freq), when);
+    if (dropTo) o.frequency.exponentialRampToValueAtTime(Math.max(1, dropTo), when + dur);
+    sfxEnv(g, when, dur, peak, attack);
     o.connect(g);
     g.connect(audioCtx.destination);
     o.start(when);
@@ -2323,7 +2512,7 @@
     return noiseBuf;
   }
 
-  function sfxNoise(when, dur, peak, filterType, freq, q) {
+  function sfxNoise(when, dur, peak, filterType, freq, q, sweepTo, attack) {
     const buf = ensureNoise();
     if (!buf) {
       sfxOsc(when, freq > 1500 ? 1200 : 180, Math.min(0.1, dur), peak * 0.65, "triangle");
@@ -2333,10 +2522,15 @@
     src.buffer = buf;
     const f = audioCtx.createBiquadFilter();
     f.type = filterType;
-    f.frequency.value = freq;
     f.Q.value = q;
+    if (sweepTo) {
+      f.frequency.setValueAtTime(Math.max(30, freq), when);
+      f.frequency.exponentialRampToValueAtTime(Math.max(30, sweepTo), when + dur);
+    } else {
+      f.frequency.value = freq;
+    }
     const g = audioCtx.createGain();
-    sfxEnv(g, when, dur, peak);
+    sfxEnv(g, when, dur, peak, attack);
     src.connect(f);
     f.connect(g);
     g.connect(audioCtx.destination);
@@ -2349,19 +2543,21 @@
     const now = audioCtx.currentTime || 0;
     try {
       if (kind === "snipe") {
-        sfxOsc(now, 1420 + Math.random() * 180, 0.04, 0.07, "square");
-        sfxNoise(now, 0.035, 0.045, "highpass", 2400, 0.7);
+        sfxNoise(now, 0.028, 0.22, "highpass", 2800, 0.85);
+        sfxOsc(now, 168, 0.07, 0.16, "sine", 52);
       } else if (kind === "blast") {
-        sfxNoise(now, 0.1, 0.08, "lowpass", 420, 0.55);
-        sfxOsc(now, 96, 0.08, 0.045, "triangle");
+        sfxNoise(now, 0.15, 0.36, "lowpass", 360, 0.55);
+        sfxOsc(now, 96, 0.1, 0.1, "triangle", 40);
       } else if (kind === "patch") {
-        sfxNoise(now, 0.11, 0.055, "bandpass", 640, 0.45);
+        sfxNoise(now, 0.16, 0.3, "bandpass", 1680, 0.7, 420, 0.04);
       } else if (kind === "volley") {
-        sfxOsc(now, 1040 + Math.random() * 90, 0.028, 0.06, "square");
+        sfxOsc(now, 1880 + Math.random() * 160, 0.02, 0.14, "square");
+        sfxNoise(now, 0.016, 0.06, "highpass", 4200, 0.8);
       } else if (kind === "cleave") {
-        sfxOsc(now, 74, 0.09, 0.08, "sine");
+        sfxOsc(now, 96, 0.11, 0.32, "sine", 46);
+        sfxNoise(now, 0.05, 0.08, "lowpass", 240, 0.5);
       } else {
-        sfxNoise(now, 0.04, 0.07, "highpass", 1500, 0.5);
+        sfxNoise(now, 0.04, 0.3, "highpass", 1800, 0.6);
       }
     } catch (err) { /* ignore */ }
   }
@@ -2374,8 +2570,8 @@
     try {
       const freq = deep ? rand(46, 64) : rand(70, 110);
       const dur = deep ? 0.22 : 0.14;
-      sfxOsc(now, freq, dur, deep ? 0.055 : 0.045, "sawtooth");
-      sfxNoise(now, dur, 0.03, "lowpass", 220, 0.6);
+      sfxOsc(now, freq, dur, deep ? 0.09 : 0.072, "sawtooth");
+      sfxNoise(now, dur, 0.028, "lowpass", 220, 0.6);
     } catch (err) { /* ignore */ }
   }
 
