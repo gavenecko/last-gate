@@ -313,16 +313,22 @@ button { font: inherit; color: inherit; }
 .hire:active:not(:disabled), .up:active { transform: scale(0.98); }
 .hire.broke, .up.broke { opacity: 0.55; }
 .hire:disabled { opacity: 0.45; }
+#roster .hire.locked,
+#roster .hire:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
 
 .face {
-  width: 18px;
-  height: 22px;
+  width: 22px;
+  height: 24px;
   border-radius: 4px;
   flex: none;
+  display: block;
+  object-fit: cover;
+  object-position: center 12%;
   background-color: #141820;
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-position: center 12%;
+  pointer-events: none;
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.12);
 }
 .hire[data-id="vera"] .face { box-shadow: inset 0 0 0 2px #e7c56a; }
@@ -338,8 +344,8 @@ button { font: inherit; color: inherit; }
 
 .meta { min-width: 0; display: flex; flex-direction: column; gap: 0; align-items: center; width: 100%; }
 .hire .meta b {
-  font-size: 9px;
-  letter-spacing: 0.02em;
+  font-size: 8px;
+  letter-spacing: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -561,6 +567,14 @@ button { font: inherit; color: inherit; }
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.85);
 }
 .titleCard h1 span { color: var(--pink); }
+.veteranLine {
+  margin: -8px 0 14px;
+  color: var(--gold);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  font-size: 15px;
+}
+.veteranLine[hidden] { display: none !important; }
 .tagline {
   margin: 0 0 18px;
   color: var(--muted);
@@ -675,6 +689,38 @@ button { font: inherit; color: inherit; }
   line-height: 1.35;
 }
 .skillNodes .got { color: var(--text); }
+.skillFork {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  margin: 6px 0;
+}
+.skillFork .forkOpt {
+  flex: 1 1 0;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+.skillFork .forkOpt.got {
+  color: var(--text);
+  border-color: var(--gold);
+}
+.skillFork .forkOpt.locked { opacity: 0.45; }
+.skillFork .miniBuy {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  margin-top: 0;
+  min-height: 64px;
+  font-size: 15px;
+  line-height: 1.05;
+  padding: 6px;
+  white-space: normal;
+}
 .ashLine {
   margin: 0;
   color: var(--gold);
@@ -851,7 +897,7 @@ button { font: inherit; color: inherit; }
 @media (max-width: 360px) {
   .pill b { font-size: 14px; }
   .pill small { font-size: 8px; }
-  .face { width: 18px; height: 22px; }
+  .face { width: 20px; height: 22px; }
   .hire { flex-basis: 46px; width: 46px; }
   #next { flex-basis: 74px; width: 74px; font-size: 13px; }
   #skillsBtn, #labBtn { flex-basis: 40px; width: 40px; font-size: 8px; }

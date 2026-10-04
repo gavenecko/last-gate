@@ -326,38 +326,43 @@
   const UP_IDS = ["wall", "aura", "turret", "spikes", "mend", "mines"];
 
   const SKILL_COST = [80, 140, 220];
+  const SKILL_FORK = {
+    range: { name: "Range", blurb: "+14% range" },
+    tempo: { name: "Tempo", blurb: "+16% attack rate" },
+  };
   const SKILL_NODES = {
     vera: [
       { name: "Keen Eye", blurb: "+18% damage" },
-      { name: "Fast Bolt", blurb: "+16% attack rate" },
+      null,
       { name: "Long Glass", blurb: "+12% range" },
     ],
     roxie: [
       { name: "Buck and Ball", blurb: "+18% damage" },
-      { name: "Pump", blurb: "+16% attack rate" },
+      null,
       { name: "Extra Pellet", blurb: "The blast hits one more target" },
     ],
     lila: [
       { name: "Hotter Mix", blurb: "+18% damage" },
-      { name: "Quicker Wick", blurb: "+16% attack rate" },
+      null,
       { name: "Long Burn", blurb: "The fire patch lasts longer" },
     ],
     nyx: [
       { name: "Hex Mark", blurb: "+18% damage" },
-      { name: "Rapid Hex", blurb: "+16% attack rate" },
+      null,
       { name: "Deep Hex", blurb: "Slow and stun bite harder" },
     ],
     sable: [
       { name: "Tight Group", blurb: "+18% damage" },
-      { name: "Fast Hands", blurb: "+16% attack rate" },
+      null,
       { name: "Fourth Shot", blurb: "The volley fires one more round" },
     ],
     wren: [
       { name: "Heavy Haft", blurb: "+18% damage" },
-      { name: "Quick Thrust", blurb: "+16% attack rate" },
+      null,
       { name: "Hard Cleave", blurb: "The swing hits harder" },
     ],
   };
+  const JOBS = { vera: "Sniper", roxie: "Shotgun", lila: "Fire", nyx: "Hex", sable: "Pistols", wren: "Spear" };
   const LAB_MAX = 8;
   const LAB_TRACKS = [
     { id: "power", name: "Power", blurb: "+7% heroine damage per level. Stacks with skills." },
@@ -367,7 +372,7 @@
   const META_KEY = "last-gate-meta";
 
   function defaultMeta() {
-    return { ash: 0, power: 0, tempo: 0, gate: 0, regions: { yard: true, marsh: false, chapel: false } };
+    return { ash: 0, power: 0, tempo: 0, gate: 0, veteran: "", regions: { yard: true, marsh: false, chapel: false } };
   }
 
   function loadMeta() {
@@ -385,6 +390,7 @@
         meta.regions.marsh = !!data.regions.marsh;
         meta.regions.chapel = !!data.regions.chapel;
       }
+      if (typeof data.veteran === "string" && HEROES[data.veteran]) meta.veteran = data.veteran;
       return meta;
     } catch (err) {
       return defaultMeta();
@@ -491,12 +497,15 @@
       muted: false, sent: false, runLive: false,
       pausedFrom: null,
       perkDue: false, perkPicked: true,
+      crateDue: false, crateTaken: true, crateOffer: "",
       spawnQ: [], offer: [],
       turretCd: 0.2, turretAng: -Math.PI / 2, turretFlash: 0,
       mineCd: 2.6,
+      armedMines: 0, armedCd: 0.4,
       toldSable: false,
       toldWren: false,
       skills: { vera: 0, roxie: 0, lila: 0, nyx: 0, sable: 0, wren: 0 },
+      fork: { vera: "", roxie: "", lila: "", nyx: "", sable: "", wren: "" },
       toldMarsh: false,
       toldChapel: false,
       startRegion: "yard",
@@ -536,11 +545,13 @@
     const h = HEROES[u.kind];
     const low = u.named ? 1 : 0.74;
     const rank = (state.skills && state.skills[u.kind]) || 0;
+    const fork = (state.fork && state.fork[u.kind]) || "";
     const skillDmg = rank >= 1 ? 1.18 : 1;
-    const skillRate = rank >= 2 ? 1.16 : 1;
+    const skillRate = rank >= 2 && fork === "tempo" ? 1.16 : 1;
     const labDmg = 1 + (meta.power || 0) * 0.07;
     const labRate = 1 + (meta.tempo || 0) * 0.05;
     let range = h.range * (u.named ? 1 : 0.88) * state.rangeMult;
+    if (rank >= 2 && fork === "range") range *= 1.14;
     let seek = h.seek * state.rangeMult;
     let patchTime = (h.patchTime || 2.4) * (u.named ? 1 : 0.75);
     let slow = h.slow || 0.5;
@@ -780,7 +791,7 @@
     }
     burst(e.x, e.y, e.elite ? "#ffd56a" : e.boss ? "#d7c4ff" : "#8a9474", e.boss ? 14 : 6, e.boss ? 7 : 4.5);
     if (floaters.length < 24) {
-      floaters.push({ x: e.x, y: e.y - e.r, text: "+" + e.reward, life: 0.7, color: "#ffc857" });
+      floaters.push({ x: e.x, y: e.y - e.r, text: "+$" + e.reward, life: 0.78, color: "#ffc857" });
     }
   }
 
@@ -1185,12 +1196,7 @@
     state.baseHp = Math.min(state.baseMax, state.baseHp + rate * dt);
   }
 
-  function updateMines(dt) {
-    const spec = MINES[state.ups.mines];
-    if (!spec || state.phase !== "fight") return;
-    state.mineCd -= dt;
-    if (state.mineCd > 0) return;
-    state.mineCd = spec.every;
+  function detonateMine(spec) {
     let best = null;
     let bestD = spec.range;
     for (const e of enemies) {
@@ -1198,10 +1204,28 @@
       const d = Math.hypot(e.x - BASE.x, e.y - BASE.y);
       if (d < bestD) { bestD = d; best = e; }
     }
-    if (!best) return;
+    if (!best) return false;
     hurtEnemy(best, spec.dmg);
     rings.push({ x: best.x, y: best.y, r: 0.3, max: 2.4, life: 0.22, color: "#ff5d6c" });
     burst(best.x, best.y, "#ff5d6c", 6, 5);
+    return true;
+  }
+
+  function updateMines(dt) {
+    const spec = MINES[state.ups.mines];
+    if (!spec || state.phase !== "fight") return;
+    state.mineCd -= dt;
+    if (state.mineCd <= 0) {
+      state.mineCd = spec.every;
+      detonateMine(spec);
+    }
+    if ((state.armedMines | 0) > 0) {
+      state.armedCd -= dt;
+      if (state.armedCd <= 0) {
+        if (detonateMine(spec)) state.armedMines -= 1;
+        state.armedCd = 0.4;
+      }
+    }
   }
 
   function updateTurret(dt) {
@@ -1294,6 +1318,7 @@
     meta.ash = (meta.ash || 0) + ashGain;
     if (cleared >= 20) meta.regions.marsh = true;
     if (cleared >= 50) meta.regions.chapel = true;
+    if (cleared === 20 || cleared === 50 || cleared === FINALE) meta.veteran = pickVeteranKind();
     saveMeta();
     state.log.push("w" + cleared + " hp" + Math.round(state.baseHp) + " $" + state.cash + " u" + units.length);
     let msg = "Stage " + cleared + " down +$" + bonus + " +" + ashGain + " ash";
@@ -1425,8 +1450,13 @@
     ctx.drawImage(src, frame * fw, 0, fw, fh, ox, oy, dw, dh);
     if (flash > 0.02) {
       ctx.filter = "brightness(0) invert(1)";
-      ctx.globalAlpha = alpha * Math.min(0.9, flash);
+      ctx.globalAlpha = alpha * Math.min(0.85, flash);
       ctx.drawImage(src, frame * fw, 0, fw, fh, ox, oy, dw, dh);
+      if (opts.hit) {
+        ctx.filter = "sepia(1) saturate(6) hue-rotate(-18deg) brightness(1.35)";
+        ctx.globalAlpha = alpha * Math.min(0.62, flash);
+        ctx.drawImage(src, frame * fw, 0, fw, fh, ox, oy, dw, dh);
+      }
     }
     ctx.restore();
     return true;
@@ -1589,6 +1619,7 @@
       sy: 1,
       filter: spriteFilter(e),
       flash: flash,
+      hit: true,
       backup: (rr) => drawZombieFallback(e, rr),
     });
     if (e.spitter && e.spitCd < 0.45) {
@@ -1846,6 +1877,37 @@
     view.oy = (canvas.height - WORLD_H * view.s) / 2;
   }
 
+  function drawThreatBar() {
+    const counts = { n: 0, e: 0, s: 0, w: 0 };
+    let total = 0;
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      if (!e || e.dead) continue;
+      const dN = e.y;
+      const dE = WORLD_W - e.x;
+      const dS = WORLD_H - e.y;
+      const dW = e.x;
+      let side = "n";
+      let best = dN;
+      if (dE < best) { best = dE; side = "e"; }
+      if (dS < best) { best = dS; side = "s"; }
+      if (dW < best) side = "w";
+      counts[side] += 1;
+      total += 1;
+    }
+    const order = ["n", "e", "s", "w"];
+    const seg = WORLD_W / 4;
+    const h = 1.8;
+    for (let i = 0; i < order.length; i++) {
+      const c = counts[order[i]];
+      const hot = total > 0 ? c / total : 0;
+      ctx.globalAlpha = c <= 0 ? 0.14 : Math.min(0.86, 0.32 + hot * 0.54);
+      ctx.fillStyle = c <= 0 ? "#4a2832" : "#ff3d5c";
+      ctx.fillRect(i * seg + 0.15, 0.12, seg - 0.3, h);
+    }
+    ctx.globalAlpha = 1;
+  }
+
   function draw() {
     resize();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1950,10 +2012,11 @@
     for (const f of floaters) {
       ctx.globalAlpha = Math.max(0, f.life / 0.7);
       ctx.fillStyle = f.color;
-      ctx.font = "700 2.2px sans-serif";
+      ctx.font = "700 1.85px sans-serif";
       ctx.fillText(f.text, f.x, f.y);
     }
     ctx.globalAlpha = 1;
+    drawThreatBar();
     if (state.banner && state.banner.life > 0) {
       ctx.globalAlpha = Math.min(1, state.banner.life * 2);
       ctx.fillStyle = "#f7f3ea";
@@ -2035,6 +2098,7 @@
       const need = HEROES[id].unlock || 1;
       const gated = state.wave < need;
       btn.disabled = gated;
+      btn.classList.toggle("locked", gated);
       btn.querySelector(".price").textContent = gated ? "Stage " + need : (state.sale ? "SALE $" + cost : "$" + cost);
       const owned = units.filter((u) => u.kind === id);
       const named = owned.some((u) => u.named);
@@ -2338,6 +2402,71 @@
     }
   }
 
+  function crateOfferCopy(kind) {
+    if (kind === "scavenge") return { name: "Scavenge", desc: "+$40 cash" };
+    if (kind === "mend") return { name: "Mend", desc: "Heal the gate 40 HP." };
+    if ((state.ups.mines | 0) > 0) return { name: "Cache", desc: "Arm 2 extra yard mines." };
+    return { name: "Cache", desc: "Yard Mines, level 1." };
+  }
+
+  function applyCrate(kind) {
+    if (kind === "scavenge") {
+      state.cash += 40;
+      state.earned += 40;
+      toast("Scavenge +$40");
+      return;
+    }
+    if (kind === "mend") {
+      state.baseHp = Math.min(state.baseMax, state.baseHp + 40);
+      toast("Mend");
+      return;
+    }
+    const lv = state.ups.mines | 0;
+    if (lv > 0 && MINES[lv]) {
+      state.armedMines = (state.armedMines | 0) + 2;
+      state.armedCd = 0.35;
+      toast("Cache armed 2 mines");
+      return;
+    }
+    if (lv <= 0 && BASE_UPS.mines && MINES[1]) {
+      state.ups.mines = 1;
+      state.mineCd = MINES[1].every;
+      toast("Yard Mines LV 1");
+      return;
+    }
+    state.cash += 40;
+    state.earned += 40;
+    toast("Scavenge +$40");
+  }
+
+  function renderCrate() {
+    const kinds = ["scavenge", "mend", "cache"];
+    const kind = kinds[(Math.random() * kinds.length) | 0];
+    state.crateOffer = kind;
+    const copy = crateOfferCopy(kind);
+    const box = $("ovChoices");
+    box.innerHTML = "";
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "choice";
+    const strong = document.createElement("b");
+    strong.textContent = copy.name;
+    const span = document.createElement("span");
+    span.textContent = copy.desc;
+    b.appendChild(strong);
+    b.appendChild(span);
+    b.addEventListener("click", () => {
+      if (!state.crateDue || state.crateTaken) return;
+      applyCrate(kind);
+      state.crateTaken = true;
+      b.disabled = true;
+      b.classList.add("picked");
+      $("ovBtn").disabled = false;
+      blip(520, 0.07, "square", 0.03);
+    });
+    box.appendChild(b);
+  }
+
   function rollPerks() {
     const pool = PERKS.slice();
     for (let i = pool.length - 1; i > 0; i--) {
@@ -2441,10 +2570,15 @@
   function openBrief(withPerk) {
     const spec = stageSpec(state.wave);
     const entered = announceRegion(state.wave);
+    const perk = !!withPerk;
+    const crate = !perk && !spec.boss && !spec.finale && Math.random() < 0.4;
     hideMenus();
     state.phase = "brief";
-    state.perkDue = !!withPerk;
-    state.perkPicked = !withPerk;
+    state.perkDue = perk;
+    state.perkPicked = !perk;
+    state.crateDue = crate;
+    state.crateTaken = !crate;
+    state.crateOffer = "";
     const kind = spec.finale ? "FINALE" : spec.boss ? "BOSS" : spec.challenge ? "CHALLENGE" : "NEXT";
     if (entered && state.wave >= 51) $("ovKicker").textContent = "THE CHAPEL  ·  STAGE " + state.wave;
     else if (entered && state.wave >= 21) $("ovKicker").textContent = "THE MARSH  ·  STAGE " + state.wave;
@@ -2452,14 +2586,17 @@
     $("ovTitle").textContent = spec.name;
     $("ovBody").textContent = spec.blurb;
     fillDebuts(debutsOn(state.wave));
-    $("ovPerk").hidden = !withPerk;
+    $("ovPerk").hidden = !perk && !crate;
+    if (perk) $("ovPerk").textContent = "Pick one. It stays for the run.";
+    else if (crate) $("ovPerk").textContent = "Supply crate. Tap once to take it. Free.";
     $("ovSummary").hidden = true;
     $("ovHint").hidden = false;
     $("ovHint").textContent = "Continue, gear up, then start the wave. It will not start on its own.";
     $("ovChoices").innerHTML = "";
-    if (withPerk) renderPerks();
+    if (perk) renderPerks();
+    else if (crate) renderCrate();
     $("ovBtn").hidden = false;
-    $("ovBtn").disabled = !!withPerk;
+    $("ovBtn").disabled = perk || crate;
     $("ovBtn").textContent = "CONTINUE";
     $("ovRestart").hidden = false;
     bolts.length = 0;
@@ -2480,6 +2617,7 @@
   function dismissBrief() {
     if (state.phase !== "brief") return;
     if (state.perkDue && !state.perkPicked) return;
+    if (state.crateDue && !state.crateTaken) return;
     state.phase = "shop";
     $("overlay").classList.add("hidden");
     clearSplashArt();
@@ -2551,6 +2689,21 @@
     syncSoundLabels();
   }
 
+  function pickVeteranKind() {
+    for (let i = 0; i < units.length; i++) {
+      const u = units[i];
+      if (u.named && u.kind !== "vera" && u.kind !== "roxie" && HEROES[u.kind]) return u.kind;
+    }
+    for (let i = 0; i < units.length; i++) {
+      const u = units[i];
+      if (u.kind !== "vera" && u.kind !== "roxie" && HEROES[u.kind]) return u.kind;
+    }
+    for (let i = 0; i < units.length; i++) {
+      if (units[i].named && HEROES[units[i].kind]) return units[i].kind;
+    }
+    return "vera";
+  }
+
   function applyMetaStats() {
     const gate = clamp(meta.gate || 0, 0, LAB_MAX);
     state.baseMax = BASE_HP0 + gate * 20;
@@ -2577,6 +2730,10 @@
     if (startN >= 4) state.toldSable = true;
     if (startN >= 6) state.toldWren = true;
     state.mineCd = 2.6;
+    if ((startN === 21 || startN === 51) && meta.veteran && meta.veteran !== "vera" && meta.veteran !== "roxie" && HEROES[meta.veteran]) {
+      addUnit(meta.veteran);
+      layoutHomes();
+    }
     hideMenus();
     $("titleScreen").classList.add("hidden");
     $("overlay").classList.add("hidden");
@@ -2626,8 +2783,27 @@
       b.type = "button";
       b.className = "hire";
       b.dataset.id = id;
-      b.innerHTML = '<span class="face" style="background-image:url(assets/' + id + '.png)"></span>' +
-        '<span class="meta"><b>' + h.short + '</b><small>' + h.tag + '</small><em class="price"></em><i class="own"></i></span>';
+      const img = document.createElement("img");
+      img.className = "face";
+      img.alt = "";
+      img.draggable = false;
+      img.src = "assets/" + id + ".png";
+      const metaEl = document.createElement("span");
+      metaEl.className = "meta";
+      const name = document.createElement("b");
+      name.textContent = JOBS[id] || h.short;
+      const small = document.createElement("small");
+      small.textContent = h.tag;
+      const price = document.createElement("em");
+      price.className = "price";
+      const own = document.createElement("i");
+      own.className = "own";
+      metaEl.appendChild(name);
+      metaEl.appendChild(small);
+      metaEl.appendChild(price);
+      metaEl.appendChild(own);
+      b.appendChild(img);
+      b.appendChild(metaEl);
       b.addEventListener("click", () => buy(id));
       root.appendChild(b);
       rosterButtons[id] = b;
@@ -2661,9 +2837,11 @@
     row.innerHTML = "";
     if (options.length < 2) {
       row.hidden = true;
+      renderVeteran();
       return;
     }
     row.hidden = false;
+    renderVeteran();
     for (let i = 0; i < options.length; i++) {
       const opt = options[i];
       const b = document.createElement("button");
@@ -2678,6 +2856,20 @@
     }
   }
 
+  function renderVeteran() {
+    const el = $("veteranLine");
+    if (!el) return;
+    const kind = meta.veteran;
+    const hero = kind && HEROES[kind];
+    if (!hero) {
+      el.hidden = true;
+      el.textContent = "";
+      return;
+    }
+    el.hidden = false;
+    el.textContent = "Veteran: " + hero.name;
+  }
+
   function renderSkills() {
     const box = $("skillList");
     box.innerHTML = "";
@@ -2687,6 +2879,7 @@
       const open = state.wave >= (hero.unlock || 1);
       if (!hired && !open) continue;
       const rank = (state.skills && state.skills[id]) || 0;
+      const picked = (state.fork && state.fork[id]) || "";
       const card = document.createElement("div");
       card.className = "skillCard";
       const title = document.createElement("b");
@@ -2695,27 +2888,58 @@
       const nodes = document.createElement("div");
       nodes.className = "skillNodes";
       const tree = SKILL_NODES[id];
-      for (let i = 0; i < tree.length; i++) {
-        const line = document.createElement("div");
-        line.className = i < rank ? "got" : "";
-        const cost = i < rank ? "owned" : "$" + SKILL_COST[i];
-        line.textContent = (i + 1) + ". " + tree[i].name + " — " + tree[i].blurb + " (" + cost + ")";
-        nodes.appendChild(line);
+      const first = document.createElement("div");
+      first.className = rank >= 1 ? "got" : "";
+      first.textContent = "1. " + tree[0].name + " — " + tree[0].blurb + " (" + (rank >= 1 ? "owned" : "$" + SKILL_COST[0]) + ")";
+      nodes.appendChild(first);
+      const forkRow = document.createElement("div");
+      forkRow.className = "skillFork";
+      const keys = ["range", "tempo"];
+      for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+        const spec = SKILL_FORK[key];
+        const chosen = picked === key;
+        const lockedOut = rank >= 2 && !chosen;
+        if (rank === 1) {
+          const forkBtn = document.createElement("button");
+          forkBtn.type = "button";
+          forkBtn.className = "miniBuy forkBtn";
+          forkBtn.textContent = spec.name + " · " + spec.blurb + " · $" + SKILL_COST[1];
+          forkBtn.disabled = !canShop() || state.cash < SKILL_COST[1];
+          forkBtn.addEventListener("click", () => buySkill(id, key));
+          forkRow.appendChild(forkBtn);
+        } else {
+          const line = document.createElement("div");
+          line.className = "forkOpt" + (chosen ? " got" : "") + (lockedOut ? " locked" : "");
+          const tag = chosen ? "owned" : lockedOut ? "locked" : "or $" + SKILL_COST[1];
+          line.textContent = spec.name + " — " + spec.blurb + " (" + tag + ")";
+          forkRow.appendChild(line);
+        }
       }
+      nodes.appendChild(forkRow);
+      const sig = document.createElement("div");
+      sig.className = rank >= 3 ? "got" : "";
+      sig.textContent = "3. " + tree[2].name + " — " + tree[2].blurb + " (" + (rank >= 3 ? "owned" : "$" + SKILL_COST[2]) + ")";
+      nodes.appendChild(sig);
       card.appendChild(nodes);
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "miniBuy";
-      if (rank >= 3) {
-        btn.disabled = true;
-        btn.textContent = "MAXED";
-      } else {
-        const cost = SKILL_COST[rank];
-        btn.textContent = "BUY " + tree[rank].name + "  ·  $" + cost;
-        btn.disabled = !canShop() || state.cash < cost;
-        btn.addEventListener("click", () => buySkill(id));
+      if (rank !== 1) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "miniBuy";
+        if (rank >= 3) {
+          btn.disabled = true;
+          btn.textContent = "MAXED";
+        } else if (rank === 0) {
+          btn.textContent = "BUY " + tree[0].name + "  ·  $" + SKILL_COST[0];
+          btn.disabled = !canShop() || state.cash < SKILL_COST[0];
+          btn.addEventListener("click", () => buySkill(id));
+        } else {
+          btn.textContent = "BUY " + tree[2].name + "  ·  $" + SKILL_COST[2];
+          btn.disabled = !canShop() || state.cash < SKILL_COST[2];
+          btn.addEventListener("click", () => buySkill(id));
+        }
+        card.appendChild(btn);
       }
-      card.appendChild(btn);
       box.appendChild(card);
     }
     if (!box.children.length) {
@@ -2725,16 +2949,21 @@
     }
   }
 
-  function buySkill(kind) {
+  function buySkill(kind, forkKey) {
     if (!canShop()) { toast("Not during this screen"); return; }
     const rank = (state.skills && state.skills[kind]) || 0;
     if (rank >= 3) return;
+    if (rank === 1) {
+      if (forkKey !== "range" && forkKey !== "tempo") return;
+      if (state.fork && state.fork[kind]) return;
+    }
     const cost = SKILL_COST[rank];
     if (state.cash < cost) { toast("Need $" + cost); return; }
     state.cash -= cost;
+    if (rank === 1) state.fork[kind] = forkKey;
     state.skills[kind] = rank + 1;
-    const node = SKILL_NODES[kind][rank];
-    toast(HEROES[kind].short + " · " + node.name);
+    const nodeName = rank === 1 ? SKILL_FORK[forkKey].name : SKILL_NODES[kind][rank].name;
+    toast(HEROES[kind].short + " · " + nodeName);
     blip(480, 0.06, "triangle", 0.03);
     renderSkills();
   }
