@@ -2119,7 +2119,7 @@
     state.eventAt = -1;
     state.eventKind = "";
     if (spec.boss || spec.finale || spec.n < 3) return;
-    const chance = spec.n < 8 ? 0.3 : 0.38;
+    const chance = spec.n < 8 ? 0.3 : 0.36;
     if (Math.random() >= chance) return;
     const pool = [];
     for (const k of EVENT_KINDS) {
@@ -2981,15 +2981,27 @@
     }
     const frozen = state.freezeT > 0 && e.stunT > 0;
     if (frozen) {
-      ctx.globalAlpha = 0.38;
-      ctx.fillStyle = "#bcd4ff";
+      // Thin frost shell plus a few ice shards: reads as frozen without hiding the sprite.
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = "#cfe0ff";
       ctx.beginPath();
-      ctx.ellipse(x, y - height * 0.45, height * 0.24, height * 0.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, y - height * 0.42, height * 0.17, height * 0.42, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.globalAlpha = 0.8;
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 0.15;
+      ctx.globalAlpha = 0.85;
+      ctx.strokeStyle = "#e8f0ff";
+      ctx.lineWidth = 0.14;
       ctx.stroke();
+      ctx.fillStyle = "#ffffff";
+      for (let i = 0; i < 3; i++) {
+        const sx = x + (i - 1) * height * 0.11;
+        const sy = y - height * (0.05 + (i % 2) * 0.04);
+        ctx.beginPath();
+        ctx.moveTo(sx - 0.35, sy);
+        ctx.lineTo(sx, sy - 1.3);
+        ctx.lineTo(sx + 0.35, sy);
+        ctx.closePath();
+        ctx.fill();
+      }
       ctx.globalAlpha = 1;
     } else if (e.slowT > 0 || e.stunT > 0) drawHexMark(x, y - height * 0.55, height * 0.2, e.stunT > 0);
     if (e.burnT > 0) {
