@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#07080d">
   <title>Last Gate</title>
-  <link rel="stylesheet" href="css/style.css?v=20">
+  <link rel="stylesheet" href="css/style.css?v=21">
 </head>
 <body>
   <div id="app">
@@ -42,7 +42,10 @@
               <div class="waveTitle"><span id="waveTag" class="tag"></span><b id="waveName">Shamble</b></div>
               <p id="waveBlurb"></p>
               <p id="mods"></p>
+              <p id="twistLine" hidden></p>
             </div>
+            <h3 class="shopSec">BUILD <small>Boss cards this run</small></h3>
+            <div id="buildRow"></div>
             <h3 class="shopSec">HIRE <small id="squadCount">0 / 10</small></h3>
             <div id="roster" aria-label="Hire heroines"></div>
             <h3 class="shopSec">BASE <small>Passive upgrades</small></h3>
@@ -59,6 +62,10 @@
         </div>
       </div>
       <div id="toast" role="status"></div>
+    </div>
+    <div id="abilBar" hidden>
+      <div id="abilRow" aria-label="Heroine abilities"></div>
+      <div id="twistTags"></div>
     </div>
   </div>
 
@@ -122,6 +129,7 @@
       <h2 id="ovTitle"></h2>
       <p id="ovBody"></p>
       <div id="ovDebut" hidden></div>
+      <div id="ovTwist" hidden></div>
       <p id="ovPerk" hidden>Pick one. It stays for the run.</p>
       <div id="ovChoices"></div>
       <div id="ovSummary" hidden></div>
@@ -132,6 +140,6 @@
       </div>
     </div>
   </div>
-  <script src="js/game.js?v=20"></script>
+  <script src="js/game.js?v=21"></script>
 </body>
 </html>

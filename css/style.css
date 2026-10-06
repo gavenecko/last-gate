@@ -1002,3 +1002,167 @@ button { font: inherit; color: inherit; }
 .up[data-id="mend"] .mark { background-size: 140%; }
 .up[data-id="ammo"] .mark { background-size: 125%; }
 .up[data-id="squad"] .mark { background-size: 150%; }
+
+/* ---------- Ability strip: under the field, never on it ---------- */
+#abilBar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: calc(46px + env(safe-area-inset-bottom));
+  padding: 4px 8px calc(4px + env(safe-area-inset-bottom));
+  background: #07080d;
+  border-top: 1px solid #1c2130;
+}
+#abilBar[hidden] { display: none; }
+#abilRow { display: flex; gap: 6px; flex: 0 0 auto; }
+.abil {
+  --ac: #ffc857;
+  --p: 0;
+  position: relative;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 10px;
+  border: 2px solid #2c3348;
+  background: #12151e;
+  overflow: hidden;
+  touch-action: none;
+  transition: border-color 0.15s, opacity 0.15s;
+}
+.abil img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 12%;
+  pointer-events: none;
+}
+.abil .cd {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: conic-gradient(rgba(4, 5, 10, 0.78) calc(var(--p) * 1turn), transparent 0);
+}
+.abil .k {
+  position: absolute;
+  right: 2px;
+  bottom: 0;
+  font-size: 9px;
+  font-weight: 800;
+  color: #f4f1ea;
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+}
+.abil.ready {
+  border-color: var(--ac);
+  animation: abilGlow 1.3s ease-in-out infinite;
+}
+.abil.idle { opacity: 0.5; }
+.abil:disabled { cursor: default; }
+.abil.fired { animation: abilPop 0.32s ease-out; }
+@keyframes abilGlow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--ac); }
+  50% { box-shadow: 0 0 10px 1px var(--ac); }
+}
+@keyframes abilPop {
+  0% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+#twistTags {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  overflow: hidden;
+  max-height: 38px;
+}
+.twTag {
+  --tw: #ffc857;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--tw);
+  border: 1px solid var(--tw);
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: rgba(255, 255, 255, 0.03);
+}
+@media (max-width: 380px) {
+  .abil { width: 36px; height: 36px; }
+  #abilRow { gap: 4px; }
+  #abilBar { gap: 6px; padding-left: 6px; padding-right: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .abil.ready, .abil.fired { animation: none; }
+  .abil.ready { box-shadow: 0 0 6px var(--ac); }
+}
+
+/* ---------- Twist block on the brief ---------- */
+#ovTwist[hidden] { display: none; }
+.twist {
+  --tw: #ffc857;
+  border: 1px solid var(--tw);
+  background: #17121a;
+  border-radius: 14px;
+  padding: 9px 12px;
+  margin-top: 8px;
+}
+.twist em {
+  display: block;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+}
+.twist b {
+  display: block;
+  font-family: "Passion One", Impact, sans-serif;
+  font-size: 22px;
+  letter-spacing: 0.03em;
+  color: var(--tw);
+}
+.twist span { display: block; color: var(--text); font-size: 14px; line-height: 1.3; }
+.twist i { display: block; font-style: normal; color: var(--gold); font-size: 12px; margin-top: 3px; }
+
+/* ---------- Boss reward cards ---------- */
+.choice.card { border-width: 2px; position: relative; }
+.choice.card .rar {
+  display: block;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+.choice.card.r-common { border-color: #8c96aa; }
+.choice.card.r-common .rar { color: #b4bccc; }
+.choice.card.r-rare { border-color: #4aa8ff; }
+.choice.card.r-rare .rar { color: #7cc0ff; }
+.choice.card.r-epic { border-color: #c06bff; box-shadow: 0 0 14px rgba(192, 107, 255, 0.35); }
+.choice.card.r-epic .rar { color: #d9a6ff; }
+.choice.card.picked { box-shadow: 0 0 0 2px var(--gold), 0 0 16px rgba(255, 200, 87, 0.35); }
+
+/* ---------- Shop: build row and twist line ---------- */
+#buildRow { display: flex; flex-wrap: wrap; gap: 6px; }
+.buildEmpty { color: var(--muted); font-size: 13px; }
+.buildChip {
+  flex: 1 1 140px;
+  border: 1px solid #8c96aa;
+  border-radius: 10px;
+  background: var(--panel-2);
+  padding: 6px 9px;
+}
+.buildChip b { display: block; font-size: 13px; }
+.buildChip small { display: block; color: var(--muted); font-size: 11px; line-height: 1.25; }
+.buildChip.r-rare { border-color: #4aa8ff; }
+.buildChip.r-rare b { color: #9ccfff; }
+.buildChip.r-epic { border-color: #c06bff; }
+.buildChip.r-epic b { color: #ddb0ff; }
+#twistLine { color: var(--gold); font-size: 13px; margin: 4px 0 0; }
+#twistLine[hidden] { display: none; }
