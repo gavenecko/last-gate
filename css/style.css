@@ -439,18 +439,11 @@ button { font: inherit; color: inherit; }
 .up[data-id="wall"] .mark { background-image: url("../assets/upgrade-wall.png"); }
 .up[data-id="aura"] .mark { background-image: url("../assets/upgrade-aura.png"); }
 .up[data-id="turret"] .mark { background-image: url("../assets/upgrade-turret.png"); }
-.up[data-id="spikes"] .mark,
-.up[data-id="mend"] .mark,
-.up[data-id="mines"] .mark,
-.up[data-id="ammo"] .mark,
-.up[data-id="squad"] .mark {
-  font-family: "Passion One", Impact, sans-serif;
-  font-size: 20px;
-  line-height: 36px;
-  text-align: center;
-  color: var(--text);
-  background-image: none;
-}
+.up[data-id="spikes"] .mark { background-image: url("../assets/upgrade-spikes.png"); }
+.up[data-id="mend"] .mark { background-image: url("../assets/upgrade-mend.png"); }
+.up[data-id="mines"] .mark { background-image: url("../assets/upgrade-mines.png"); }
+.up[data-id="ammo"] .mark { background-image: url("../assets/upgrade-ammo.png"); }
+.up[data-id="squad"] .mark { background-image: url("../assets/upgrade-squad.png"); }
 .up .meta { align-items: flex-start; }
 .up .meta b { font-size: 13px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .up .lv { font-style: normal; font-size: 12px; font-weight: 800; color: var(--gold); line-height: 1.2; }
@@ -1005,3 +998,7 @@ button { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   #toast { transition: none; }
 }
+.up[data-id="spikes"] .mark { background-size: 240%; background-position: 50% 52%; }
+.up[data-id="mend"] .mark { background-size: 140%; }
+.up[data-id="ammo"] .mark { background-size: 125%; }
+.up[data-id="squad"] .mark { background-size: 150%; }
