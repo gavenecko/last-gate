@@ -527,13 +527,6 @@
   const state = freshState();
   state.phase = "title";
 
-  const SPECKS = Array.from({ length: 70 }, (_, i) => ({
-    x: ((i * 53) % 997) / 997 * WORLD_W,
-    y: ((i * 97) % 991) / 991 * WORLD_H,
-    r: 0.12 + (i % 4) * 0.08,
-    a: 0.1 + (i % 5) * 0.04,
-  }));
-
   let view = { ox: 0, oy: 0, s: 1 };
   let audioCtx = null;
   let music = null;
@@ -544,6 +537,9 @@
   let toastTimer = 0;
   const rosterButtons = {};
   const upButtons = {};
+  // Shop drawer. While open the simulation is frozen; phase stays "shop"/"fight" so buying works.
+  let shopOpen = false;
+  let shopFromPause = false;
 
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
   function rand(a, b) { return a + Math.random() * (b - a); }
@@ -1391,6 +1387,7 @@
 
   function update(dt) {
     if (state.phase === "paused" || state.phase === "title") return;
+    if (shopOpen) { musicTick(dt); return; }
     state.time += dt;
     state.shake = Math.max(0, state.shake - dt * 1.8);
     state.baseFlash = Math.max(0, state.baseFlash - dt);
@@ -1822,26 +1819,6 @@
     ctx.restore();
   }
 
-  function drawFence() {
-    ctx.strokeStyle = "rgba(180,170,150,0.28)";
-    ctx.lineWidth = 0.28;
-    const gap = 7.5;
-    for (let x = 3; x < WORLD_W - 2; x += gap) {
-      if (Math.round(x / gap) % 4 === 2) continue;
-      ctx.beginPath();
-      ctx.moveTo(x, 1.1); ctx.lineTo(x, 3.1);
-      ctx.moveTo(x, WORLD_H - 1.1); ctx.lineTo(x, WORLD_H - 3.1);
-      ctx.stroke();
-    }
-    for (let y = 3; y < WORLD_H - 2; y += gap) {
-      if (Math.round(y / gap) % 4 === 1) continue;
-      ctx.beginPath();
-      ctx.moveTo(1.1, y); ctx.lineTo(3.1, y);
-      ctx.moveTo(WORLD_W - 1.1, y); ctx.lineTo(WORLD_W - 3.1, y);
-      ctx.stroke();
-    }
-  }
-
   function drawProp(key, x, y, size, rot) {
     return drawSprite(key, x, y, size, { anchor: "center", rot: rot || 0 });
   }
@@ -2073,6 +2050,743 @@
     ctx.globalAlpha = 1;
   }
 
+  // ---------- Terrain ----------
+  // Static ground is painted once per region + canvas size into an offscreen canvas (seeded, so it
+  // never reshuffles), then blitted every frame. Only ripples, candle flicker and fog draw live.
+  const TAU = Math.PI * 2;
+  const terrain = { canvas: null, key: "", x0: 0, y0: 0, x1: WORLD_W, y1: WORLD_H, layout: null };
+  const terrainLayouts = {};
+  let fogSprite = null;
+  let glowSprite = null;
+
+  function seeded(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function hashStr(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+  function rr(rng, a, b) { return a + rng() * (b - a); }
+  function pick(rng, list) { return list[(rng() * list.length) | 0]; }
+  function distBase(x, y) { return Math.hypot(x - BASE.x, y - BASE.y); }
+
+  function makeSprite(size, paint) {
+    const c = document.createElement("canvas");
+    c.width = size;
+    c.height = size;
+    paint(c.getContext("2d"), size);
+    return c;
+  }
+  function ensureFxSprites() {
+    if (!fogSprite) {
+      fogSprite = makeSprite(128, (g, n) => {
+        const grad = g.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2);
+        grad.addColorStop(0, "rgba(200,220,205,1)");
+        grad.addColorStop(0.45, "rgba(200,220,205,0.45)");
+        grad.addColorStop(1, "rgba(200,220,205,0)");
+        g.fillStyle = grad;
+        g.fillRect(0, 0, n, n);
+      });
+    }
+    if (!glowSprite) {
+      glowSprite = makeSprite(64, (g, n) => {
+        const grad = g.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2);
+        grad.addColorStop(0, "rgba(255,206,120,0.9)");
+        grad.addColorStop(0.3, "rgba(255,160,70,0.35)");
+        grad.addColorStop(1, "rgba(255,140,60,0)");
+        g.fillStyle = grad;
+        g.fillRect(0, 0, n, n);
+      });
+    }
+  }
+
+  // Wobbly polyline from the base out to the world edge along angle a.
+  function radialPath(rng, a, start, wobble) {
+    const pts = [];
+    const dx = Math.cos(a), dy = Math.sin(a);
+    const tx = dx > 0 ? (WORLD_W + 2 - BASE.x) / dx : dx < 0 ? (-2 - BASE.x) / dx : 1e9;
+    const ty = dy > 0 ? (WORLD_H + 2 - BASE.y) / dy : dy < 0 ? (-2 - BASE.y) / dy : 1e9;
+    const len = Math.min(tx, ty);
+    const steps = Math.max(6, Math.round((len - start) / 6));
+    let off = 0;
+    for (let i = 0; i <= steps; i++) {
+      const d = start + (len - start) * (i / steps);
+      if (i > 0) off += rr(rng, -wobble, wobble);
+      off *= 0.85;
+      pts.push({ x: BASE.x + dx * d - dy * off, y: BASE.y + dy * d + dx * off });
+    }
+    return pts;
+  }
+  function strokePts(g, pts, offset) {
+    g.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      let x = p.x, y = p.y;
+      if (offset) {
+        const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+        const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+        x += (-(b.y - a.y) / l) * offset;
+        y += ((b.x - a.x) / l) * offset;
+      }
+      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  function nearPath(paths, x, y, w) {
+    for (const pts of paths) {
+      for (let i = 0; i < pts.length; i++) {
+        if (Math.abs(pts[i].x - x) < w && Math.abs(pts[i].y - y) < w + 3) return true;
+      }
+    }
+    return false;
+  }
+  function blobPath(g, rng, x, y, r, rough, n) {
+    const pts = n || 12;
+    g.beginPath();
+    const rs = [];
+    for (let i = 0; i < pts; i++) rs.push(r * (1 - rough + rng() * rough * 2));
+    for (let i = 0; i <= pts; i++) {
+      const k = i % pts;
+      const a = (k / pts) * TAU;
+      const px = x + Math.cos(a) * rs[k], py = y + Math.sin(a) * rs[k];
+      if (i === 0) g.moveTo(px, py);
+      else {
+        const pa = ((k - 0.5) / pts) * TAU;
+        const pr = (rs[k] + rs[(k + pts - 1) % pts]) / 2 * 1.04;
+        g.quadraticCurveTo(x + Math.cos(pa) * pr, y + Math.sin(pa) * pr, px, py);
+      }
+    }
+    g.closePath();
+  }
+  function scatter(rng, n, minBase, maxTry, ok) {
+    const out = [];
+    let tries = 0;
+    while (out.length < n && tries < n * (maxTry || 20)) {
+      tries++;
+      const x = rr(rng, 3, WORLD_W - 3), y = rr(rng, 4, WORLD_H - 3);
+      if (distBase(x, y) < minBase) continue;
+      if (ok && !ok(x, y, out)) continue;
+      out.push({ x: x, y: y });
+    }
+    return out;
+  }
+  function apart(list, x, y, d) {
+    for (const p of list) if (Math.hypot(p.x - x, p.y - y) < d) return false;
+    return true;
+  }
+
+  // Layout is size-independent (world units only), cached per region.
+  function terrainLayout(region) {
+    if (terrainLayouts[region]) return terrainLayouts[region];
+    const rng = seeded(hashStr("last-gate-" + region));
+    const L = { region: region, paths: [], pools: [], candles: [], fog: [] };
+    if (region === "yard") {
+      const n = 7;
+      const a0 = rng() * TAU;
+      for (let i = 0; i < n; i++) L.paths.push(radialPath(rng, a0 + (i / n) * TAU + rr(rng, -0.25, 0.25), BASE.r + 2, 1.6));
+    } else if (region === "marsh") {
+      const pools = scatter(rng, 11, 22, 40, (x, y, out) => apart(out, x, y, 22));
+      for (const p of pools) {
+        const r = rr(rng, 5, 10.5);
+        const ripples = [];
+        const k = 1 + ((rng() * 2) | 0);
+        for (let i = 0; i < k; i++) {
+          const a = rng() * TAU, d = rng() * r * 0.35;
+          ripples.push({ x: p.x + Math.cos(a) * d, y: p.y + Math.sin(a) * d * 0.7, max: r * rr(rng, 0.35, 0.55), speed: rr(rng, 0.22, 0.38), ph: rng() });
+        }
+        L.pools.push({ x: p.x, y: p.y, r: r, seed: (rng() * 1e9) | 0, ripples: ripples });
+      }
+      const a0 = rng() * TAU;
+      L.paths.push(radialPath(rng, a0, BASE.r + 4, 1.2));
+      L.paths.push(radialPath(rng, a0 + Math.PI + rr(rng, -0.5, 0.5), BASE.r + 4, 1.2));
+      for (let i = 0; i < 6; i++) {
+        L.fog.push({ y: rr(rng, 8, WORLD_H - 8), w: rr(rng, 40, 64), h: rr(rng, 16, 26), speed: rr(rng, 0.6, 1.4) * (rng() < 0.5 ? -1 : 1), ph: rng() * 200, a: rr(rng, 0.05, 0.085) });
+      }
+    } else {
+      L.plazaR = 25;
+      const a0 = -Math.PI / 2 + rr(rng, -0.2, 0.2);
+      for (let i = 0; i < 4; i++) L.paths.push(radialPath(rng, a0 + i * Math.PI / 2 + rr(rng, -0.12, 0.12), L.plazaR - 2, 0.6));
+      // Graves on a loose grid, kept off the plaza and the cobble paths.
+      L.graves = [];
+      for (let gy = 8; gy < WORLD_H - 6; gy += 11) {
+        for (let gx = 7; gx < WORLD_W - 5; gx += 9.5) {
+          const x = gx + rr(rng, -2, 2), y = gy + rr(rng, -2, 2);
+          if (distBase(x, y) < L.plazaR + 6) continue;
+          if (nearPath(L.paths, x, y, 5)) continue;
+          if (rng() < 0.42) continue;
+          L.graves.push({ x: x, y: y, w: rr(rng, 2.6, 3.4), h: rr(rng, 3.2, 4.4), rot: rr(rng, -0.22, 0.22), cross: rng() < 0.22, broken: rng() < 0.15, shade: (rng() * 3) | 0 });
+        }
+      }
+      for (const gr of L.graves) {
+        if (rng() < 0.2) L.candles.push({ x: gr.x + rr(rng, -1.8, 1.8), y: gr.y + gr.h * 0.25 + rr(rng, 0.6, 1.6), ph: rng() * TAU });
+      }
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * TAU + 0.3 + rr(rng, -0.1, 0.1);
+        L.candles.push({ x: BASE.x + Math.cos(a) * (L.plazaR - 3), y: BASE.y + Math.sin(a) * (L.plazaR - 3), ph: rng() * TAU });
+      }
+    }
+    terrainLayouts[region] = L;
+    return L;
+  }
+
+  function paintMottle(g, rng, x0, y0, x1, y1, colors, density, rmin, rmax, amin, amax) {
+    const n = Math.round((x1 - x0) * (y1 - y0) / density);
+    for (let i = 0; i < n; i++) {
+      g.globalAlpha = rr(rng, amin, amax);
+      g.fillStyle = pick(rng, colors);
+      g.beginPath();
+      g.arc(rr(rng, x0, x1), rr(rng, y0, y1), rr(rng, rmin, rmax), 0, TAU);
+      g.fill();
+    }
+    g.globalAlpha = 1;
+  }
+  function paintTufts(g, rng, x, y, n, colors, len) {
+    g.lineCap = "round";
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + rr(rng, -0.75, 0.75);
+      const l = len * rr(rng, 0.55, 1.1);
+      const bx = x + rr(rng, -0.5, 0.5);
+      g.strokeStyle = pick(rng, colors);
+      g.lineWidth = rr(rng, 0.14, 0.24);
+      g.beginPath();
+      g.moveTo(bx, y);
+      g.quadraticCurveTo(bx + Math.cos(a) * l * 0.4, y + Math.sin(a) * l * 0.6, bx + Math.cos(a) * l, y + Math.sin(a) * l);
+      g.stroke();
+    }
+  }
+  function paintShadow(g, x, y, rx, ry, a) {
+    g.fillStyle = "rgba(0,0,0," + (a || 0.3) + ")";
+    g.beginPath();
+    g.ellipse(x, y, rx, ry, 0, 0, TAU);
+    g.fill();
+  }
+  function paintBranch(g, rng, x, y, a, len, w, depth) {
+    const ex = x + Math.cos(a) * len, ey = y + Math.sin(a) * len;
+    g.lineWidth = w;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(ex, ey);
+    g.stroke();
+    if (depth <= 0) return;
+    const k = 2 + ((rng() * 2) | 0);
+    for (let i = 0; i < k; i++) paintBranch(g, rng, ex, ey, a + rr(rng, -0.8, 0.8), len * rr(rng, 0.5, 0.72), w * 0.62, depth - 1);
+  }
+  function paintFence(g, color) {
+    g.strokeStyle = color;
+    g.lineWidth = 0.28;
+    const gap = 7.5;
+    for (let x = 3; x < WORLD_W - 2; x += gap) {
+      if (Math.round(x / gap) % 4 === 2) continue;
+      g.beginPath();
+      g.moveTo(x, 1.1); g.lineTo(x, 3.1);
+      g.moveTo(x, WORLD_H - 1.1); g.lineTo(x, WORLD_H - 3.1);
+      g.stroke();
+    }
+    for (let y = 3; y < WORLD_H - 2; y += gap) {
+      if (Math.round(y / gap) % 4 === 1) continue;
+      g.beginPath();
+      g.moveTo(1.1, y); g.lineTo(3.1, y);
+      g.moveTo(WORLD_W - 1.1, y); g.lineTo(WORLD_W - 3.1, y);
+      g.stroke();
+    }
+  }
+
+  function paintYard(g, rng, L, ext) {
+    g.fillStyle = "#17190f";
+    g.fillRect(ext.x0, ext.y0, ext.x1 - ext.x0, ext.y1 - ext.y0);
+    paintMottle(g, rng, ext.x0, ext.y0, ext.x1, ext.y1, ["#2a2a1a", "#1d2614", "#232c17", "#2e281b", "#101208"], 9, 1.5, 6, 0.12, 0.3);
+    // Grass patches.
+    for (let i = 0; i < 46; i++) {
+      const x = rr(rng, -4, WORLD_W + 4), y = rr(rng, -4, WORLD_H + 4);
+      g.fillStyle = pick(rng, ["rgba(36,54,22,0.42)", "rgba(44,60,26,0.36)", "rgba(30,44,18,0.45)"]);
+      blobPath(g, rng, x, y, rr(rng, 3, 9), 0.35, 10);
+      g.fill();
+    }
+    // Worn dirt paths from the gate to the fence.
+    g.lineCap = "round";
+    g.lineJoin = "round";
+    for (const pts of L.paths) {
+      g.strokeStyle = "rgba(66,54,36,0.42)"; g.lineWidth = 7.5; strokePts(g, pts);
+      g.strokeStyle = "rgba(86,72,50,0.34)"; g.lineWidth = 4.6; strokePts(g, pts);
+      g.strokeStyle = "rgba(40,32,22,0.35)"; g.lineWidth = 0.5; strokePts(g, pts, 1.3); strokePts(g, pts, -1.3);
+    }
+    // Packed dirt round the gate.
+    const clear = g.createRadialGradient(BASE.x, BASE.y, 2, BASE.x, BASE.y, 26);
+    clear.addColorStop(0, "rgba(92,80,56,0.55)");
+    clear.addColorStop(0.6, "rgba(72,62,42,0.3)");
+    clear.addColorStop(1, "rgba(60,50,34,0)");
+    g.fillStyle = clear;
+    g.fillRect(BASE.x - 30, BASE.y - 30, 60, 60);
+    paintMottle(g, rng, ext.x0, ext.y0, ext.x1, ext.y1, ["#d9d3c4", "#a89c84"], 22, 0.1, 0.32, 0.08, 0.22);
+    // Blood stains.
+    for (const p of scatter(rng, 9, 15)) {
+      g.fillStyle = "rgba(84,10,14,0.4)";
+      blobPath(g, rng, p.x, p.y, rr(rng, 1, 2.4), 0.4, 9);
+      g.fill();
+      for (let i = 0; i < 5; i++) {
+        g.beginPath();
+        g.arc(p.x + rr(rng, -3.5, 3.5), p.y + rr(rng, -3, 3), rr(rng, 0.15, 0.5), 0, TAU);
+        g.fill();
+      }
+    }
+    // Tufts (not on the gate apron).
+    for (let i = 0; i < 300; i++) {
+      const x = rr(rng, -2, WORLD_W + 2), y = rr(rng, -2, WORLD_H + 2);
+      if (distBase(x, y) < 16 || nearPath(L.paths, x, y, 2.2)) continue;
+      paintTufts(g, rng, x, y, 3 + ((rng() * 4) | 0), ["rgba(78,102,44,0.6)", "rgba(96,110,52,0.55)", "rgba(58,80,34,0.6)", "rgba(120,112,64,0.45)"], rr(rng, 0.9, 1.7));
+    }
+    // Rubble.
+    for (let i = 0; i < 80; i++) {
+      const x = rr(rng, 2, WORLD_W - 2), y = rr(rng, 2, WORLD_H - 2);
+      if (distBase(x, y) < 12) continue;
+      const r = rr(rng, 0.3, 0.95);
+      g.fillStyle = pick(rng, ["#4a4740", "#3c3a34", "#55504a", "#3a342c"]);
+      g.globalAlpha = 0.75;
+      blobPath(g, rng, x, y, r, 0.45, 5);
+      g.fill();
+      g.globalAlpha = 0.25;
+      g.fillStyle = "#c8c0ae";
+      g.beginPath(); g.arc(x - r * 0.3, y - r * 0.3, r * 0.3, 0, TAU); g.fill();
+    }
+    g.globalAlpha = 1;
+    const props = scatter(rng, 26, 20, 40, (x, y, out) => apart(out, x, y, 9) && !nearPath(L.paths, x, y, 4));
+    let pi = 0;
+    // Dead trees near the edges.
+    for (; pi < 5 && pi < props.length; pi++) {
+      const p = props[pi];
+      paintShadow(g, p.x + 1.5, p.y + 1.2, 5.5, 2.4, 0.22);
+      g.strokeStyle = "rgba(38,30,22,0.92)";
+      g.lineCap = "round";
+      const k = 4 + ((rng() * 3) | 0);
+      const a0 = rng() * TAU;
+      for (let i = 0; i < k; i++) paintBranch(g, rng, p.x, p.y, a0 + (i / k) * TAU + rr(rng, -0.3, 0.3), rr(rng, 2.6, 4.2), 0.75, 2);
+      g.fillStyle = "#2c2219";
+      g.beginPath(); g.arc(p.x, p.y, 0.95, 0, TAU); g.fill();
+    }
+    // Tires.
+    for (let n = 0; n < 6 && pi < props.length; n++, pi++) {
+      const p = props[pi];
+      const stack = rng() < 0.4 ? 2 : 1;
+      for (let s = 0; s < stack; s++) {
+        const x = p.x + s * 1.1, y = p.y - s * 0.6;
+        paintShadow(g, x + 0.3, y + 0.5, 1.9, 1.1, 0.3);
+        g.strokeStyle = "#0f0f10"; g.lineWidth = 0.8;
+        g.beginPath(); g.ellipse(x, y, 1.45, 1.1, 0, 0, TAU); g.stroke();
+        g.strokeStyle = "rgba(90,90,90,0.5)"; g.lineWidth = 0.14;
+        g.beginPath(); g.ellipse(x, y, 1.05, 0.75, 0, 0, TAU); g.stroke();
+      }
+    }
+    // Crates.
+    for (let n = 0; n < 6 && pi < props.length; n++, pi++) {
+      const p = props[pi];
+      const s = rr(rng, 2.4, 3.3);
+      g.save();
+      g.translate(p.x, p.y);
+      g.rotate(rr(rng, -0.5, 0.5));
+      g.fillStyle = "rgba(0,0,0,0.3)"; g.fillRect(-s / 2 + 0.5, -s / 2 + 0.6, s, s);
+      g.fillStyle = pick(rng, ["#4a3a26", "#544130", "#3f3222"]); g.fillRect(-s / 2, -s / 2, s, s);
+      g.strokeStyle = "rgba(24,18,10,0.85)"; g.lineWidth = 0.2;
+      g.strokeRect(-s / 2, -s / 2, s, s);
+      g.beginPath();
+      g.moveTo(-s / 2, -s / 2); g.lineTo(s / 2, s / 2);
+      g.moveTo(-s / 2, 0); g.lineTo(s / 2, 0);
+      g.stroke();
+      g.restore();
+    }
+    // Broken fence runs.
+    for (let n = 0; n < 6 && pi < props.length; n++, pi++) {
+      const p = props[pi];
+      const a = rng() * TAU;
+      const posts = 3 + ((rng() * 3) | 0);
+      g.lineCap = "round";
+      for (let i = 0; i < posts; i++) {
+        const x = p.x + Math.cos(a) * i * 2.6, y = p.y + Math.sin(a) * i * 2.6;
+        if (i < posts - 1 && rng() < 0.7) {
+          g.strokeStyle = "rgba(92,74,52,0.8)"; g.lineWidth = 0.4;
+          const sag = rng() < 0.3 ? rr(rng, 0.6, 1.4) : 0;
+          g.beginPath();
+          g.moveTo(x, y - 0.3);
+          g.lineTo(x + Math.cos(a) * 2.6, y + Math.sin(a) * 2.6 - 0.3 + sag);
+          g.stroke();
+        }
+        if (rng() < 0.85) {
+          g.fillStyle = "#3a2c1e";
+          g.beginPath(); g.arc(x, y, 0.42, 0, TAU); g.fill();
+        }
+      }
+    }
+    // Leftover slots: scattered planks.
+    for (; pi < props.length; pi++) {
+      const p = props[pi];
+      g.save();
+      g.translate(p.x, p.y);
+      g.rotate(rng() * TAU);
+      g.fillStyle = "rgba(80,64,44,0.7)";
+      g.fillRect(-1.6, -0.25, 3.2, 0.5);
+      g.restore();
+    }
+    paintFence(g, "rgba(180,170,150,0.28)");
+  }
+
+  function paintMarsh(g, rng, L, ext) {
+    g.fillStyle = "#111814";
+    g.fillRect(ext.x0, ext.y0, ext.x1 - ext.x0, ext.y1 - ext.y0);
+    paintMottle(g, rng, ext.x0, ext.y0, ext.x1, ext.y1, ["#1c261c", "#26281a", "#162019", "#2a2418", "#0c120e"], 8, 1.5, 6, 0.15, 0.35);
+    // Mud flats.
+    for (let i = 0; i < 30; i++) {
+      g.fillStyle = pick(rng, ["rgba(54,44,28,0.38)", "rgba(46,40,26,0.42)", "rgba(36,32,22,0.45)"]);
+      blobPath(g, rng, rr(rng, -4, WORLD_W + 4), rr(rng, -4, WORLD_H + 4), rr(rng, 3, 8), 0.4, 10);
+      g.fill();
+    }
+    // Wet mud round the gate.
+    const clear = g.createRadialGradient(BASE.x, BASE.y, 2, BASE.x, BASE.y, 24);
+    clear.addColorStop(0, "rgba(70,60,40,0.5)");
+    clear.addColorStop(1, "rgba(50,44,30,0)");
+    g.fillStyle = clear;
+    g.fillRect(BASE.x - 26, BASE.y - 26, 52, 52);
+    // Pools: dark water with muddy banks.
+    for (const p of L.pools) {
+      const pr = seeded(p.seed);
+      g.fillStyle = "rgba(40,36,24,0.55)";
+      blobPath(g, seeded(p.seed), p.x, p.y, p.r * 1.18, 0.22, 14);
+      g.fill();
+      blobPath(g, pr, p.x, p.y, p.r, 0.22, 14);
+      const water = g.createRadialGradient(p.x - p.r * 0.2, p.y - p.r * 0.25, p.r * 0.1, p.x, p.y, p.r * 1.1);
+      water.addColorStop(0, "#1a3434");
+      water.addColorStop(0.7, "#0f2224");
+      water.addColorStop(1, "#0a1617");
+      g.fillStyle = water;
+      g.fill();
+      g.strokeStyle = "rgba(90,104,70,0.32)";
+      g.lineWidth = 0.45;
+      g.stroke();
+      g.strokeStyle = "rgba(170,210,200,0.08)";
+      g.lineWidth = 0.3;
+      for (let i = 0; i < 3; i++) {
+        const sx = p.x + rr(pr, -p.r * 0.5, p.r * 0.3), sy = p.y + rr(pr, -p.r * 0.5, p.r * 0.4);
+        g.beginPath(); g.moveTo(sx, sy); g.lineTo(sx + rr(pr, 1.5, 3.5), sy - 0.2); g.stroke();
+      }
+      // Lily pads.
+      const pads = 2 + ((pr() * 4) | 0);
+      for (let i = 0; i < pads; i++) {
+        const a = pr() * TAU, d = pr() * p.r * 0.7;
+        const x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d * 0.8;
+        const r = rr(pr, 0.55, 1.05);
+        const notch = pr() * TAU;
+        g.fillStyle = pick(pr, ["#2c4a24", "#365a2a", "#24401e"]);
+        g.beginPath();
+        g.moveTo(x, y);
+        g.arc(x, y, r, notch + 0.45, notch + TAU - 0.15);
+        g.closePath();
+        g.fill();
+        if (pr() < 0.18) {
+          g.fillStyle = "rgba(230,170,200,0.7)";
+          g.beginPath(); g.arc(x + r * 0.2, y - r * 0.1, 0.28, 0, TAU); g.fill();
+        }
+      }
+      // Reeds round the bank.
+      const clumps = 3 + ((pr() * 4) | 0);
+      for (let i = 0; i < clumps; i++) {
+        const a = pr() * TAU;
+        const x = p.x + Math.cos(a) * p.r * 1.02, y = p.y + Math.sin(a) * p.r * 1.02;
+        const k = 4 + ((pr() * 5) | 0);
+        g.lineCap = "round";
+        for (let j = 0; j < k; j++) {
+          const bx = x + rr(pr, -0.9, 0.9), lean = rr(pr, -0.35, 0.35), l = rr(pr, 2, 3.8);
+          g.strokeStyle = pick(pr, ["rgba(86,100,48,0.85)", "rgba(70,86,40,0.85)", "rgba(104,108,58,0.8)"]);
+          g.lineWidth = 0.2;
+          g.beginPath(); g.moveTo(bx, y); g.lineTo(bx + lean * l, y - l); g.stroke();
+          if (pr() < 0.35) {
+            g.fillStyle = "#3b2a1a";
+            g.beginPath(); g.ellipse(bx + lean * l * 0.92, y - l * 0.92, 0.22, 0.55, lean, 0, TAU); g.fill();
+          }
+        }
+      }
+    }
+    // Duckboards across the mud.
+    for (const pts of L.paths) {
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b = pts[i + 1];
+        const seg = Math.hypot(b.x - a.x, b.y - a.y);
+        const ang = Math.atan2(b.y - a.y, b.x - a.x);
+        for (let d = 0; d < seg; d += 1.45) {
+          if (rng() < 0.09) continue;
+          const x = a.x + Math.cos(ang) * d, y = a.y + Math.sin(ang) * d;
+          g.save();
+          g.translate(x, y);
+          g.rotate(ang + Math.PI / 2 + rr(rng, -0.12, 0.12));
+          g.fillStyle = "rgba(0,0,0,0.3)"; g.fillRect(-1.6, -0.35, 3.2, 0.95);
+          g.fillStyle = pick(rng, ["#4a3c2a", "#3e3324", "#54442e"]);
+          g.fillRect(-1.6 + rr(rng, -0.2, 0.2), -0.5, 3.2, 0.85);
+          g.restore();
+        }
+      }
+    }
+    // Rotting logs.
+    for (const p of scatter(rng, 4, 20, 40, (x, y) => !nearPath(L.paths, x, y, 4))) {
+      g.save();
+      g.translate(p.x, p.y);
+      g.rotate(rng() * TAU);
+      const l = rr(rng, 4, 7);
+      g.fillStyle = "rgba(0,0,0,0.3)"; g.fillRect(-l / 2 + 0.4, -0.4, l, 1.6);
+      g.fillStyle = "#3a2c1e"; g.fillRect(-l / 2, -0.75, l, 1.5);
+      g.fillStyle = "#5a4630"; g.beginPath(); g.ellipse(l / 2, 0, 0.35, 0.75, 0, 0, TAU); g.fill();
+      g.fillStyle = "rgba(60,90,40,0.6)"; g.fillRect(-l / 4, -0.75, l / 3, 0.4);
+      g.restore();
+    }
+    for (let i = 0; i < 220; i++) {
+      const x = rr(rng, -2, WORLD_W + 2), y = rr(rng, -2, WORLD_H + 2);
+      if (distBase(x, y) < 15) continue;
+      paintTufts(g, rng, x, y, 3 + ((rng() * 3) | 0), ["rgba(70,92,46,0.55)", "rgba(56,76,40,0.6)", "rgba(92,96,52,0.45)"], rr(rng, 0.9, 1.8));
+    }
+    paintFence(g, "rgba(150,160,130,0.26)");
+  }
+
+  function paintChapel(g, rng, L, ext) {
+    g.fillStyle = "#121318";
+    g.fillRect(ext.x0, ext.y0, ext.x1 - ext.x0, ext.y1 - ext.y0);
+    paintMottle(g, rng, ext.x0, ext.y0, ext.x1, ext.y1, ["#1a1f1a", "#1e1e24", "#151a15", "#22222a", "#0c0d10"], 8, 1.5, 6, 0.18, 0.38);
+    // Overgrowth.
+    for (let i = 0; i < 40; i++) {
+      g.fillStyle = pick(rng, ["rgba(30,42,28,0.4)", "rgba(26,36,26,0.45)"]);
+      blobPath(g, rng, rr(rng, -4, WORLD_W + 4), rr(rng, -4, WORLD_H + 4), rr(rng, 3, 8), 0.35, 10);
+      g.fill();
+    }
+    // Cobble paths out to the fence.
+    for (const pts of L.paths) {
+      g.lineCap = "round"; g.lineJoin = "round";
+      g.strokeStyle = "rgba(20,20,24,0.6)"; g.lineWidth = 6; strokePts(g, pts);
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b = pts[i + 1];
+        const seg = Math.hypot(b.x - a.x, b.y - a.y);
+        const ang = Math.atan2(b.y - a.y, b.x - a.x);
+        const nx = -Math.sin(ang), ny = Math.cos(ang);
+        for (let d = 0; d < seg; d += 1.35) {
+          for (let w = -2.1; w <= 2.15; w += 1.4) {
+            if (rng() < 0.12) continue;
+            const off = w + rr(rng, -0.25, 0.25) + ((Math.round(d / 1.35) % 2) ? 0.7 : 0);
+            if (Math.abs(off) > 2.5) continue;
+            const x = a.x + Math.cos(ang) * d + nx * off, y = a.y + Math.sin(ang) * d + ny * off;
+            g.fillStyle = pick(rng, ["#2c2c33", "#33333a", "#27272c", "#38363a"]);
+            blobPath(g, rng, x, y, rr(rng, 0.5, 0.68), 0.2, 6);
+            g.fill();
+          }
+        }
+      }
+    }
+    // Flagstone plaza round the gate.
+    const R = L.plazaR;
+    g.fillStyle = "rgba(14,14,18,0.85)";
+    blobPath(g, rng, BASE.x, BASE.y, R + 0.6, 0.06, 24);
+    g.fill();
+    const rowH = 3.1;
+    for (let y = BASE.y - R; y < BASE.y + R; y += rowH) {
+      const shift = ((Math.round((y - BASE.y) / rowH) % 2) + 2) % 2 ? 2 : 0;
+      for (let x = BASE.x - R - shift; x < BASE.x + R; ) {
+        const w = rr(rng, 3, 4.8);
+        const cx = x + w / 2, cy = y + rowH / 2;
+        const edge = R - 1.2 + Math.sin(Math.atan2(cy - BASE.y, cx - BASE.x) * 5) * 0.9;
+        if (distBase(cx, cy) < edge && rng() > 0.05) {
+          g.fillStyle = pick(rng, ["#2e2e35", "#29292f", "#333339", "#25252a", "#302e32"]);
+          g.fillRect(x + 0.14, y + 0.14, w - 0.28, rowH - 0.28);
+          g.fillStyle = "rgba(255,255,255,0.035)";
+          g.fillRect(x + 0.14, y + 0.14, w - 0.28, 0.35);
+          if (rng() < 0.28) {
+            g.strokeStyle = "rgba(12,12,16,0.8)";
+            g.lineWidth = 0.14;
+            g.beginPath();
+            let px = x + rr(rng, 0.4, w - 0.4), py = y + 0.2;
+            g.moveTo(px, py);
+            for (let k = 0; k < 4; k++) { px += rr(rng, -0.7, 0.7); py += (rowH - 0.4) / 4; g.lineTo(px, py); }
+            g.stroke();
+          }
+          if (rng() < 0.12) paintTufts(g, rng, x + rr(rng, 0, w), y + rowH - 0.1, 3, ["rgba(64,84,48,0.6)", "rgba(52,72,40,0.6)"], 0.9);
+        }
+        x += w;
+      }
+    }
+    // Weeds.
+    for (let i = 0; i < 240; i++) {
+      const x = rr(rng, -2, WORLD_W + 2), y = rr(rng, -2, WORLD_H + 2);
+      if (distBase(x, y) < R + 1) continue;
+      paintTufts(g, rng, x, y, 3 + ((rng() * 4) | 0), ["rgba(62,80,48,0.6)", "rgba(50,66,40,0.62)", "rgba(80,86,58,0.45)"], rr(rng, 0.9, 1.9));
+    }
+    // Gravestones and crosses.
+    const shades = [["#34343b", "#42424a"], ["#313337", "#3e4045"], ["#383434", "#45403f"]];
+    for (const gr of L.graves) {
+      g.fillStyle = "rgba(34,28,22,0.55)";
+      g.beginPath(); g.ellipse(gr.x, gr.y + gr.h * 0.55, gr.w * 0.7, gr.h * 0.38, 0, 0, TAU); g.fill();
+      paintShadow(g, gr.x + 0.8, gr.y + 0.4, gr.w * 0.6, 0.6, 0.35);
+      g.save();
+      g.translate(gr.x, gr.y);
+      g.rotate(gr.rot);
+      const sh = shades[gr.shade];
+      const h = gr.broken ? gr.h * 0.55 : gr.h;
+      if (gr.cross) {
+        g.fillStyle = sh[0];
+        g.fillRect(-0.4, -h, 0.8, h);
+        g.fillRect(-1.35, -h * 0.75, 2.7, 0.75);
+        g.fillStyle = sh[1];
+        g.fillRect(-0.4, -h, 0.3, h);
+      } else {
+        const w = gr.w;
+        g.fillStyle = sh[0];
+        g.beginPath();
+        g.moveTo(-w / 2, 0);
+        g.lineTo(-w / 2, -h + w / 2);
+        if (gr.broken) { g.lineTo(-w / 6, -h + 0.2); g.lineTo(w / 5, -h + 0.9); g.lineTo(w / 2, -h + 0.4); }
+        else g.arc(0, -h + w / 2, w / 2, Math.PI, 0);
+        g.lineTo(w / 2, 0);
+        g.closePath();
+        g.fill();
+        g.fillStyle = sh[1];
+        g.fillRect(-w / 2, -h + w / 2, 0.35, h - w / 2);
+        g.strokeStyle = "rgba(20,20,24,0.7)";
+        g.lineWidth = 0.16;
+        g.beginPath();
+        g.moveTo(-w * 0.25, -h * 0.55); g.lineTo(w * 0.25, -h * 0.55);
+        g.moveTo(-w * 0.2, -h * 0.4); g.lineTo(w * 0.2, -h * 0.4);
+        g.stroke();
+        if (rng() < 0.5) {
+          g.fillStyle = "rgba(70,96,52,0.5)";
+          g.beginPath(); g.arc(rr(rng, -w / 3, w / 3), -rr(rng, 0.3, 1.2), rr(rng, 0.3, 0.6), 0, TAU); g.fill();
+        }
+      }
+      g.restore();
+      paintTufts(g, rng, gr.x + rr(rng, -1.2, 1.2), gr.y + 0.2, 4, ["rgba(62,80,48,0.7)", "rgba(80,90,56,0.6)"], 1.1);
+    }
+    // Candle stubs (flames draw live).
+    for (const c of L.candles) {
+      g.fillStyle = "rgba(0,0,0,0.35)";
+      g.beginPath(); g.ellipse(c.x + 0.2, c.y + 0.1, 0.5, 0.2, 0, 0, TAU); g.fill();
+      g.fillStyle = "#d8ccb0";
+      g.fillRect(c.x - 0.22, c.y - 0.9, 0.44, 0.9);
+      g.fillStyle = "#f0e6cc";
+      g.fillRect(c.x - 0.22, c.y - 0.9, 0.44, 0.14);
+    }
+    paintFence(g, "rgba(160,160,180,0.3)");
+  }
+
+  function paintLighting(g, ext, region) {
+    // Red-tinged danger strip along the fence line (as before).
+    g.fillStyle = "rgba(80,16,28,0.14)";
+    g.fillRect(0, 0, WORLD_W, 5);
+    g.fillRect(0, WORLD_H - 5, WORLD_W, 5);
+    g.fillRect(0, 0, 5, WORLD_H);
+    g.fillRect(WORLD_W - 5, 0, 5, WORLD_H);
+    // Warm light pooled on the gate.
+    const tint = region === "marsh" ? "190,220,170" : region === "chapel" ? "255,200,140" : "255,214,150";
+    const lit = g.createRadialGradient(BASE.x, BASE.y, 0, BASE.x, BASE.y, 34);
+    lit.addColorStop(0, "rgba(" + tint + ",0.10)");
+    lit.addColorStop(1, "rgba(" + tint + ",0)");
+    g.fillStyle = lit;
+    g.fillRect(BASE.x - 36, BASE.y - 36, 72, 72);
+    // Vignette: edges fall into the dark.
+    const far = Math.hypot(Math.max(BASE.x - ext.x0, ext.x1 - BASE.x), Math.max(BASE.y - ext.y0, ext.y1 - BASE.y));
+    const vig = g.createRadialGradient(BASE.x, BASE.y, 18, BASE.x, BASE.y, Math.max(far, 120));
+    vig.addColorStop(0, "rgba(0,0,0,0)");
+    vig.addColorStop(0.42, "rgba(0,0,0,0.2)");
+    vig.addColorStop(0.75, "rgba(0,0,0,0.48)");
+    vig.addColorStop(1, "rgba(0,0,0,0.72)");
+    g.fillStyle = vig;
+    g.fillRect(ext.x0, ext.y0, ext.x1 - ext.x0, ext.y1 - ext.y0);
+    // Off-field margins (wide screens) stay dim so the fence reads as the edge.
+    g.fillStyle = "rgba(3,4,8,0.55)";
+    if (ext.x0 < 0) g.fillRect(ext.x0, ext.y0, -ext.x0, ext.y1 - ext.y0);
+    if (ext.x1 > WORLD_W) g.fillRect(WORLD_W, ext.y0, ext.x1 - WORLD_W, ext.y1 - ext.y0);
+    if (ext.y0 < 0) g.fillRect(0, ext.y0, WORLD_W, -ext.y0);
+    if (ext.y1 > WORLD_H) g.fillRect(0, WORLD_H, WORLD_W, ext.y1 - WORLD_H);
+  }
+
+  function ensureTerrain(region) {
+    const s = view.s;
+    const key = region + "|" + canvas.width + "x" + canvas.height;
+    if (terrain.key === key && terrain.canvas) return terrain;
+    // Cover the whole canvas (letterbox margins too), plus a little slack for screen shake.
+    const pad = 2;
+    const ext = {
+      x0: Math.min(0, -view.ox / s) - pad,
+      y0: Math.min(0, -view.oy / s) - pad,
+      x1: Math.max(WORLD_W, (canvas.width - view.ox) / s) + pad,
+      y1: Math.max(WORLD_H, (canvas.height - view.oy) / s) + pad,
+    };
+    const w = Math.max(1, Math.ceil((ext.x1 - ext.x0) * s));
+    const h = Math.max(1, Math.ceil((ext.y1 - ext.y0) * s));
+    const c = terrain.canvas || document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const g = c.getContext("2d");
+    g.setTransform(s, 0, 0, s, -ext.x0 * s, -ext.y0 * s);
+    const L = terrainLayout(region);
+    const rng = seeded(hashStr("paint-" + region));
+    if (region === "marsh") paintMarsh(g, rng, L, ext);
+    else if (region === "chapel") paintChapel(g, rng, L, ext);
+    else paintYard(g, rng, L, ext);
+    g.globalAlpha = 1;
+    paintLighting(g, ext, region);
+    terrain.canvas = c;
+    terrain.key = key;
+    terrain.x0 = ext.x0; terrain.y0 = ext.y0;
+    terrain.x1 = ext.x0 + w / s; terrain.y1 = ext.y0 + h / s;
+    terrain.layout = L;
+    return terrain;
+  }
+
+  function drawTerrainLive(region) {
+    const L = terrain.layout;
+    if (!L || L.region !== region) return;
+    const t = state.time;
+    if (region === "marsh") {
+      ctx.lineWidth = 0.18;
+      for (const p of L.pools) {
+        for (const rp of p.ripples) {
+          const f = reduceMotion ? 0.5 : (t * rp.speed + rp.ph) % 1;
+          ctx.strokeStyle = "rgba(180,220,210," + (0.22 * (1 - f)).toFixed(3) + ")";
+          ctx.beginPath();
+          ctx.ellipse(rp.x, rp.y, 0.3 + f * rp.max, (0.3 + f * rp.max) * 0.62, 0, 0, TAU);
+          ctx.stroke();
+        }
+      }
+      if (fogSprite && !reduceMotion) {
+        const span = WORLD_W + 70;
+        for (const f of L.fog) {
+          const x = ((((f.ph + t * f.speed) % span) + span) % span) - 35;
+          ctx.globalAlpha = f.a;
+          ctx.drawImage(fogSprite, x - f.w / 2, f.y - f.h / 2 + Math.sin(t * 0.3 + f.ph) * 1.5, f.w, f.h);
+        }
+        ctx.globalAlpha = 1;
+      }
+    } else if (region === "chapel" && glowSprite) {
+      ctx.globalCompositeOperation = "lighter";
+      for (const c of L.candles) {
+        const fl = reduceMotion ? 0.8 : 0.72 + Math.sin(t * 9 + c.ph) * 0.14 + Math.sin(t * 23.7 + c.ph * 2.3) * 0.09;
+        ctx.globalAlpha = 0.32 * fl;
+        const gs = 7 * (0.9 + fl * 0.15);
+        ctx.drawImage(glowSprite, c.x - gs / 2, c.y - 1 - gs / 2, gs, gs);
+      }
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+      for (const c of L.candles) {
+        const fl = reduceMotion ? 0 : Math.sin(t * 13 + c.ph) * 0.06;
+        ctx.fillStyle = "#ffd27a";
+        ctx.beginPath();
+        ctx.ellipse(c.x + fl, c.y - 1.15, 0.17, 0.34, fl, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = "#fff4d6";
+        ctx.beginPath();
+        ctx.arc(c.x + fl * 0.5, c.y - 1.05, 0.08, 0, TAU);
+        ctx.fill();
+      }
+    }
+  }
+
   function draw() {
     resize();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -2084,27 +2798,11 @@
     const jx = Math.sin(state.time * 46) * sh * 0.35 * view.s;
     const jy = Math.cos(state.time * 33) * sh * 0.28 * view.s;
     ctx.setTransform(view.s, 0, 0, view.s, view.ox + jx, view.oy + jy);
-    ctx.fillStyle = "#14160f";
-    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
-    const yard = ctx.createRadialGradient(BASE.x, BASE.y, 3, BASE.x, BASE.y, 40);
-    yard.addColorStop(0, "#322e22");
-    yard.addColorStop(1, "rgba(20,22,15,0)");
-    ctx.fillStyle = yard;
-    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
-    for (const s of SPECKS) {
-      ctx.globalAlpha = s.a;
-      ctx.fillStyle = "#d9d3c4";
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = "rgba(80,16,28,0.16)";
-    ctx.fillRect(0, 0, WORLD_W, 5);
-    ctx.fillRect(0, WORLD_H - 5, WORLD_W, 5);
-    ctx.fillRect(0, 0, 5, WORLD_H);
-    ctx.fillRect(WORLD_W - 5, 0, 5, WORLD_H);
-    drawFence();
+    const region = regionOf(state.wave);
+    ensureFxSprites();
+    const ground = ensureTerrain(region);
+    if (ground.canvas) ctx.drawImage(ground.canvas, ground.x0, ground.y0, ground.x1 - ground.x0, ground.y1 - ground.y0);
+    drawTerrainLive(region);
     drawAura();
     for (const p of patches) drawPatch(p);
     for (const e of enemies) {
@@ -2238,7 +2936,7 @@
   function syncHud() {
     const hpNow = Math.max(0, Math.ceil(state.baseHp));
     $("hp").textContent = String(hpNow);
-    $("hpLabel").textContent = "/ " + state.baseMax + " HP";
+    $("hpLabel").textContent = "/" + state.baseMax + " HP";
     $("cash").textContent = String(state.cash);
     $("ash").textContent = String(meta.ash || 0);
     $("waveNum").textContent = String(state.wave);
@@ -2265,8 +2963,9 @@
     else $("waveBlurb").textContent = "";
     $("mods").textContent = modLine();
     const next = $("next");
-    next.disabled = state.phase !== "shop";
-    next.textContent = state.phase === "fight" ? "HOLDING" : "START WAVE";
+    const canStart = state.phase === "shop" && state.runLive;
+    next.disabled = !canStart;
+    if (next.hidden === canStart) next.hidden = !canStart;
     const locked = state.phase === "won" || state.phase === "lost" || state.phase === "brief" || state.phase === "paused" || state.phase === "title" || state.phase === "pick";
     for (const id of ORDER) {
       const btn = rosterButtons[id];
@@ -2283,7 +2982,9 @@
       if (named && extras) own = "Hero + " + extras + " lower rank";
       else if (named) own = "Hero on field";
       else if (extras) own = extras + " on field";
-      btn.querySelector(".own").textContent = own;
+      const ownEl = btn.querySelector(".own");
+      ownEl.textContent = own;
+      ownEl.classList.toggle("has", owned.length > 0);
       btn.classList.toggle("broke", !gated && (locked || units.length >= squadCap() || state.cash < cost));
     }
     announceHires();
@@ -2292,11 +2993,25 @@
       const lv = state.ups[id];
       const up = BASE_UPS[id];
       const maxed = lv >= up.max;
-      btn.querySelector(".lv").textContent = maxed ? "LV " + lv + " · MAX" : "LV " + lv + " · $" + up.costs[lv];
+      btn.querySelector(".lv").textContent = maxed ? "LV " + lv + "/" + up.max + " · MAX" : "LV " + lv + "/" + up.max + " · $" + up.costs[lv];
       btn.querySelector(".fx").textContent = upEffect(id, lv);
-      btn.classList.toggle("broke", locked || maxed || state.cash < (maxed ? 1e9 : up.costs[lv]));
+      btn.classList.toggle("maxed", maxed);
+      btn.classList.toggle("broke", !maxed && (locked || state.cash < up.costs[lv]));
     }
-    $("pauseBtn").textContent = state.phase === "paused" ? "RESUME" : "PAUSE";
+    const paused = state.phase === "paused";
+    const pb = $("pauseBtn");
+    if (pb.classList.contains("on") !== paused) {
+      pb.classList.toggle("on", paused);
+      pb.setAttribute("aria-label", paused ? "Resume" : "Pause");
+    }
+    const sb = $("shopBtn");
+    sb.disabled = !state.runLive || !(state.phase === "shop" || state.phase === "fight" || state.phase === "paused");
+    if (shopOpen) {
+      $("shopCash").textContent = String(state.cash);
+      $("shopAsh").textContent = String(meta.ash || 0);
+      $("squadCount").textContent = "Squad " + units.length + " / " + squadCap();
+      $("shopKicker").textContent = (state.phase === "fight" ? "WAVE PAUSED" : "BETWEEN WAVES") + "  ·  STAGE " + state.wave;
+    }
   }
 
   function toast(msg) {
@@ -2551,7 +3266,7 @@
       if (!music.paused) music.pause();
       return;
     }
-    music.volume = 0.5;
+    music.volume = shopOpen ? 0.22 : 0.5;
     if (music.paused) {
       const pending = music.play();
       if (pending && typeof pending.catch === "function") pending.catch(() => {});
@@ -2559,7 +3274,8 @@
   }
 
   function syncSoundLabels() {
-    $("mute").textContent = state.muted ? "OFF" : "SND";
+    $("mute").classList.toggle("off", state.muted);
+    $("mute").setAttribute("aria-label", state.muted ? "Sound off. Tap to turn on" : "Sound on. Tap to mute");
     $("titleMute").textContent = state.muted ? "SOUND OFF" : "SOUND ON";
   }
 
@@ -2759,7 +3475,9 @@
     if (splash === lastSplash) splash = splash % SPLASH_COUNT + 1;
     lastSplash = splash;
     const file = "splash-" + String(splash).padStart(2, "0") + ".jpg";
-    ov.querySelector(".panel").style.setProperty("--splash", 'url("assets/splashes/' + file + '")');
+    // Absolute URL: a relative url() inside a custom property resolves against css/style.css, not the page.
+    const href = new URL("assets/splashes/" + file, document.baseURI).href;
+    ov.querySelector(".panel").style.setProperty("--splash", 'url("' + href + '")');
   }
 
   function openBrief(withPerk) {
@@ -2768,6 +3486,7 @@
     const perk = !!withPerk;
     const crate = !perk && !spec.boss && !spec.finale && Math.random() < 0.4;
     hideMenus();
+    forceCloseShop();
     state.phase = "brief";
     state.perkDue = perk;
     state.perkPicked = !perk;
@@ -2821,6 +3540,7 @@
 
   function showEnd(kind) {
     hideMenus();
+    forceCloseShop();
     spits.length = 0;
     bolts.length = 0;
     lobs.length = 0;
@@ -2955,11 +3675,11 @@
       layoutHomes();
     }
     hideMenus();
+    forceCloseShop();
     $("titleScreen").classList.add("hidden");
     $("overlay").classList.add("hidden");
     clearSplashArt();
     $("pauseScreen").classList.add("hidden");
-    $("pauseBtn").textContent = "PAUSE";
     if (startN >= 51) announceRegion(startN);
     else if (startN >= 21) announceRegion(startN);
     else toast("Vera and Roxie hold the yard.");
@@ -2971,6 +3691,7 @@
     state.runLive = false;
     if (music) music.pause();
     hideMenus();
+    forceCloseShop();
     $("overlay").classList.add("hidden");
     clearSplashArt();
     $("pauseScreen").classList.add("hidden");
@@ -2978,20 +3699,89 @@
     renderRegions();
   }
 
-  function togglePause() {
-    if (state.phase === "paused") {
-      state.phase = state.pausedFrom || "fight";
-      state.pausedFrom = null;
-      $("pauseScreen").classList.add("hidden");
-      $("pauseBtn").textContent = "PAUSE";
-      return;
-    }
+  function enterPause() {
     if (state.phase !== "fight" && state.phase !== "shop") return;
     hideMenus();
     state.pausedFrom = state.phase;
     state.phase = "paused";
     $("pauseScreen").classList.remove("hidden");
-    $("pauseBtn").textContent = "RESUME";
+  }
+
+  function togglePause() {
+    if (shopOpen) {
+      // Pausing from inside the shop: fold the shop away and land on the pause screen.
+      const stayPaused = shopFromPause;
+      closeShop();
+      if (!stayPaused) enterPause();
+      return;
+    }
+    if (state.phase === "paused") {
+      state.phase = state.pausedFrom || "fight";
+      state.pausedFrom = null;
+      $("pauseScreen").classList.add("hidden");
+      return;
+    }
+    enterPause();
+  }
+
+  function setShopUi(open) {
+    $("shopPanel").classList.toggle("hidden", !open);
+    const sb = $("shopBtn");
+    sb.classList.toggle("on", open);
+    sb.setAttribute("aria-expanded", open ? "true" : "false");
+    sb.setAttribute("aria-label", open ? "Close shop" : "Open shop");
+    sb.querySelector(".lbl").textContent = open ? "CLOSE" : "SHOP";
+  }
+
+  function openShop() {
+    if (shopOpen || !state.runLive) return;
+    if (!$("restartConfirm").classList.contains("hidden")) return;
+    if (state.phase === "paused") {
+      // Opened from the pause screen: shop with the run frozen, and go back to paused on close.
+      const from = state.pausedFrom || "fight";
+      if (from !== "fight" && from !== "shop") return;
+      state.phase = from;
+      state.pausedFrom = null;
+      $("pauseScreen").classList.add("hidden");
+      shopFromPause = true;
+    } else if (state.phase === "fight" || state.phase === "shop") {
+      shopFromPause = false;
+    } else {
+      return;
+    }
+    shopOpen = true;
+    setShopUi(true);
+    $("shopDone").textContent = shopFromPause ? "CLOSE · STAY PAUSED" : state.phase === "fight" ? "CLOSE · RESUME" : "CLOSE";
+    const scroller = document.querySelector("#shopPanel .shopScroll");
+    if (scroller) scroller.scrollTop = 0;
+    syncHud();
+    blip(420, 0.05, "triangle", 0.025);
+  }
+
+  function closeShop() {
+    if (!shopOpen) return;
+    hideMenus();
+    shopOpen = false;
+    setShopUi(false);
+    if (shopFromPause) {
+      shopFromPause = false;
+      if (state.phase === "fight" || state.phase === "shop") {
+        state.pausedFrom = state.phase;
+        state.phase = "paused";
+        $("pauseScreen").classList.remove("hidden");
+      }
+    }
+  }
+
+  function forceCloseShop() {
+    shopOpen = false;
+    shopFromPause = false;
+    setShopUi(false);
+  }
+
+  function toggleShop() {
+    if (shopOpen) closeShop();
+    else openShop();
   }
 
   function buildRoster() {
@@ -3014,7 +3804,7 @@
       const name = document.createElement("b");
       name.textContent = JOBS[id] || h.short;
       const small = document.createElement("small");
-      small.textContent = h.tag;
+      small.textContent = h.short;
       const price = document.createElement("em");
       price.className = "price";
       const own = document.createElement("i");
@@ -3041,8 +3831,9 @@
       b.className = "up";
       b.dataset.id = id;
       const label = { wall: "Wall", aura: "Aura", turret: "Turret", spikes: "Spikes", mend: "Mend", mines: "Mines", ammo: "Ammo", squad: "Squad" }[id] || up.name;
-      b.innerHTML = '<span class="mark">' + up.mark + '</span><em class="lv"></em><span class="meta"><b>' + label +
-        '</b><small>' + up.blurb + '</small><i class="fx"></i></span>';
+      b.title = up.blurb;
+      b.innerHTML = '<span class="mark">' + up.mark + '</span><span class="meta"><b>' + label +
+        '</b><em class="lv"></em><i class="fx"></i></span>';
       b.addEventListener("click", () => buyUp(id));
       root.appendChild(b);
       upButtons[id] = b;
@@ -3262,7 +4053,16 @@
     startMusic();
   });
   $("titleMute").addEventListener("click", () => { unlock(); onMute(); });
-  $("next").addEventListener("click", () => { unlock(); startWave(); });
+  $("next").addEventListener("click", () => {
+    unlock();
+    if (shopOpen) closeShop();
+    startWave();
+  });
+  $("shopBtn").addEventListener("click", () => { unlock(); toggleShop(); });
+  $("shopClose").addEventListener("click", () => closeShop());
+  $("shopDone").addEventListener("click", () => closeShop());
+  $("shopPanel").addEventListener("click", (ev) => { if (ev.target === $("shopPanel")) closeShop(); });
+  $("pauseShop").addEventListener("click", () => { unlock(); openShop(); });
   $("restart").addEventListener("click", () => {
     unlock();
     requestRestart();
@@ -3297,7 +4097,22 @@
   window.addEventListener("keydown", (ev) => {
     if (ev.repeat) return;
     if (ev.target && ev.target.tagName === "BUTTON" && (ev.key === " " || ev.code === "Space")) return;
-    if (ev.key === " " || ev.code === "Space") { ev.preventDefault(); startWave(); }
+    if (ev.key === "Escape") {
+      if (!$("restartConfirm").classList.contains("hidden")) { cancelRestart(); return; }
+      if (!$("labScreen").classList.contains("hidden") || !$("skillScreen").classList.contains("hidden")) { hideMenus(); return; }
+      if (shopOpen) { closeShop(); return; }
+      togglePause();
+      return;
+    }
+    if (ev.key === "b" || ev.key === "B" || ev.key === "u" || ev.key === "U") { unlock(); toggleShop(); return; }
+    if (ev.key === " " || ev.code === "Space") {
+      ev.preventDefault();
+      if (shopOpen) {
+        if (shopFromPause || state.phase !== "shop") return;
+        closeShop();
+      }
+      startWave();
+    }
     else if (ev.key === "1") buy("vera");
     else if (ev.key === "2") buy("roxie");
     else if (ev.key === "3") buy("lila");
@@ -3307,7 +4122,7 @@
     else if (ev.key === "7") buyUp("turret");
     else if (ev.key === "r" || ev.key === "R") { requestRestart(); }
     else if (ev.key === "m" || ev.key === "M") onMute();
-    else if (ev.key === "p" || ev.key === "P" || ev.key === "Escape") togglePause();
+    else if (ev.key === "p" || ev.key === "P") togglePause();
   });
   if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => resize()).observe(stage);
   else window.addEventListener("resize", resize);
