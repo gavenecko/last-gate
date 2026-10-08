@@ -397,6 +397,7 @@
     return {
       ash: 0, power: 0, tempo: 0, gate: 0, veteran: "", regions: { yard: true, marsh: false, chapel: false },
       medals: {}, life: {}, epics: 0, bestEndless: 0, bestCombo: 0,
+      loadouts: { default: 1 }, loadout: "default",
     };
   }
 
@@ -429,6 +430,10 @@
       meta.epics = Math.max(0, data.epics | 0);
       meta.bestEndless = Math.max(0, data.bestEndless | 0);
       meta.bestCombo = Math.max(0, data.bestCombo | 0);
+      if (data.loadouts && typeof data.loadouts === "object") {
+        for (const id in data.loadouts) if (data.loadouts[id] && LOADOUT_BY_ID[id]) meta.loadouts[id] = 1;
+      }
+      if (typeof data.loadout === "string" && LOADOUT_BY_ID[data.loadout] && meta.loadouts[data.loadout]) meta.loadout = data.loadout;
       return meta;
     } catch (err) {
       return defaultMeta();
@@ -443,17 +448,6 @@
   function labCost(level) {
     return 12 * ((level | 0) + 1);
   }
-
-  const PERKS = [
-    { id: "dmg", name: "Hot Barrels", short: "DMG+", desc: "All heroines deal 20% more damage." },
-    { id: "rate", name: "Hair Trigger", short: "RATE+", desc: "Heroines attack 16% faster." },
-    { id: "move", name: "Quick Step", short: "MOVE+", desc: "Heroines move 18% faster." },
-    { id: "heal", name: "Field Medic", short: "HEAL", desc: "Repair 45 base HP." },
-    { id: "sale", name: "Surplus", short: "SALE", desc: "The next heroine is 40% off." },
-    { id: "range", name: "Spotter Kit", short: "RANGE+", desc: "Heroine range is 12% longer." },
-    { id: "gate", name: "Reinforced Gate", short: "HP+", desc: "Max base HP +30, and heal 30." },
-    { id: "cash", name: "Scavenge", short: "CASH", desc: "Pocket $45 from the yard." },
-  ];
 
   // ---------- Run variety: twists, cards, abilities, bosses, events ----------
   // Twists are rolled per stage on the brief. bonus = extra share of the clear bonus, ash = extra ash.
@@ -472,32 +466,160 @@
   const TWIST_IDS = Object.keys(TWISTS);
 
   const RARITY = {
-    common: { name: "Common", weight: 6 },
-    rare: { name: "Rare", weight: 4 },
-    epic: { name: "Epic", weight: 1.6 },
+    common: { name: "Common", weight: 65 },
+    rare: { name: "Rare", weight: 28 },
+    epic: { name: "Epic", weight: 7 },
+    cursed: { name: "Cursed", weight: 0 },
   };
+  // Card tags. Holding 3 or 5 cards of a tag (copies count) turns on its set bonus.
+  const TAGS = {
+    fire: { name: "Fire", color: "#ff8a3c", t3: "Burns spread to nearby zombies.", t5: "Fire deals +40%, and zombies that die burning burst." },
+    hex: { name: "Hex", color: "#c49bff", t3: "Ability cooldowns 15% shorter.", t5: "Abilities hit 25% harder and freeze the field for 1.2s." },
+    gun: { name: "Gun", color: "#7ec8ff", t3: "+10% crit chance.", t5: "+15% attack rate. Crits deal 3x." },
+    blade: { name: "Blade", color: "#9be36a", t3: "+12% heroine damage.", t5: "Hits finish off normal zombies under 15% health. Roxie and Wren +20% damage." },
+    gate: { name: "Gate", color: "#e7c56a", t3: "+40 max gate HP. The gate takes 8% less damage.", t5: "The gate regenerates 2 HP/s in waves, and biters take thorn damage." },
+    gold: { name: "Gold", color: "#ffd94a", t3: "+$1 cash per kill.", t5: "+$2 more per kill. Shop prices 15% off." },
+    mine: { name: "Mine", color: "#ff5d6c", t3: "Mines hit 25% harder. 1 extra mine arms each stage.", t5: "Every mine chains into a second blast. Mines trigger 40% faster." },
+  };
+  const TAG_IDS = Object.keys(TAGS);
+  // stack: how many copies a run can hold. instant: one-shot effect (always offerable).
   const CARDS = [
-    { id: "dragonshells", name: "Dragon Shells", rarity: "rare", kind: "roxie", desc: "Roxie's pellets set zombies on fire." },
-    { id: "wildfire", name: "Wildfire", rarity: "epic", kind: "lila", desc: "Lila's fire ignites zombies, and burning zombies spread it to their neighbours." },
-    { id: "hexthorns", name: "Hex Thorns", rarity: "rare", kind: "nyx", desc: "Zombies slowed by Nyx take damage every second." },
-    { id: "hollowpoint", name: "Hollow Points", rarity: "rare", kind: "vera", desc: "Vera's shots pierce through to 2 more zombies." },
-    { id: "ricochet", name: "Ricochet", rarity: "rare", kind: "sable", desc: "Sable's bullets bounce to a second zombie." },
-    { id: "shockhaft", name: "Shock Haft", rarity: "common", kind: "wren", desc: "Wren's cleave knocks zombies back and staggers them." },
-    { id: "chainmines", name: "Chain Mines", rarity: "rare", kind: "", desc: "Mines blast an area and set off a second mine. Grants Mines LV 1 if you have none." },
-    { id: "thorngate", name: "Thorned Gate", rarity: "common", kind: "", desc: "Biters take heavy thorn damage on every bite. Spikes hit twice as hard." },
-    { id: "twinbarrel", name: "Twin Barrel", rarity: "rare", kind: "", desc: "The turret fires a second barrel at another zombie. Grants Turret LV 1 if you have none." },
-    { id: "triage", name: "Field Triage", rarity: "common", kind: "", desc: "Every kill heals the gate 0.5 HP." },
-    { id: "precision", name: "Deadly Precision", rarity: "rare", kind: "", desc: "Heroine hits: +15% crit chance. Crits deal 2.5x." },
-    { id: "quickhands", name: "Quick Hands", rarity: "common", kind: "", desc: "Ability cooldowns are 25% shorter." },
-    { id: "spree", name: "Killing Spree", rarity: "rare", kind: "", desc: "12 kills in a quick streak: heroines attack 35% faster for 5 seconds." },
-    { id: "interest", name: "Compound Interest", rarity: "common", kind: "", desc: "Earn 5% of your banked cash after each stage (up to $60)." },
-    { id: "overcharge", name: "Overcharge", rarity: "epic", kind: "", desc: "Abilities hit 50% harder and last 25% longer." },
-    { id: "mortar", name: "Mortar Team", rarity: "epic", kind: "", desc: "Every 6 seconds a shell lands on the biggest crowd." },
-    { id: "goldteeth", name: "Gold Teeth", rarity: "common", kind: "", desc: "Kills pay 25% more cash." },
-    { id: "secondwind", name: "Second Wind", rarity: "rare", kind: "", desc: "Once per stage, when the gate drops below 30%, it heals 35% and the dead freeze for 2s." },
+    // Gun
+    { id: "hotbarrels", name: "Hot Barrels", rarity: "common", kind: "", tags: ["gun"], stack: 6, desc: "+10% heroine damage." },
+    { id: "hairtrigger", name: "Hair Trigger", rarity: "common", kind: "", tags: ["gun"], stack: 5, desc: "+8% heroine attack rate." },
+    { id: "spotterkit", name: "Spotter Kit", rarity: "common", kind: "", tags: ["gun"], stack: 4, desc: "+8% heroine range." },
+    { id: "longshot", name: "Longshot", rarity: "common", kind: "vera", tags: ["gun"], stack: 3, desc: "Vera: +15% damage and +6% range." },
+    { id: "doubleought", name: "Double Ought", rarity: "common", kind: "roxie", tags: ["gun"], stack: 2, desc: "Roxie's blast hits 1 more zombie and deals +8%." },
+    { id: "quickdraw", name: "Quickdraw", rarity: "common", kind: "sable", tags: ["gun"], stack: 3, desc: "Sable: +12% attack rate." },
+    { id: "gunoil", name: "Gun Oil", rarity: "common", kind: "", tags: ["gun", "gate"], stack: 3, need: "turret", desc: "Turret: +25% damage and +10% fire rate." },
+    { id: "hollowpoint", name: "Hollow Points", rarity: "rare", kind: "vera", tags: ["gun"], desc: "Vera's shots pierce through to 2 more zombies." },
+    { id: "ricochet", name: "Ricochet", rarity: "rare", kind: "sable", tags: ["gun"], desc: "Sable's bullets bounce to a second zombie." },
+    { id: "precision", name: "Deadly Precision", rarity: "rare", kind: "", tags: ["gun"], desc: "Heroine hits: +15% crit chance. Crits deal 2.5x." },
+    { id: "twinbarrel", name: "Twin Barrel", rarity: "rare", kind: "", tags: ["gun", "gate"], desc: "The turret fires a second barrel at another zombie. Grants Turret LV 1 if you have none." },
+    // Fire
+    { id: "jellied", name: "Jellied Fuel", rarity: "common", kind: "lila", tags: ["fire"], stack: 3, desc: "Lila: fire patches burn 25% hotter and last 20% longer." },
+    { id: "accelerant", name: "Accelerant", rarity: "common", kind: "", tags: ["fire"], stack: 3, desc: "All burns and fire patches deal +15%." },
+    { id: "dragonshells", name: "Dragon Shells", rarity: "rare", kind: "roxie", tags: ["fire", "gun"], desc: "Roxie's pellets set zombies on fire." },
+    { id: "emberrounds", name: "Ember Rounds", rarity: "rare", kind: "sable", tags: ["fire", "gun"], desc: "Sable's bullets set zombies on fire." },
+    { id: "pyre", name: "Pyre", rarity: "rare", kind: "", tags: ["fire"], desc: "Burning zombies take +25% damage from heroine hits." },
+    { id: "wildfire", name: "Wildfire", rarity: "epic", kind: "lila", tags: ["fire"], desc: "Lila's fire ignites zombies, and burning zombies spread it to their neighbours." },
+    { id: "mortar", name: "Mortar Team", rarity: "epic", kind: "", tags: ["mine", "fire"], desc: "Every 6 seconds a shell lands on the biggest crowd." },
+    // Hex
+    { id: "hexcoil", name: "Hex Coil", rarity: "common", kind: "nyx", tags: ["hex"], stack: 2, desc: "Nyx: +20% pulse radius and +10% damage." },
+    { id: "quickhands", name: "Quick Hands", rarity: "common", kind: "", tags: ["hex"], desc: "Ability cooldowns are 25% shorter." },
+    { id: "refocus", name: "Refocus", rarity: "common", kind: "", tags: ["hex"], stack: 3, desc: "Ability cooldowns 8% shorter." },
+    { id: "fieldnotes", name: "Field Notes", rarity: "common", kind: "", tags: ["hex"], stack: 2, desc: "Heroines earn 30% more XP." },
+    { id: "hexthorns", name: "Hex Thorns", rarity: "rare", kind: "nyx", tags: ["hex"], desc: "Zombies slowed by Nyx take damage every second." },
+    { id: "witchfire", name: "Witchfire", rarity: "rare", kind: "nyx", tags: ["hex", "fire"], desc: "Nyx's pulse sets zombies alight." },
+    { id: "doommark", name: "Doom Mark", rarity: "rare", kind: "", tags: ["hex"], desc: "Elites, bounties and bosses take +20% damage from everything." },
+    { id: "trance", name: "Battle Trance", rarity: "rare", kind: "", tags: ["hex"], desc: "Firing an ability makes every heroine attack 30% faster for 5s." },
+    { id: "overcharge", name: "Overcharge", rarity: "epic", kind: "", tags: ["hex"], desc: "Abilities hit 50% harder and last 25% longer." },
+    // Blade
+    { id: "shockhaft", name: "Shock Haft", rarity: "common", kind: "wren", tags: ["blade"], desc: "Wren's cleave knocks zombies back and staggers them." },
+    { id: "spearhead", name: "Spearhead", rarity: "common", kind: "wren", tags: ["blade"], stack: 3, desc: "Wren: +18% damage." },
+    { id: "quickstep", name: "Quick Step", rarity: "common", kind: "", tags: ["blade"], stack: 3, desc: "Heroines move 15% faster." },
+    { id: "cleaver", name: "Butcher's Edge", rarity: "common", kind: "", tags: ["blade"], stack: 3, desc: "+12% heroine damage to zombies near the gate." },
+    { id: "bloodlust", name: "Bloodlust", rarity: "rare", kind: "", tags: ["blade"], desc: "Roxie and Wren attack 20% faster." },
+    { id: "spree", name: "Killing Spree", rarity: "rare", kind: "", tags: ["blade"], desc: "12 kills in a quick streak: heroines attack 35% faster for 5 seconds." },
+    { id: "execution", name: "Execution", rarity: "rare", kind: "", tags: ["blade"], desc: "Heroine hits finish off normal zombies under 15% health." },
+    // Gate
+    { id: "reinforced", name: "Reinforced Gate", rarity: "common", kind: "", tags: ["gate"], stack: 5, desc: "Max gate HP +30, and heal 30." },
+    { id: "fieldmedic", name: "Field Medic", rarity: "common", kind: "", tags: ["gate"], stack: 99, instant: true, desc: "Repair the gate by 35% of its max HP now." },
+    { id: "bulwark", name: "Bulwark", rarity: "common", kind: "", tags: ["gate"], stack: 3, desc: "The gate takes 8% less damage." },
+    { id: "patchkit", name: "Patch Kit", rarity: "common", kind: "", tags: ["gate"], stack: 3, desc: "The gate regenerates 1 HP/s during waves." },
+    { id: "triage", name: "Field Triage", rarity: "common", kind: "", tags: ["gate"], stack: 3, desc: "Every kill heals the gate 0.5 HP." },
+    { id: "thorngate", name: "Thorned Gate", rarity: "common", kind: "", tags: ["gate", "blade"], desc: "Biters take heavy thorn damage on every bite. Spikes hit twice as hard." },
+    { id: "secondwind", name: "Second Wind", rarity: "rare", kind: "", tags: ["gate"], desc: "Once per stage, when the gate drops below 30%, it heals 35% and the dead freeze for 2s." },
+    // Gold
+    { id: "scavenge", name: "Scavenge", rarity: "common", kind: "", tags: ["gold"], stack: 99, instant: true, desc: "Pocket $40 plus $2 per stage now." },
+    { id: "surplus", name: "Surplus", rarity: "common", kind: "", tags: ["gold"], stack: 99, instant: true, desc: "Your next hire is 40% off." },
+    { id: "goldteeth", name: "Gold Teeth", rarity: "common", kind: "", tags: ["gold"], stack: 3, desc: "Kills pay 20% more cash." },
+    { id: "interest", name: "Compound Interest", rarity: "common", kind: "", tags: ["gold"], desc: "Earn 5% of your banked cash after each stage (up to $60)." },
+    { id: "bountyboard", name: "Bounty Board", rarity: "common", kind: "", tags: ["gold"], stack: 2, desc: "Elites pay +$20 more." },
+    { id: "luckycoin", name: "Lucky Coin", rarity: "common", kind: "", tags: ["gold"], stack: 2, desc: "One free shop reroll every stage." },
+    { id: "warchest", name: "War Chest", rarity: "rare", kind: "", tags: ["gold"], desc: "Stage clear bonus +50%." },
+    // Mine
+    { id: "blastingcaps", name: "Blasting Caps", rarity: "common", kind: "", tags: ["mine"], stack: 3, need: "mines", desc: "Mines hit 30% harder." },
+    { id: "sapper", name: "Sapper Kit", rarity: "common", kind: "", tags: ["mine"], stack: 3, desc: "Start every stage with 2 armed mines. Grants Mines LV 1 if you have none." },
+    { id: "chainmines", name: "Chain Mines", rarity: "rare", kind: "", tags: ["mine"], desc: "Mines blast an area and set off a second mine. Grants Mines LV 1 if you have none." },
+    { id: "minelayer", name: "Minelayer", rarity: "rare", kind: "", tags: ["mine"], desc: "Mines trigger 30% faster. Grants Mines LV 1 if you have none." },
+    { id: "clusterbomb", name: "Cluster Charge", rarity: "epic", kind: "", tags: ["mine", "fire"], need: "mines", desc: "Every mine blast leaves a fire patch." },
+    // Curses: big upside, lasting downside.
+    { id: "bloodpact", name: "Blood Pact", rarity: "cursed", curse: true, kind: "", tags: ["blade"], desc: "+40% heroine damage.", down: "Gate max HP -25%." },
+    { id: "glassgate", name: "Glass Gate", rarity: "cursed", curse: true, kind: "", tags: ["gun", "gate"], desc: "Turret damage x2. Grants Turret LV 1 if you have none.", down: "The gate takes +20% damage." },
+    { id: "greed", name: "Greed", rarity: "cursed", curse: true, kind: "", tags: ["gold"], desc: "Kill cash x1.5.", down: "Zombies have +15% HP." },
+    { id: "hastehex", name: "Haste Hex", rarity: "cursed", curse: true, kind: "", tags: ["hex"], desc: "Heroines attack 30% faster.", down: "Ability cooldowns +40%." },
+    { id: "powderkeg", name: "Powder Keg", rarity: "cursed", curse: true, kind: "", tags: ["mine"], desc: "Mines deal double and blast an area. Grants Mines LV 1 if you have none.", down: "Gate max HP -15%." },
+    { id: "pyromania", name: "Pyromania", rarity: "cursed", curse: true, kind: "", tags: ["fire"], desc: "All fire damage +60%.", down: "Heroine range -15%." },
+    { id: "bloodmoney", name: "Blood Money", rarity: "cursed", curse: true, kind: "", tags: ["gold"], desc: "+$4 cash per kill.", down: "All gate healing is halved." },
+    { id: "berserker", name: "Berserker", rarity: "cursed", curse: true, kind: "", tags: ["blade"], desc: "+25% heroine damage and +15% attack rate.", down: "The Sandbag Wall works at half strength." },
+    { id: "darkpact", name: "Dark Pact", rarity: "cursed", curse: true, kind: "", tags: ["hex"], desc: "Abilities hit 60% harder and last 25% longer.", down: "Zombies move 10% faster." },
+    { id: "foolsgold", name: "Fool's Gold", rarity: "cursed", curse: true, kind: "", tags: ["gold"], desc: "+$60 after every stage.", down: "Card picks offer one card fewer." },
   ];
   const CARD_BY_ID = {};
-  for (const c of CARDS) CARD_BY_ID[c.id] = c;
+  for (const c of CARDS) { if (!c.tags) c.tags = []; if (!c.stack) c.stack = 1; CARD_BY_ID[c.id] = c; }
+
+  // Relics: rare, rule-bending, one of each per run. mono = the letters on the badge.
+  const RELICS = [
+    { id: "sapper", name: "Sapper's Pouch", mono: "SP", color: "#ff5d6c", desc: "Mines re-arm: start every stage with 3 armed mines. Grants Mines LV 1." },
+    { id: "goldtrigger", name: "Golden Trigger", mono: "GT", color: "#ffd94a", desc: "Every heroine crit drops $1." },
+    { id: "ironward", name: "Iron Ward", mono: "IW", color: "#a9c2dd", desc: "The first hit on the gate each stage is negated." },
+    { id: "tally", name: "Tally Counter", mono: "TC", color: "#d5e6ff", desc: "Every 10th kill fires a free turret volley at up to 6 zombies." },
+    { id: "hourglass", name: "Hourglass", mono: "HG", color: "#c49bff", desc: "The first ability you fire each stage recharges twice as fast." },
+    { id: "wardrum", name: "War Drum", mono: "WD", color: "#ff9a3c", desc: "Heroines attack 12% faster." },
+    { id: "fang", name: "Vampire Fang", mono: "VF", color: "#ff4d5e", desc: "Every 20 kills heal the gate 8 HP." },
+    { id: "emberheart", name: "Ember Heart", mono: "EH", color: "#ff8a3c", desc: "Zombies that die burning set their neighbours alight." },
+    { id: "hexdoll", name: "Hex Doll", mono: "HD", color: "#b88cff", desc: "Elites, bounties and bosses take +25% damage. Elites arrive slowed." },
+    { id: "bonedice", name: "Bone Dice", mono: "BD", color: "#efe6d2", desc: "Two free shop rerolls every stage." },
+    { id: "ledger", name: "Merchant's Ledger", mono: "ML", color: "#ffc857", desc: "Shop prices 15% off." },
+    { id: "chart", name: "Treasure Chart", mono: "TM", color: "#7dffb3", desc: "Card picks offer one card more." },
+    { id: "gildedtooth", name: "Gilded Tooth", mono: "GD", color: "#ffe066", desc: "+$1 cash per kill." },
+    { id: "medicbag", name: "Medic Bag", mono: "MB", color: "#7dffb3", desc: "The gate heals 15% of its max HP after every stage." },
+    { id: "sparebarrel", name: "Spare Barrel", mono: "SB", color: "#d5e6ff", desc: "The turret fires 25% faster. Grants Turret LV 1." },
+    { id: "rallyflag", name: "Rally Flag", mono: "RF", color: "#ff4d9a", desc: "Heroines holding a flag (dragged into place) deal +18% damage." },
+    { id: "thorncrown", name: "Thorn Crown", mono: "CR", color: "#9be36a", desc: "Biters take 20 + 1 per stage thorn damage on every bite." },
+    { id: "lantern", name: "Storm Lantern", mono: "SL", color: "#ffe9a0", desc: "Fog cannot hide the dead from your squad." },
+    { id: "plating", name: "Siege Plating", mono: "PL", color: "#a9c2dd", desc: "The gate takes 12% less damage." },
+    { id: "papers", name: "Recruit Papers", mono: "RP", color: "#e7c56a", desc: "A free random heroine joins now, and the squad cap is +1." },
+    { id: "blackcat", name: "Black Cat", mono: "BC", color: "#8a5cff", desc: "Curse downsides are halved (Fool's Gold's is lifted)." },
+    { id: "ankh", name: "Last Rites", mono: "LR", color: "#ffcf5a", desc: "Once per run, when the gate would fall, it holds at 30% HP and the dead freeze for 3s." },
+  ];
+  const RELIC_BY_ID = {};
+  for (const r of RELICS) RELIC_BY_ID[r.id] = r;
+
+  // Map nodes between stages.
+  const NODES = {
+    start: { name: "Start", color: "#c8ccd8", desc: "Where the run began." },
+    fight: { name: "Fight", color: "#c8ccd8", desc: "A normal stage." },
+    elite: { name: "Elite", color: "#ff6a6a", desc: "Tougher wave with extra elites. Pays 50% more, then a rare+ card and a 40% relic chance." },
+    shop: { name: "Shop", color: "#ffc857", desc: "A normal wave, but the shop has extra stock at 25% off." },
+    rest: { name: "Rest", color: "#7dffb3", desc: "Heal the gate 35% now. A shorter, easier wave with no twist." },
+    mystery: { name: "Mystery", color: "#c49bff", desc: "A strange encounter before the wave. Choices, risks, rewards." },
+    treasure: { name: "Treasure", color: "#ffe066", desc: "Only a few dead guard a chest. Clear them to pick a relic." },
+    boss: { name: "Boss", color: "#ff4d9a", desc: "A fixed boss stage. Rare+ card and a relic when it falls." },
+  };
+  const NODE_GLYPH = {
+    start: '<path d="M6 21V4h11l-2 4 2 4H6"/>',
+    fight: '<path d="M4 20 15 9M13 6l5-2-2 5M20 20 9 9M11 6 6 4l2 5M6 14l4 4M18 14l-4 4"/>',
+    elite: '<path d="M12 3a7 7 0 0 0-7 7c0 2.6 1.3 4.4 3 5.4V19h8v-3.6c1.7-1 3-2.8 3-5.4a7 7 0 0 0-7-7zM10 19v2M14 19v2"/><circle cx="9.3" cy="10.5" r="1.7" fill="currentColor"/><circle cx="14.7" cy="10.5" r="1.7" fill="currentColor"/>',
+    shop: '<circle cx="12" cy="12" r="8.5"/><path d="M14.8 9.3c-.6-.9-1.6-1.4-2.8-1.4-1.7 0-2.8.9-2.8 2.1 0 2.9 5.8 1.5 5.8 4.3 0 1.3-1.2 2.1-2.9 2.1-1.3 0-2.5-.6-3.1-1.5M12 6.2v11.6"/>',
+    rest: '<path d="M12 3c1.2 3 4.2 4.6 4.2 8.4a4.2 4.2 0 0 1-8.4 0c0-2 1-3.2 2.1-4.1 0 1.6.8 2.6 2 2.6 0-2.4-1-4.4.1-6.9zM5 21l14-3.5M5 17.5 19 21"/>',
+    mystery: '<path d="M8.8 8.6a3.3 3.3 0 1 1 4.8 2.9c-1 .6-1.6 1.3-1.6 2.6"/><circle cx="12" cy="18" r="1.3" fill="currentColor"/>',
+    treasure: '<rect x="3.5" y="10" width="17" height="9.5" rx="1.5"/><path d="M3.5 10c0-3.1 3.4-5 8.5-5s8.5 1.9 8.5 5M3.5 13.5h17M12 12v3.5"/>',
+    boss: '<path d="M3.5 18h17l1-10.5-5.2 4.2L12 5l-4.3 6.7-5.2-4.2zM4 21h16"/>',
+  };
+
+  // Starting loadouts, bought with ash on the title screen.
+  const LOADOUTS = [
+    { id: "default", name: "Default", cost: 0, units: ["vera", "roxie"], desc: "Vera and Roxie. $100." },
+    { id: "fire", name: "Firestarters", cost: 30, units: ["lila", "roxie"], cards: ["dragonshells"], desc: "Lila and Roxie. Starts with Dragon Shells, a Fire card." },
+    { id: "hexlab", name: "Hex Lab", cost: 40, units: ["nyx", "vera"], relics: ["hexdoll"], desc: "Nyx and Vera. Starts with the Hex Doll relic." },
+    { id: "gunline", name: "Gunline", cost: 40, units: ["sable", "vera"], cards: ["hotbarrels", "spotterkit"], desc: "Sable and Vera. Starts with Hot Barrels and Spotter Kit, two Gun cards." },
+    { id: "spearwall", name: "Spearwall", cost: 30, units: ["wren", "roxie"], ups: { wall: 1 }, desc: "Wren and Roxie. The Sandbag Wall starts at LV 1." },
+    { id: "gambler", name: "Gambler", cost: 60, units: ["?"], cash: 200, gamble: true, desc: "One random heroine and +$200, plus a random cursed card and a random relic." },
+  ];
+  const LOADOUT_BY_ID = {};
+  for (const l of LOADOUTS) LOADOUT_BY_ID[l.id] = l;
 
   const ABILITIES = {
     vera: { name: "Deadeye", cd: 32, desc: "Marks the toughest zombies and drops each with a heavy shot." },
@@ -761,6 +883,10 @@
       hired: {}, syn: {}, endless: false, minHpFrac: 1,
       // Juice.
       combo: 0, comboT: 0, comboPop: 0, comboBest: 0, multiN: 0, multiT: 0, shout: null, slowmo: 0,
+      // Roguelike: shop stock, relics, map node, post-stage steps, build mods.
+      stock: null, relics: [], relicSet: {}, node: "start", map: { seed: 1, lane: 1, start: 1 }, post: null,
+      tagN: {}, sets: {}, bm: null, gateBase: BASE_HP0, wardUp: false, hourglass: false, ankhUsed: false,
+      tally: 0, tranceT: 0, loadout: "default", skips: 0, lastMystery: "",
     };
   }
   const state = freshState();
@@ -774,9 +900,6 @@
   let meta = loadMeta();
   let pickedRegion = "yard";
   let toastTimer = 0;
-  const rosterButtons = {};
-  const rosterTiles = {};
-  const upButtons = {};
   // Shop drawer. While open the simulation is frozen; phase stays "shop"/"fight" so buying works.
   let shopOpen = false;
   let drag = null;
@@ -829,17 +952,19 @@
     let tempRate = 1;
     if (state.rallyT > 0) tempRate *= 1.4;
     if (state.spreeT > 0) tempRate *= 1.35;
+    if (state.tranceT > 0) tempRate *= 1.3;
     if (u.slowT > 0) tempRate *= 0.5;
     const tempMove = u.slowT > 0 ? 0.55 : 1;
     // Level, traits, bond and synergies for her kind.
     const km = kindMods[u.kind] || NEUTRAL_MODS;
+    const flag = u.hold && hasRelic("rallyflag") ? 1.18 : 1;
     return {
       kind: h.attack,
       accent: h.accent,
-      dmg: h.dmg * low * state.dmgMult * skillDmg * labDmg * ammoDmg * km.dmg,
+      dmg: h.dmg * low * state.dmgMult * skillDmg * labDmg * ammoDmg * km.dmg * flag,
       range: range * km.range,
       rate: h.rate * (u.named ? 1 : 0.9) * state.rateMult * skillRate * labRate * tempRate * km.rate,
-      move: h.move * (u.named ? 1 : 0.92) * state.moveMult * tempMove,
+      move: h.move * (u.named ? 1 : 0.92) * state.moveMult * B().move * tempMove,
       leash: h.leash,
       seek: seek * km.range,
       post: h.post,
@@ -905,7 +1030,7 @@
   }
 
   function squadCap() {
-    return CAP + ((state.ups && state.ups.squad) || 0) * 2;
+    return CAP + ((state.ups && state.ups.squad) || 0) * 2 + (B().capAdd | 0);
   }
 
   function buy(id) {
@@ -973,6 +1098,8 @@
     const p = opts.x != null ? { x: opts.x, y: opts.y } : edgePoint();
     let mul = proto.boss ? spec.bossHp : spec.hpMul;
     if (opts.hpMul) mul *= opts.hpMul;
+    mul *= B().enemyHp;
+    if (state.node === "elite" && !proto.boss) mul *= 1.2;
     const hp = Math.max(1, Math.round(proto.hp * mul));
     const foe = {
       id: ++eid,
@@ -1019,6 +1146,7 @@
       lastBy: "", burnBy: "", hexBy: "", frailT: 0, nyxT: 0,
     };
     if (state.tw.bloodmoon) foe.speed *= 1.25;
+    foe.speed *= B().enemySpeed;
     if (opts.small) {
       foe.small = true;
       foe.hp = foe.max = Math.max(1, Math.round(foe.hp * 0.55));
@@ -1045,6 +1173,7 @@
       foe.armor = Math.min(0.58, (foe.armor || 0) + 0.1);
       foe.bite = Math.max(1, Math.round(foe.bite * 1.25));
       foe.r *= 1.06;
+      if (hasRelic("hexdoll")) { foe.slowT = 3; foe.slowFactor = 0.6; }
     }
     if (opts.gold && !proto.boss) {
       foe.gold = true;
@@ -1120,6 +1249,23 @@
     }
     state.ironArmor = 3 + state.wave * 0.14;
     const groups = twistGroups(spec);
+    if (!spec.boss && (state.node === "rest" || state.node === "treasure")) {
+      const k = state.node === "rest" ? 0.6 : 0.3;
+      for (const g of groups) g.n = Math.max(1, Math.round(g.n * k));
+      if (state.node === "treasure") {
+        // Only a handful guard the chest.
+        const cap = 4 + Math.floor(state.wave / 25);
+        let total = 0;
+        for (const g of groups) total += g.n;
+        while (total > cap && groups.length) {
+          let big = 0;
+          for (let i = 1; i < groups.length; i++) if (groups[i].n > groups[big].n) big = i;
+          if (groups[big].n <= 1) groups.splice(big, 1);
+          else groups[big].n--;
+          total--;
+        }
+      }
+    }
     let lastT = 0;
     for (const g of groups) {
       for (let i = 0; i < g.n; i++) {
@@ -1130,6 +1276,14 @@
     }
     state.spawnQ.sort((a, b) => a.t - b.t);
     markElites(state.spawnQ, state.wave);
+    if (state.node === "elite") {
+      // Elite stop: extra elites on top of the usual ones.
+      const pool = [];
+      for (let i = 0; i < state.spawnQ.length; i++) if (state.spawnQ[i].type !== "boss" && !state.spawnQ[i].elite) pool.push(i);
+      for (let i = pool.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; const t = pool[i]; pool[i] = pool[j]; pool[j] = t; }
+      const k = Math.min(pool.length, 2 + Math.floor(state.wave / 25));
+      for (let i = 0; i < k; i++) state.spawnQ[pool[i]].elite = true;
+    }
     if (hasTwist("goldrush")) {
       for (const job of state.spawnQ) if (job.type !== "boss" && Math.random() < 0.13) job.gold = true;
     }
@@ -1146,6 +1300,13 @@
     state.minHpFrac = state.baseMax > 0 ? Math.max(0, state.baseHp) / state.baseMax : 1;
     state.mortarCd = 4;
     state.windUsed = false;
+    state.wardUp = hasRelic("ironward");
+    state.hourglass = hasRelic("hourglass");
+    state.tranceT = 0;
+    if (B().mineArm > 0 && (state.ups.mines | 0) > 0) {
+      state.armedMines = (state.armedMines | 0) + B().mineArm;
+      state.armedCd = 0.8;
+    }
     state.event = null;
     state.breachT = 0;
     drops.length = 0;
@@ -1154,7 +1315,8 @@
     bursts.length = 0;
     fxs.length = 0;
     scheduleEvent(spec, lastT);
-    const kind = spec.finale ? "FINALE" : state.endless ? (spec.boss ? "ENDLESS BOSS" : "ENDLESS") : spec.boss ? "BOSS" : spec.challenge ? "CHALLENGE" : "STAGE";
+    const nodeKind = !spec.boss && NODES[state.node] && state.node !== "fight" && state.node !== "start" ? NODES[state.node].name.toUpperCase() : "";
+    const kind = spec.finale ? "FINALE" : state.endless ? (spec.boss ? "ENDLESS BOSS" : "ENDLESS" + (nodeKind ? " " + nodeKind : "")) : spec.boss ? "BOSS" : nodeKind || (spec.challenge ? "CHALLENGE" : "STAGE");
     let twistNames = "";
     for (const id of state.twists) twistNames += (twistNames ? " + " : "") + TWISTS[id].name;
     toast(kind + " " + state.wave + " — " + spec.name + (twistNames ? "  ·  " + twistNames : ""));
@@ -1199,22 +1361,28 @@
       if (km.eliteDmg !== 1 && (e.elite || e.boss || e.bounty || e.giant)) amt *= km.eliteDmg;
       if (km.execute && e.hp < e.max * 0.35) amt *= 2;
       pierceArmor = km.armorPierce;
-      const cc = (state.cardSet.precision ? 0.15 : 0) + km.crit;
-      if (cc > 0 && Math.random() < cc) {
+      const chance = km.crit;
+      if (chance > 0 && Math.random() < chance) {
         crit = true;
-        amt *= (state.cardSet.precision || km.critMul) ? 2.5 : 2;
+        amt *= km.critMul || 2;
+        if (hasRelic("goldtrigger")) { state.cash += 1; state.earned += 1; }
       }
+      const bm = B();
+      if (bm.pyre && e.burnT > 0) amt *= 1 + bm.pyre;
+      if (bm.nearGate !== 1 && distBase(e.x, e.y) <= BASE.r + 14) amt *= bm.nearGate;
       const syn = state.syn;
       if (who === "vera" && syn.pinned && e.slowT > 0) amt *= 1.2;
       else if (who === "sable" && syn.crossfire && nearKind(e, "wren", 11)) amt *= 1.25;
       else if ((who === "roxie" || who === "wren") && syn.frontline && distBase(e.x, e.y) <= BASE.r + e.r + 3.2) amt *= 1.2;
     }
     if (e.frailT > 0) amt *= 1.15;
+    if ((e.elite || e.boss || e.bounty) && B().eliteTaken !== 1) amt *= B().eliteTaken;
     if (src !== 2 && state.tw.ironhide && !pierceArmor) amt = Math.max(amt * 0.2, amt - state.ironArmor);
     let dealt = amt * (1 - (pierceArmor ? 0 : (e.armor || 0)));
     if (e.shielded) dealt *= 0.25;
     if (dealt <= 0) return;
     e.hp -= dealt;
+    if (src === 1 && e.hp > 0 && B().execute && !e.boss && !e.elite && !e.bounty && !e.egg && e.hp < e.max * B().execute) e.hp = 0;
     if (src !== 2 || e.flash <= 0) e.flash = src === 2 ? 0.06 : 0.18;
     if (crit) critFloat(e, dealt);
     // Big hits shake the screen a little.
@@ -1230,7 +1398,10 @@
     e.dying = e.dyingMax;
     let reward = e.reward;
     if (state.tw.bloodmoon) reward *= 2;
-    if (state.cardSet.goldteeth) reward = Math.round(reward * 1.25);
+    const bm = B();
+    reward = Math.round(reward * bm.cashMul);
+    if (e.elite) reward += bm.eliteCash;
+    reward += bm.killCash;
     if (e.bounty) {
       reward += e.bounty;
       meta.ash = (meta.ash || 0) + 2;
@@ -1243,7 +1414,20 @@
     state.earned += reward;
     state.kills++;
     creditKill(e);
-    if (state.cardSet.triage && state.baseHp > 0) state.baseHp = Math.min(state.baseMax, state.baseHp + 0.5);
+    if (cc("triage")) healGate(0.5 * cc("triage"));
+    state.tally = (state.tally | 0) + 1;
+    if (hasRelic("tally") && state.tally % 10 === 0) tallyVolley();
+    if (hasRelic("fang") && state.tally % 20 === 0) healGate(8);
+    if (e.burnT > 0 && !e.egg) {
+      if (hasRelic("emberheart")) {
+        let lit = 0;
+        for (const o of enemies) {
+          if (o === e || o.dead || o.burnT > 0.5) continue;
+          if (Math.abs(o.x - e.x) < 6 && Math.abs(o.y - e.y) < 6) { igniteEnemy(o, Math.max(e.burnDps, 6), 2.4, e.burnBy); if (++lit >= 3) break; }
+        }
+      }
+      if (bm.burnBlast && bursts.length < 48) bursts.push({ x: e.x, y: e.y, t: 0.12, r: 4.8, dmg: 10 + state.wave * 1.6, safe: true });
+    }
     if (state.cardSet.spree) {
       state.streak++;
       state.streakT = 1.6;
@@ -1274,7 +1458,14 @@
 
   function hurtBase(raw) {
     if (state.phase !== "fight") return;
-    const dmg = raw * (1 - WALL_CUT[state.ups.wall]);
+    if (state.wardUp) {
+      state.wardUp = false;
+      rings.push({ x: BASE.x, y: BASE.y, r: BASE.r, max: BASE.r + 6, life: 0.4, color: "#a9c2dd" });
+      if (floaters.length < 22) floaters.push({ x: BASE.x, y: BASE.y - BASE.r - 2, text: "WARD", life: 0.9, color: "#d5e6ff" });
+      return;
+    }
+    const bmG = B();
+    const dmg = raw * (1 - WALL_CUT[state.ups.wall] * bmG.wallMul) * bmG.gateTaken;
     state.baseHp -= dmg;
     state.baseHurt += dmg;
     if (state.baseMax > 0) state.minHpFrac = Math.min(state.minHpFrac, Math.max(0, state.baseHp) / state.baseMax);
@@ -1289,10 +1480,18 @@
     blip(80, 0.08, "sawtooth", 0.03);
     if (state.cardSet.secondwind && !state.windUsed && state.baseHp > 0 && state.baseHp < state.baseMax * 0.3) {
       state.windUsed = true;
-      state.baseHp = Math.min(state.baseMax, state.baseHp + state.baseMax * 0.35);
+      healGate(state.baseMax * 0.35);
       freezeAll(2);
       rings.push({ x: BASE.x, y: BASE.y, r: BASE.r, max: 40, life: 0.6, color: "#7dffb3" });
       toast("Second Wind", 1600);
+    }
+    if (state.baseHp <= 0 && hasRelic("ankh") && !state.ankhUsed) {
+      state.ankhUsed = true;
+      state.baseHp = Math.max(1, Math.round(state.baseMax * 0.3));
+      freezeAll(3);
+      rings.push({ x: BASE.x, y: BASE.y, r: BASE.r, max: 46, life: 0.8, color: "#ffcf5a" });
+      callout("RELIC · LAST RITES", "The gate holds", "Once per run. It will not save you twice.", "relic");
+      return;
     }
     if (state.baseHp <= 0) {
       state.baseHp = 0;
@@ -1411,6 +1610,7 @@
           if (km.frailty) e.frailT = Math.max(e.frailT, s.slowTime + 1);
           e.nyxT = Math.max(e.nyxT, s.slowTime);
           if (state.syn.hexfire) igniteEnemy(e, s.dmg * 0.6, 1.6, u.kind);
+          if (B().witchfire) igniteEnemy(e, s.dmg * 0.9, 2.2, u.kind);
           hurtEnemy(e, s.dmg, 1);
           applySlow(e, s.slow, s.slowTime);
           const stun = s.stun * (1 - e.slowRes);
@@ -1432,6 +1632,9 @@
         const bx = u.x + px * off;
         const by = u.y + py * off;
         bolts.push({ x: bx, y: by, ox: bx, oy: by, targetId: target.id, dmg: s.dmg, color: s.accent, src: 1, pierce: (state.cardSet.ricochet ? 1 : 0) + km.rico, prev: 0, by: u.kind });
+      }
+      if (B().emberRounds && u.kind === "sable" && !target.dead) {
+        igniteEnemy(target, s.dmg * 0.6, 2, u.kind);
       }
     } else if (s.kind === "cleave") {
       const mult = s.cleave || (u.named ? 1.25 : 1);
@@ -1680,6 +1883,7 @@
   function igniteEnemy(e, dps, time, by) {
     if (!e || e.dead || e.egg) return;
     by = by || curBy;
+    dps *= B().fire;
     if (e.burnT <= 0 || dps > e.burnDps) {
       e.burnDps = dps;
       if (by) e.burnBy = by;
@@ -1699,10 +1903,10 @@
   function updateEnemies(dt) {
     const howlers = [];
     for (const e of enemies) if (!e.dead && e.shrieker) howlers.push(e);
-    const fog = !!state.tw.fog;
+    const fog = !!state.tw.fog && !hasRelic("lantern");
     const frenzy = !!state.tw.frenzy;
     const plague = !!state.tw.plague;
-    const wild = !!state.cardSet.wildfire;
+    const wild = !!state.cardSet.wildfire || B().spread;
     const hexfire = !!state.syn.hexfire;
     const ev = state.event;
     const surv = ev && ev.kind === "survivor" ? ev : null;
@@ -1816,6 +2020,7 @@
             e.lunge = 1;
             let spike = SPIKE_DMG[state.ups.spikes] || 0;
             if (state.cardSet.thorngate) spike = spike * 2 + 14 + state.wave * 0.6;
+            spike += thornDmg();
             if (spike > 0) hurtEnemy(e, spike);
             hurtBase(e.bite);
             if (state.phase !== "fight") return;
@@ -1831,7 +2036,7 @@
   }
 
   function updatePatches(dt) {
-    const wild = !!state.cardSet.wildfire;
+    const wild = !!state.cardSet.wildfire || B().spread;
     const hexfire = !!state.syn.hexfire;
     for (const p of patches) {
       p.life -= dt;
@@ -1865,11 +2070,11 @@
   }
 
   function updateMend(dt) {
-    const rate = MEND_RATE[state.ups.mend] || 0;
+    const rate = (MEND_RATE[state.ups.mend] || 0) + (state.phase === "fight" ? B().regen : 0);
     if (rate <= 0) return;
     if (state.phase !== "shop" && state.phase !== "fight") return;
-    if (state.baseHp >= state.baseMax) return;
-    state.baseHp = Math.min(state.baseMax, state.baseHp + rate * dt);
+    if (state.baseHp >= state.baseMax || state.baseHp <= 0) return;
+    state.baseHp = Math.min(state.baseMax, state.baseHp + rate * dt * B().healMul);
   }
 
   function detonateMine(spec, chained) {
@@ -1882,21 +2087,31 @@
     }
     if (!best) return false;
     const bx = best.x, by = best.y, firstId = best.id;
-    hurtEnemy(best, spec.dmg);
+    const bm = B();
+    const mdmg = spec.dmg * bm.mineDmg;
+    hurtEnemy(best, mdmg);
+    if (bm.clusterFire && patches.length < 40) patches.push({ x: bx, y: by, r: 5, dps: (5 + state.wave * 0.7) * bm.fire, life: 2.6, max: 2.6, by: "mine" });
+    if (bm.mineArea && !state.cardSet.chainmines) {
+      rings.push({ x: bx, y: by, r: 0.6, max: 6, life: 0.3, color: "#ffb15a" });
+      for (const e of enemies) {
+        if (e.dead || e.id === firstId) continue;
+        if (Math.abs(e.x - bx) < 6 && Math.abs(e.y - by) < 6 && Math.hypot(e.x - bx, e.y - by) <= 6) hurtEnemy(e, mdmg * 0.5);
+      }
+    }
     rings.push({ x: bx, y: by, r: 0.3, max: 2.4, life: 0.22, color: "#ff5d6c" });
     burst(bx, by, "#ff5d6c", 6, 5);
-    if (state.cardSet.chainmines && !chained) {
+    if ((state.cardSet.chainmines || bm.mineChain) && !chained) {
       // Area blast round the first mine, then a second mine on the next zombie out.
       rings.push({ x: bx, y: by, r: 0.6, max: 6.5, life: 0.3, color: "#ffb15a" });
       let next = null, nd = 1e9;
       for (const e of enemies) {
         if (e.dead || e.id === firstId || !e.lit) continue;
         const d = Math.hypot(e.x - bx, e.y - by);
-        if (d <= 6.5) hurtEnemy(e, spec.dmg * 0.6);
+        if (d <= 6.5) hurtEnemy(e, mdmg * 0.6);
         else if (d < nd && d < 20) { nd = d; next = e; }
       }
       if (next) {
-        hurtEnemy(next, spec.dmg);
+        hurtEnemy(next, mdmg);
         rings.push({ x: next.x, y: next.y, r: 0.3, max: 3.4, life: 0.25, color: "#ff5d6c" });
         burst(next.x, next.y, "#ff5d6c", 5, 5);
       }
@@ -1909,7 +2124,7 @@
     if (!spec || state.phase !== "fight") return;
     state.mineCd -= dt;
     if (state.mineCd <= 0) {
-      state.mineCd = spec.every;
+      state.mineCd = spec.every / B().mineRate;
       detonateMine(spec);
     }
     if ((state.armedMines | 0) > 0) {
@@ -1936,14 +2151,14 @@
     state.turretAng = Math.atan2(best.y - BASE.y, best.x - BASE.x);
     state.turretCd -= dt;
     if (state.turretCd <= 0) {
-      state.turretCd = 1 / spec.rate;
+      state.turretCd = 1 / (spec.rate * B().turretRate);
       state.turretFlash = 0.08;
       const ang = state.turretAng;
       bolts.push({
         x: BASE.x + Math.cos(ang) * (BASE.r * 0.85),
         y: BASE.y + Math.sin(ang) * (BASE.r * 0.85),
         ox: BASE.x, oy: BASE.y,
-        targetId: best.id, dmg: spec.dmg, color: "#d5e6ff", src: 0, pierce: 0, prev: 0,
+        targetId: best.id, dmg: spec.dmg * B().turretDmg, color: "#d5e6ff", src: 0, pierce: 0, prev: 0,
       });
       if (state.cardSet.twinbarrel) {
         const t2 = second || best;
@@ -1952,7 +2167,7 @@
           x: BASE.x + Math.cos(a2) * (BASE.r * 0.85),
           y: BASE.y + Math.sin(a2) * (BASE.r * 0.85),
           ox: BASE.x, oy: BASE.y,
-          targetId: t2.id, dmg: spec.dmg, color: "#ffe2a8", src: 0, pierce: 0, prev: 0,
+          targetId: t2.id, dmg: spec.dmg * B().turretDmg, color: "#ffe2a8", src: 0, pierce: 0, prev: 0,
         });
       }
       state.shots++;
@@ -2292,7 +2507,7 @@
           if (++hit >= 6) break;
         }
       }
-      if (distBase(b.x, b.y) <= BASE.r + b.r * 0.8) {
+      if (!b.safe && distBase(b.x, b.y) <= BASE.r + b.r * 0.8) {
         hurtBase(2 + state.wave * 0.06);
         if (state.phase !== "fight") return;
       }
@@ -2314,7 +2529,7 @@
       const d = distBase(e.x, e.y);
       if (Math.abs(d - w.r) <= w.w + e.r * 0.4 || d < w.r - w.w) {
         const k = d < w.r - w.w ? 0.35 : 1;
-        hurtEnemy(e, w.dps * k * dt, 2, "lila");
+        hurtEnemy(e, w.dps * k * dt * B().fire, 2, "lila");
         igniteEnemy(e, w.burn, 1.5, "lila");
         applySlow(e, 0.6, 0.3);
       }
@@ -2351,6 +2566,7 @@
     state.freezeT = Math.max(0, state.freezeT - dt);
     state.rallyT = Math.max(0, state.rallyT - dt);
     state.spreeT = Math.max(0, state.spreeT - dt);
+    state.tranceT = Math.max(0, (state.tranceT || 0) - dt);
     if (state.streakT > 0) {
       state.streakT -= dt;
       if (state.streakT <= 0) state.streak = 0;
@@ -2415,7 +2631,7 @@
     state.earned += cash;
     meta.ash = (meta.ash || 0) + 3;
     saveMeta();
-    state.baseHp = Math.min(state.baseMax, state.baseHp + 15);
+    healGate(15);
     toast("Survivor safe  +$" + cash + "  +3 ash  +15 HP", 2200);
     blip(660, 0.12, "triangle", 0.035);
     state.event = null;
@@ -2438,8 +2654,7 @@
       state.earned += cash;
       toast("Supply drop  +$" + cash, 1800);
     } else if (roll === 1) {
-      const heal = Math.round(state.baseMax * 0.25);
-      state.baseHp = Math.min(state.baseMax, state.baseHp + heal);
+      const heal = Math.round(healGate(state.baseMax * 0.25));
       toast("Supply drop  gate +" + heal + " HP", 1800);
     } else {
       for (const k of ORDER) state.abil[k] = 0;
@@ -2511,7 +2726,7 @@
   // ---------- Tap abilities ----------
   function abilityCd(kind) {
     let cd = ABILITIES[kind].cd;
-    if (state.cardSet.quickhands) cd *= 0.75;
+    cd *= B().abilCd;
     if (((state.skills && state.skills[kind]) | 0) >= 3) cd *= 0.88;
     cd *= (kindMods[kind] || NEUTRAL_MODS).abilCd;
     return cd;
@@ -2540,8 +2755,8 @@
     for (const u of list) if (u.named) lead = u;
     const ls = statsOf(lead);
     const km = kindMods[kind] || NEUTRAL_MODS;
-    const oc = (state.cardSet.overcharge ? 1.5 : 1) * km.abilPow;
-    const dur = (state.cardSet.overcharge ? 1.25 : 1) * km.abilDur;
+    const oc = B().abilPow * km.abilPow;
+    const dur = B().abilDur * km.abilDur;
     if (kind === "vera") {
       const alive = [];
       for (const e of enemies) if (!e.dead) alive.push(e);
@@ -2589,7 +2804,10 @@
       }
     }
     state.abil[kind] = abilityCd(kind);
+    if (state.hourglass) { state.hourglass = false; state.abil[kind] *= 0.5; }
     state.abilMax[kind] = state.abil[kind];
+    if (B().abilFreeze && kind !== "nyx") freezeAll(B().abilFreeze);
+    if (B().trance) state.tranceT = 5;
     state.shake = Math.min(1.6, state.shake + (reduceMotion ? 0 : 0.7));
     abilitySfx(kind);
     toast(HEROES[kind].short + " · " + ABILITIES[kind].name, 1000);
@@ -2730,124 +2948,6 @@
     return out;
   }
 
-  function rollCards() {
-    const pool = [];
-    for (const c of CARDS) {
-      if (state.cardSet[c.id]) continue;
-      if (c.kind && !units.some((u) => u.kind === c.kind)) continue;
-      pool.push(c);
-    }
-    const out = [];
-    while (out.length < 3 && pool.length) {
-      let total = 0;
-      for (const c of pool) total += RARITY[c.rarity].weight;
-      let r = Math.random() * total;
-      let idx = 0;
-      for (; idx < pool.length - 1; idx++) {
-        r -= RARITY[pool[idx].rarity].weight;
-        if (r <= 0) break;
-      }
-      out.push(pool[idx]);
-      pool.splice(idx, 1);
-    }
-    return out;
-  }
-
-  function applyCard(id) {
-    const c = CARD_BY_ID[id];
-    if (!c || state.cardSet[id]) return false;
-    state.cards.push(id);
-    state.cardSet[id] = true;
-    if (c.rarity === "epic") {
-      meta.epics = (meta.epics || 0) + 1;
-      saveMeta();
-      if (meta.epics >= 5) earnMedal("epic5");
-    }
-    if (id === "chainmines" && !(state.ups.mines | 0)) { state.ups.mines = 1; state.mineCd = MINES[1].every; }
-    if (id === "twinbarrel" && !(state.ups.turret | 0)) state.ups.turret = 1;
-    renderBuild();
-    return true;
-  }
-
-  function cardTagText(c) {
-    return RARITY[c.rarity].name.toUpperCase() + (c.kind ? "  ·  " + HEROES[c.kind].short.toUpperCase() : "");
-  }
-
-  function renderCards() {
-    const box = $("ovChoices");
-    box.innerHTML = "";
-    const choices = rollCards();
-    state.offer = choices;
-    for (const card of choices) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "choice card r-" + card.rarity;
-      b.dataset.card = card.id;
-      const tag = document.createElement("em");
-      tag.className = "rar";
-      tag.textContent = cardTagText(card);
-      const strong = document.createElement("b");
-      strong.textContent = card.name;
-      const span = document.createElement("span");
-      span.textContent = card.desc;
-      b.appendChild(tag);
-      b.appendChild(strong);
-      b.appendChild(span);
-      b.addEventListener("click", () => {
-        if (state.cardPicked) return;
-        applyCard(card.id);
-        state.cardPicked = true;
-        $("ovBtn").disabled = false;
-        const kids = box.children;
-        for (let i = 0; i < kids.length; i++) kids[i].disabled = true;
-        b.disabled = false;
-        b.classList.add("picked");
-        toast(card.name);
-        blip(620, 0.09, "triangle", 0.035);
-      });
-      box.appendChild(b);
-    }
-    if (!choices.length) state.cardPicked = true;
-  }
-
-  function renderBuild() {
-    const row = $("buildRow");
-    if (!row) return;
-    row.innerHTML = "";
-    for (const sy of SYNERGIES) {
-      if (!synOn(sy.id)) continue;
-      const chip = document.createElement("span");
-      chip.className = "buildChip syn";
-      chip.title = sy.desc;
-      const b = document.createElement("b");
-      b.textContent = sy.name;
-      const sm = document.createElement("small");
-      sm.textContent = HEROES[sy.a].short + " + " + HEROES[sy.b].short + ". " + sy.desc;
-      chip.appendChild(b);
-      chip.appendChild(sm);
-      row.appendChild(chip);
-    }
-    if (!state.cards.length) {
-      const p = document.createElement("span");
-      p.className = "buildEmpty";
-      p.textContent = row.children.length ? "Beat a boss to pick your first card." : "Beat a boss to pick your first card. Hire the right pairs for synergies.";
-      row.appendChild(p);
-      return;
-    }
-    for (const id of state.cards) {
-      const c = CARD_BY_ID[id];
-      const chip = document.createElement("span");
-      chip.className = "buildChip r-" + c.rarity;
-      chip.title = c.desc;
-      const b = document.createElement("b");
-      b.textContent = c.name;
-      const s = document.createElement("small");
-      s.textContent = c.desc;
-      chip.appendChild(b);
-      chip.appendChild(s);
-      row.appendChild(chip);
-    }
-  }
 
   function fillTwist() {
     const box = $("ovTwist");
@@ -2926,8 +3026,10 @@
     state.streak = 0;
     for (const u of units) { u.stormT = 0; u.whirlT = 0; u.dazeT = 0; u.slowT = 0; }
     const cleared = state.wave;
-    const bonus = 8 + cleared * 3;
     const specCleared = stageSpec(cleared);
+    const bmC = B();
+    const bonus = Math.round((8 + cleared * 3) * bmC.clearMul * (state.node === "elite" && !specCleared.boss ? 1.5 : 1)) + bmC.clearFlat;
+    if (bmC.stageHeal > 0) healGate(state.baseMax * bmC.stageHeal);
     state.cash += bonus;
     state.earned += bonus;
     if (specCleared.challenge) {
@@ -2976,7 +3078,7 @@
     if (cleared >= FINALE && !state.endless) { win(); return; }
     state.wave = cleared + 1;
     setTwists(rollTwists(state.wave));
-    openBrief(cleared % 3 === 0, specCleared.boss);
+    beginPost(cleared);
   }
 
   function updateFx(dt) {
@@ -5229,13 +5331,9 @@
   }
 
   function modLine() {
-    const parts = [];
-    for (const p of PERKS) {
-      const c = state.mods[p.id] || 0;
-      if (!c) continue;
-      parts.push(c > 1 ? p.short + " x" + c : p.short);
-    }
-    return parts.join("  ·  ");
+    const nd = NODES[state.node];
+    if (!nd || state.node === "fight" || state.node === "start") return "";
+    return nd.name.toUpperCase() + " STOP  ·  " + nodeBlurb(state.wave, state.node);
   }
 
   function announceHires() {
@@ -5243,12 +5341,12 @@
     if (state.wave >= 6 && !state.toldWren) {
       state.toldWren = true;
       state.toldSable = true;
-      toast("Wren can be hired");
+      toast("Wren can now show up in the shop");
       return;
     }
     if (state.wave >= 4 && !state.toldSable) {
       state.toldSable = true;
-      toast("Sable can be hired");
+      toast("Sable can now show up in the shop");
     }
   }
 
@@ -5269,6 +5367,7 @@
     const tag = $("waveTag");
     if (spec.finale) { tag.textContent = "FINALE"; tag.className = "tag boss"; }
     else if (spec.boss) { tag.textContent = "BOSS"; tag.className = "tag boss"; }
+    else if (NODES[state.node] && state.node !== "fight" && state.node !== "start") { tag.textContent = NODES[state.node].name.toUpperCase(); tag.className = "tag node t-" + state.node; }
     else if (spec.challenge) { tag.textContent = "CHALLENGE"; tag.className = "tag chal"; }
     else { tag.textContent = ""; tag.className = "tag"; }
     if (state.phase === "fight") {
@@ -5286,42 +5385,8 @@
     const canStart = state.phase === "shop" && state.runLive;
     next.disabled = !canStart;
     if (next.hidden === canStart) next.hidden = !canStart;
-    const locked = state.phase === "won" || state.phase === "lost" || state.phase === "brief" || state.phase === "paused" || state.phase === "title" || state.phase === "pick";
-    for (const id of ORDER) {
-      const btn = rosterButtons[id];
-      const tile = rosterTiles[id];
-      const cost = priceOf(id);
-      const need = HEROES[id].unlock || 1;
-      const gated = state.wave < need;
-      btn.disabled = gated;
-      tile.classList.toggle("locked", gated);
-      tile.classList.toggle("due", pendingTier(id) >= 0);
-      const fr = frameOf(id);
-      if (tile.dataset.frame !== fr) tile.dataset.frame = fr;
-      btn.querySelector(".price").textContent = gated ? "Stage " + need : (state.sale ? "SALE $" + cost : "$" + cost);
-      const owned = units.filter((u) => u.kind === id);
-      const named = owned.some((u) => u.named);
-      const extras = owned.length - (named ? 1 : 0);
-      let own = "Not hired";
-      if (named && extras) own = "Hero + " + extras + " lower rank";
-      else if (named) own = "Hero on field";
-      else if (extras) own = extras + " on field";
-      const ownEl = btn.querySelector(".own");
-      ownEl.textContent = own;
-      ownEl.classList.toggle("has", owned.length > 0);
-      tile.classList.toggle("broke", !gated && (locked || units.length >= squadCap() || state.cash < cost));
-    }
     announceHires();
-    for (const id of UP_IDS) {
-      const btn = upButtons[id];
-      const lv = state.ups[id];
-      const up = BASE_UPS[id];
-      const maxed = lv >= up.max;
-      btn.querySelector(".lv").textContent = maxed ? "LV " + lv + "/" + up.max + " · MAX" : "LV " + lv + "/" + up.max + " · $" + up.costs[lv];
-      btn.querySelector(".fx").textContent = upEffect(id, lv);
-      btn.classList.toggle("maxed", maxed);
-      btn.classList.toggle("broke", !maxed && (locked || state.cash < up.costs[lv]));
-    }
+    if (shopOpen) syncStock();
     const paused = state.phase === "paused";
     const pb = $("pauseBtn");
     if (pb.classList.contains("on") !== paused) {
@@ -5619,128 +5684,6 @@
     if (state.runLive && state.phase !== "title") startMusic();
   }
 
-  function applyPerk(id) {
-    if (id === "dmg") state.dmgMult *= 1.2;
-    else if (id === "rate") state.rateMult *= 1.16;
-    else if (id === "move") state.moveMult *= 1.18;
-    else if (id === "heal") state.baseHp = Math.min(state.baseMax, state.baseHp + 45);
-    else if (id === "sale") state.sale = 0.6;
-    else if (id === "range") state.rangeMult *= 1.12;
-    else if (id === "gate") {
-      state.baseMax += 30;
-      state.baseHp = Math.min(state.baseMax, state.baseHp + 30);
-    } else if (id === "cash") {
-      state.cash += 45;
-      state.earned += 45;
-    }
-  }
-
-  function crateOfferCopy(kind) {
-    if (kind === "scavenge") return { name: "Scavenge", desc: "+$40 cash" };
-    if (kind === "mend") return { name: "Mend", desc: "Heal the gate 40 HP." };
-    if ((state.ups.mines | 0) > 0) return { name: "Cache", desc: "Arm 2 extra yard mines." };
-    return { name: "Cache", desc: "Yard Mines, level 1." };
-  }
-
-  function applyCrate(kind) {
-    if (kind === "scavenge") {
-      state.cash += 40;
-      state.earned += 40;
-      toast("Scavenge +$40");
-      return;
-    }
-    if (kind === "mend") {
-      state.baseHp = Math.min(state.baseMax, state.baseHp + 40);
-      toast("Mend");
-      return;
-    }
-    const lv = state.ups.mines | 0;
-    if (lv > 0 && MINES[lv]) {
-      state.armedMines = (state.armedMines | 0) + 2;
-      state.armedCd = 0.35;
-      toast("Cache armed 2 mines");
-      return;
-    }
-    if (lv <= 0 && BASE_UPS.mines && MINES[1]) {
-      state.ups.mines = 1;
-      state.mineCd = MINES[1].every;
-      toast("Yard Mines LV 1");
-      return;
-    }
-    state.cash += 40;
-    state.earned += 40;
-    toast("Scavenge +$40");
-  }
-
-  function renderCrate() {
-    const kinds = ["scavenge", "mend", "cache"];
-    const kind = kinds[(Math.random() * kinds.length) | 0];
-    state.crateOffer = kind;
-    const copy = crateOfferCopy(kind);
-    const box = $("ovChoices");
-    box.innerHTML = "";
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "choice";
-    const strong = document.createElement("b");
-    strong.textContent = copy.name;
-    const span = document.createElement("span");
-    span.textContent = copy.desc;
-    b.appendChild(strong);
-    b.appendChild(span);
-    b.addEventListener("click", () => {
-      if (!state.crateDue || state.crateTaken) return;
-      applyCrate(kind);
-      state.crateTaken = true;
-      b.disabled = true;
-      b.classList.add("picked");
-      $("ovBtn").disabled = false;
-      blip(520, 0.07, "square", 0.03);
-    });
-    box.appendChild(b);
-  }
-
-  function rollPerks() {
-    const pool = PERKS.slice();
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0;
-      const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
-    }
-    return pool.slice(0, 3);
-  }
-
-  function renderPerks() {
-    const box = $("ovChoices");
-    box.innerHTML = "";
-    const choices = rollPerks();
-    state.offer = choices;
-    for (const perk of choices) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "choice";
-      const strong = document.createElement("b");
-      strong.textContent = perk.name;
-      const span = document.createElement("span");
-      span.textContent = perk.desc;
-      b.appendChild(strong);
-      b.appendChild(span);
-      b.addEventListener("click", () => {
-        if (state.perkPicked) return;
-        applyPerk(perk.id);
-        state.mods[perk.id] = (state.mods[perk.id] || 0) + 1;
-        state.perkPicked = true;
-        $("ovBtn").disabled = false;
-        const kids = box.children;
-        for (let i = 0; i < kids.length; i++) kids[i].disabled = true;
-        b.disabled = false;
-        b.classList.add("picked");
-        toast(perk.name);
-        blip(520, 0.07, "square", 0.03);
-      });
-      box.appendChild(b);
-    }
-  }
-
   function fillDebuts(list) {
     const box = $("ovDebut");
     box.innerHTML = "";
@@ -5812,59 +5755,6 @@
     ov.querySelector(".panel").style.setProperty("--splash", 'url("' + href + '")');
   }
 
-  function openBrief(withPerk, withCard) {
-    const spec = stageSpec(state.wave);
-    const entered = announceRegion(state.wave);
-    const card = !!withCard;
-    const perk = !card && !!withPerk;
-    const crate = !perk && !card && !spec.boss && !spec.finale && Math.random() < 0.4;
-    hideMenus();
-    forceCloseShop();
-    if (cardOpen) closeCard();
-    state.phase = "brief";
-    state.perkDue = perk;
-    state.perkPicked = !perk;
-    state.crateDue = crate;
-    state.crateTaken = !crate;
-    state.crateOffer = "";
-    state.cardDue = card;
-    state.cardPicked = !card;
-    const kind = spec.finale ? "FINALE" : spec.boss ? "BOSS" : spec.challenge ? "CHALLENGE" : "NEXT";
-    if (state.endless) $("ovKicker").textContent = "ENDLESS  ·  STAGE " + state.wave + (spec.boss ? "  ·  BOSS" : "");
-    else if (entered && state.wave >= 51) $("ovKicker").textContent = "THE CHAPEL  ·  STAGE " + state.wave;
-    else if (entered && state.wave >= 21) $("ovKicker").textContent = "THE MARSH  ·  STAGE " + state.wave;
-    else $("ovKicker").textContent = "STAGE " + state.wave + "  ·  " + kind;
-    $("ovTitle").textContent = spec.name;
-    $("ovBody").textContent = spec.blurb;
-    fillDebuts(debutsOn(state.wave));
-    fillTwist();
-    $("ovPerk").hidden = !perk && !crate && !card;
-    if (card) $("ovPerk").textContent = "Boss down. Pick a reward card. It stays for the run.";
-    else if (perk) $("ovPerk").textContent = "Pick one. It stays for the run.";
-    else if (crate) $("ovPerk").textContent = "Supply crate. Tap once to take it. Free.";
-    $("ovSummary").hidden = true;
-    $("ovHint").hidden = false;
-    $("ovHint").textContent = "Continue, gear up, then start the wave. It will not start on its own.";
-    $("ovChoices").innerHTML = "";
-    if (card) renderCards();
-    else if (perk) renderPerks();
-    else if (crate) renderCrate();
-    $("ovBtn").hidden = false;
-    $("ovBtn").disabled = perk || crate || (card && !state.cardPicked);
-    $("ovBtn").textContent = "CONTINUE";
-    $("ovEndless").hidden = true;
-    $("ovRestart").hidden = false;
-    bolts.length = 0;
-    lobs.length = 0;
-    patches.length = 0;
-    $("pauseScreen").classList.add("hidden");
-    const ov = $("overlay");
-    ov.dataset.art = (spec.boss || spec.finale) ? "boss" : state.wave >= 51 ? "chapel" : state.wave >= 21 ? "marsh" : "yard";
-    setRandomSplash(ov);
-    ov.classList.add("splash");
-    ov.classList.remove("hidden");
-  }
-
   function clearSplashArt() {
     const ov = $("overlay");
     if (ov.classList.contains("hidden") || !ov.classList.contains("splash")) delete ov.dataset.art;
@@ -5872,12 +5762,15 @@
 
   function dismissBrief() {
     if (state.phase !== "brief") return;
-    if (state.perkDue && !state.perkPicked) return;
-    if (state.crateDue && !state.crateTaken) return;
-    if (state.cardDue && !state.cardPicked) return;
-    state.phase = "shop";
-    $("overlay").classList.add("hidden");
-    clearSplashArt();
+    const p = state.post;
+    if (!p) {
+      state.phase = "shop";
+      $("overlay").classList.add("hidden");
+      clearSplashArt();
+      return;
+    }
+    if (stepNeedsPick(p) && !p.picked) return;
+    nextPostStep();
   }
 
   function showEnd(kind) {
@@ -5932,7 +5825,7 @@
     showEnd("lost");
   }
 
-  function resetRun() {
+  function resetRun(noUnits) {
     const muted = state.muted;
     const live = state.runLive;
     units.length = 0;
@@ -5958,11 +5851,15 @@
     Object.assign(state, next);
     applyMetaStats();
     refreshMods();
-    addUnit("vera");
-    addUnit("roxie");
+    if (!noUnits) {
+      addUnit("vera");
+      addUnit("roxie");
+    }
     layoutHomes();
     syncSoundLabels();
     renderBuild();
+    clearTimeout(postTimer);
+    buildAll = false;
   }
 
   function pickVeteranKind() {
@@ -5982,7 +5879,8 @@
 
   function applyMetaStats() {
     const gate = clamp(meta.gate || 0, 0, LAB_MAX);
-    state.baseMax = BASE_HP0 + gate * 20;
+    state.gateBase = BASE_HP0 + gate * 20;
+    state.baseMax = state.gateBase;
     state.baseHp = state.baseMax;
     state.cash = START_CASH + gate * 2;
   }
@@ -5991,6 +5889,7 @@
     $("skillScreen").classList.add("hidden");
     $("labScreen").classList.add("hidden");
     $("medalScreen").classList.add("hidden");
+    $("loadoutScreen").classList.add("hidden");
   }
 
   function requestRestart() {
@@ -6019,7 +5918,7 @@
     if (which === "chapel" && meta.regions.chapel) safe = "chapel";
     pickedRegion = safe;
     if (cardOpen) closeCard();
-    resetRun();
+    resetRun(true);
     const startN = safe === "chapel" ? 51 : safe === "marsh" ? 21 : 1;
     state.wave = startN;
     setTwists(rollTwists(startN));
@@ -6028,10 +5927,12 @@
     if (startN >= 4) state.toldSable = true;
     if (startN >= 6) state.toldWren = true;
     state.mineCd = 2.6;
-    if ((startN === 21 || startN === 51) && meta.veteran && meta.veteran !== "vera" && meta.veteran !== "roxie" && HEROES[meta.veteran]) {
-      addUnit(meta.veteran);
-      layoutHomes();
-    }
+    state.map = { seed: (Math.random() * 1e9) | 0, lane: 1, start: startN };
+    state.node = "start";
+    const lo = activeLoadout();
+    const kinds = applyLoadout(lo, startN);
+    refreshMods();
+    rollStock();
     hideMenus();
     forceCloseShop();
     $("titleScreen").classList.add("hidden");
@@ -6040,7 +5941,7 @@
     $("pauseScreen").classList.add("hidden");
     if (startN >= 51) announceRegion(startN);
     else if (startN >= 21) announceRegion(startN);
-    else toast("Vera and Roxie hold the yard.");
+    else toast(lo.name + ": " + kinds.map((k) => HEROES[k].short).join(" and ") + " hold the yard.", 2000);
   }
 
   function showTitle() {
@@ -6056,6 +5957,7 @@
     $("titleScreen").classList.remove("hidden");
     renderRegions();
     renderEndlessLine();
+    renderLoadoutBtn();
   }
 
   function enterPause() {
@@ -6111,6 +6013,7 @@
     shopOpen = true;
     drag = null;
     renderBuild();
+    renderStock();
     setShopUi(true);
     $("shopDone").textContent = shopFromPause ? "CLOSE · STAY PAUSED" : state.phase === "fight" ? "CLOSE · RESUME" : "CLOSE";
     const scroller = document.querySelector("#shopPanel .shopScroll");
@@ -6143,78 +6046,6 @@
   function toggleShop() {
     if (shopOpen) closeShop();
     else openShop();
-  }
-
-  function buildRoster() {
-    const root = $("roster");
-    root.innerHTML = "";
-    for (const id of ORDER) {
-      const h = HEROES[id];
-      // Tile: face opens her card, the rest of the tile hires.
-      const tile = document.createElement("div");
-      tile.className = "hire";
-      tile.dataset.id = id;
-      const cardBtn = document.createElement("button");
-      cardBtn.type = "button";
-      cardBtn.className = "hireCard";
-      cardBtn.setAttribute("aria-label", "Open " + h.name + "'s card");
-      const badge = document.createElement("span");
-      badge.className = "iBadge";
-      badge.textContent = "i";
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "hireBuy";
-      b.setAttribute("aria-label", "Hire " + h.name);
-      const img = document.createElement("img");
-      img.className = "face";
-      img.alt = "";
-      img.draggable = false;
-      img.onerror = () => { img.style.display = "none"; };
-      img.src = "assets/" + id + ".png";
-      const metaEl = document.createElement("span");
-      metaEl.className = "meta";
-      const name = document.createElement("b");
-      name.textContent = JOBS[id] || h.short;
-      const small = document.createElement("small");
-      small.textContent = h.short;
-      const price = document.createElement("em");
-      price.className = "price";
-      const own = document.createElement("i");
-      own.className = "own";
-      metaEl.appendChild(name);
-      metaEl.appendChild(small);
-      metaEl.appendChild(price);
-      metaEl.appendChild(own);
-      cardBtn.appendChild(img);
-      cardBtn.appendChild(badge);
-      cardBtn.addEventListener("click", () => { unlock(); openCard(id, "shop"); });
-      b.appendChild(metaEl);
-      b.addEventListener("click", () => buy(id));
-      tile.appendChild(cardBtn);
-      tile.appendChild(b);
-      root.appendChild(tile);
-      rosterButtons[id] = b;
-      rosterTiles[id] = tile;
-    }
-  }
-
-  function buildUps() {
-    const root = $("baseShop");
-    root.innerHTML = "";
-    for (const id of UP_IDS) {
-      const up = BASE_UPS[id];
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "up";
-      b.dataset.id = id;
-      const label = { wall: "Wall", aura: "Aura", turret: "Turret", spikes: "Spikes", mend: "Mend", mines: "Mines", ammo: "Ammo", squad: "Squad" }[id] || up.name;
-      b.title = up.blurb;
-      b.innerHTML = '<span class="mark">' + up.mark + '</span><span class="meta"><b>' + label +
-        '</b><em class="lv"></em><i class="fx"></i></span>';
-      b.addEventListener("click", () => buyUp(id));
-      root.appendChild(b);
-      upButtons[id] = b;
-    }
   }
 
   function renderRegions() {
@@ -6454,6 +6285,7 @@
   function synOn(id) { return !!(state.syn && state.syn[id]); }
 
   function refreshMods() {
+    const bm = computeBuild();
     for (const k of ORDER) {
       const m = baseMods();
       const lv = (state.lv && state.lv[k]) || 1;
@@ -6465,6 +6297,15 @@
         const tr = picks[t] && TRAIT_BY_ID[picks[t]];
         if (tr) tr.fx(m);
       }
+      m.dmg *= bm.dmg * bm.kDmg[k];
+      m.rate *= bm.rate * bm.kRate[k];
+      m.range *= bm.range * bm.kRange[k];
+      m.aoe *= bm.kAoe[k];
+      m.cap += bm.kCap[k];
+      m.patchDps *= bm.kPatch[k];
+      m.patchTime *= bm.kPatchT[k];
+      m.crit += bm.crit;
+      if (bm.critMul) m.critMul = Math.max(m.critMul || 2, bm.critMul);
       kindMods[k] = m;
     }
     if (synOn("frontline")) { kindMods.roxie.rate *= 1.12; kindMods.wren.rate *= 1.12; }
@@ -6556,14 +6397,14 @@
     const by = e.lastBy;
     if (by && HEROES[by]) {
       state.runKills[by]++;
-      grantXp(by, xpFor(e));
+      grantXp(by, xpFor(e) * B().xp);
       const life = lifeOf(by);
       const before = bondLevelFor(life.kills);
       life.kills++;
       const after = bondLevelFor(life.kills);
       if (after > before) bondUp(by, after);
       const km = kindMods[by] || NEUTRAL_MODS;
-      if (km.heal && state.baseHp > 0) state.baseHp = Math.min(state.baseMax, state.baseHp + km.heal);
+      if (km.heal && state.baseHp > 0) healGate(km.heal);
       if (km.cdOnKill && state.abil[by] > 0) state.abil[by] = Math.max(0, state.abil[by] - km.cdOnKill);
     }
     if (e.nyxT > 0 && kindMods.nyx && kindMods.nyx.siphon && state.abil.nyx > 0) state.abil.nyx = Math.max(0, state.abil.nyx - 0.5);
@@ -6752,7 +6593,7 @@
     setTwists(rollTwists(state.wave));
     $("ovEndless").hidden = true;
     toast("ENDLESS. Every stage is tougher than the last.", 2400);
-    openBrief(false, true);
+    beginPost(FINALE, { endlessStart: true });
   }
 
   // ---------- Ability strip (outside the field) ----------
@@ -7072,7 +6913,7 @@
     body.appendChild(stats);
     if (inRun) {
       const xp = el("div", "hcXp");
-      const cur = state.xp[kind] || 0;
+      const cur = Math.floor(state.xp[kind] || 0);
       const lo = LV_XP[lv] || 0;
       const hi = LV_XP[Math.min(LV_MAX, lv + 1)] || lo;
       const pct = lv >= LV_MAX ? 100 : Math.round(((cur - lo) / Math.max(1, hi - lo)) * 100);
@@ -7148,15 +6989,17 @@
     const csec = el("h4", "hcSec", "REWARD CARDS");
     csec.appendChild(el("small", "", "this run"));
     body.appendChild(csec);
-    const general = { precision: 1, quickhands: 1, overcharge: 1, spree: 1 };
+    const general = { precision: 1, quickhands: 1, overcharge: 1, spree: 1, hotbarrels: 1, hairtrigger: 1, trance: 1, refocus: 1, fieldnotes: 1 };
     let nCards = 0;
     if (inRun) {
+      const seen = {};
       for (const id of state.cards) {
         const c = CARD_BY_ID[id];
-        if (!c || !(c.kind === kind || general[id])) continue;
-        const row = el("div", "hcBox r-" + c.rarity);
+        if (!c || seen[id] || !(c.kind === kind || general[id])) continue;
+        seen[id] = 1;
+        const row = el("div", "hcBox r-" + c.rarity + (c.curse ? " cursed" : ""));
         row.appendChild(el("span", "right", RARITY[c.rarity].name.toUpperCase()));
-        row.appendChild(el("b", "", c.name));
+        row.appendChild(el("b", "", c.name + (cc(id) > 1 ? "  x" + cc(id) : "")));
         row.appendChild(el("span", "sub", c.desc));
         body.appendChild(row);
         nCards++;
@@ -7164,7 +7007,7 @@
     }
     if (!nCards) {
       const mine = CARDS.filter((c) => c.kind === kind).map((c) => c.name).join(", ");
-      body.appendChild(el("div", "hcBox off", "None yet. Her boss card: " + (mine || "none") + "."));
+      body.appendChild(el("div", "hcBox off", "None yet. Her cards: " + (mine || "none") + "."));
     }
 
     // ----- Back -----
@@ -7302,6 +7145,1429 @@
     renderMedals();
     $("medalScreen").classList.remove("hidden");
   }
+
+  // ---------- Roguelike: build mods, deck, relics, shop stock, map, post-stage steps, loadouts ----------
+  let BM0 = null;
+  let postTimer = 0;
+  let buildAll = false;
+  function B() { return state.bm || BM0 || (BM0 = defaultBuild()); }
+  function cc(id) { return state.cardSet ? (state.cardSet[id] | 0) : 0; }
+  function hasRelic(id) { return !!(state.relicSet && state.relicSet[id]); }
+
+  function defaultBuild() {
+    return {
+      dmg: 1, rate: 1, range: 1, move: 1, crit: 0, critMul: 0, xp: 1,
+      kDmg: kindMap(1), kRate: kindMap(1), kCap: kindMap(0), kAoe: kindMap(1), kRange: kindMap(1), kPatch: kindMap(1), kPatchT: kindMap(1),
+      killCash: 0, cashMul: 1, clearMul: 1, clearFlat: 0, eliteCash: 0, disc: 1, freeRerolls: 0, choices: 3,
+      gateAdd: 0, gateMul: 1, gateTaken: 1, wallMul: 1, regen: 0, thorns: 0, healMul: 1, stageHeal: 0, capAdd: 0,
+      turretDmg: 1, turretRate: 1, mineDmg: 1, mineRate: 1, mineArm: 0, mineChain: false, mineArea: false, clusterFire: false,
+      abilCd: 1, abilPow: 1, abilDur: 1, abilFreeze: 0, trance: false,
+      enemyHp: 1, enemySpeed: 1, fire: 1, spread: false, burnBlast: false, pyre: 0, eliteTaken: 1, execute: 0, nearGate: 1,
+      emberRounds: false, witchfire: false,
+    };
+  }
+
+  // Everything cards, sets and relics do to the numbers, in one place.
+  function computeBuild() {
+    const b = defaultBuild();
+    const n = cc;
+    const ck = hasRelic("blackcat") ? 0.5 : 1;
+    // Gun
+    b.dmg *= 1 + 0.1 * n("hotbarrels");
+    b.rate *= 1 + 0.08 * n("hairtrigger");
+    b.range *= 1 + 0.08 * n("spotterkit");
+    if (n("precision")) { b.crit += 0.15; b.critMul = Math.max(b.critMul, 2.5); }
+    b.kDmg.vera *= 1 + 0.15 * n("longshot");
+    b.kRange.vera *= 1 + 0.06 * n("longshot");
+    b.kCap.roxie += n("doubleought");
+    b.kDmg.roxie *= 1 + 0.08 * n("doubleought");
+    b.kRate.sable *= 1 + 0.12 * n("quickdraw");
+    b.turretDmg *= 1 + 0.25 * n("gunoil");
+    b.turretRate *= 1 + 0.1 * n("gunoil");
+    // Fire
+    b.kPatch.lila *= 1 + 0.25 * n("jellied");
+    b.kPatchT.lila *= 1 + 0.2 * n("jellied");
+    b.fire *= 1 + 0.15 * n("accelerant");
+    b.emberRounds = n("emberrounds") > 0;
+    if (n("pyre")) b.pyre = 0.25;
+    // Hex
+    b.kAoe.nyx *= 1 + 0.2 * n("hexcoil");
+    b.kDmg.nyx *= 1 + 0.1 * n("hexcoil");
+    if (n("quickhands")) b.abilCd *= 0.75;
+    b.abilCd *= Math.pow(0.92, n("refocus"));
+    b.xp *= 1 + 0.3 * n("fieldnotes");
+    b.witchfire = n("witchfire") > 0;
+    if (n("doommark")) b.eliteTaken *= 1.2;
+    b.trance = n("trance") > 0;
+    if (n("overcharge")) { b.abilPow *= 1.5; b.abilDur *= 1.25; }
+    // Blade
+    b.kDmg.wren *= 1 + 0.18 * n("spearhead");
+    b.move *= 1 + 0.15 * n("quickstep");
+    b.nearGate *= 1 + 0.12 * n("cleaver");
+    if (n("bloodlust")) { b.kRate.roxie *= 1.2; b.kRate.wren *= 1.2; }
+    if (n("execution")) b.execute = 0.15;
+    // Gate
+    b.gateAdd += 30 * n("reinforced");
+    b.gateTaken *= Math.pow(0.92, n("bulwark"));
+    b.regen += n("patchkit");
+    // Gold
+    b.cashMul *= 1 + 0.2 * n("goldteeth");
+    b.eliteCash += 20 * n("bountyboard");
+    b.freeRerolls += n("luckycoin");
+    if (n("warchest")) b.clearMul *= 1.5;
+    // Mine
+    b.mineDmg *= 1 + 0.3 * n("blastingcaps");
+    b.mineArm += 2 * n("sapper");
+    if (n("minelayer")) b.mineRate *= 1.3;
+    b.clusterFire = n("clusterbomb") > 0;
+    // Curses
+    if (n("bloodpact")) { b.dmg *= 1.4; b.gateMul *= 1 - 0.25 * ck; }
+    if (n("glassgate")) { b.turretDmg *= 2; b.gateTaken *= 1 + 0.2 * ck; }
+    if (n("greed")) { b.cashMul *= 1.5; b.enemyHp *= 1 + 0.15 * ck; }
+    if (n("hastehex")) { b.rate *= 1.3; b.abilCd *= 1 + 0.4 * ck; }
+    if (n("powderkeg")) { b.mineDmg *= 2; b.mineArea = true; b.gateMul *= 1 - 0.15 * ck; }
+    if (n("pyromania")) { b.fire *= 1.6; b.range *= 1 - 0.15 * ck; }
+    if (n("bloodmoney")) { b.killCash += 4; b.healMul *= 1 - 0.5 * ck; }
+    if (n("berserker")) { b.dmg *= 1.25; b.rate *= 1.15; b.wallMul *= 1 - 0.5 * ck; }
+    if (n("darkpact")) { b.abilPow *= 1.6; b.abilDur *= 1.25; b.enemySpeed *= 1 + 0.1 * ck; }
+    if (n("foolsgold")) { b.clearFlat += 60; if (ck === 1) b.choices -= 1; }
+    // Tag sets (every copy counts).
+    const t = {};
+    for (const id of TAG_IDS) t[id] = 0;
+    for (const id of state.cards || []) {
+      const c = CARD_BY_ID[id];
+      if (c) for (const tg of c.tags) t[tg]++;
+    }
+    const sets = {};
+    for (const id of TAG_IDS) sets[id] = t[id] >= 5 ? 5 : t[id] >= 3 ? 3 : 0;
+    state.tagN = t;
+    state.sets = sets;
+    if (sets.fire >= 3) b.spread = true;
+    if (sets.fire >= 5) { b.fire *= 1.4; b.burnBlast = true; }
+    if (sets.hex >= 3) b.abilCd *= 0.85;
+    if (sets.hex >= 5) { b.abilPow *= 1.25; b.abilFreeze = 1.2; }
+    if (sets.gun >= 3) b.crit += 0.1;
+    if (sets.gun >= 5) { b.rate *= 1.15; b.critMul = Math.max(b.critMul, 3); }
+    if (sets.blade >= 3) b.dmg *= 1.12;
+    if (sets.blade >= 5) { b.execute = Math.max(b.execute, 0.15); b.kDmg.roxie *= 1.2; b.kDmg.wren *= 1.2; }
+    if (sets.gate >= 3) { b.gateAdd += 40; b.gateTaken *= 0.92; }
+    if (sets.gate >= 5) { b.regen += 2; b.thorns += 1; }
+    if (sets.gold >= 3) b.killCash += 1;
+    if (sets.gold >= 5) { b.killCash += 2; b.disc *= 0.85; }
+    if (sets.mine >= 3) { b.mineDmg *= 1.25; b.mineArm += 1; }
+    if (sets.mine >= 5) { b.mineChain = true; b.mineRate *= 1.4; }
+    // Relics
+    if (hasRelic("sapper")) b.mineArm += 3;
+    if (hasRelic("wardrum")) b.rate *= 1.12;
+    if (hasRelic("hexdoll")) b.eliteTaken *= 1.25;
+    if (hasRelic("bonedice")) b.freeRerolls += 2;
+    if (hasRelic("ledger")) b.disc *= 0.85;
+    if (hasRelic("chart")) b.choices += 1;
+    if (hasRelic("gildedtooth")) b.killCash += 1;
+    if (hasRelic("medicbag")) b.stageHeal += 0.15;
+    if (hasRelic("sparebarrel")) b.turretRate *= 1.25;
+    if (hasRelic("thorncrown")) b.thorns += 1;
+    if (hasRelic("plating")) b.gateTaken *= 0.88;
+    if (hasRelic("papers")) b.capAdd += 1;
+    state.bm = b;
+    return b;
+  }
+
+  function thornDmg() { return B().thorns * (20 + state.wave); }
+
+  // Tally Counter: a free turret volley at up to 6 of the nearest zombies.
+  function tallyVolley() {
+    const spec = TURRET[Math.max(1, state.ups.turret | 0)];
+    const list = [];
+    for (const e of enemies) if (!e.dead && !e.egg) list.push(e);
+    list.sort((a, b) => distBase(a.x, a.y) - distBase(b.x, b.y));
+    const n = Math.min(6, list.length);
+    for (let i = 0; i < n; i++) {
+      const t = list[i];
+      const a = Math.atan2(t.y - BASE.y, t.x - BASE.x);
+      bolts.push({
+        x: BASE.x + Math.cos(a) * (BASE.r * 0.85), y: BASE.y + Math.sin(a) * (BASE.r * 0.85), ox: BASE.x, oy: BASE.y,
+        targetId: t.id, dmg: (spec.dmg + state.wave * 0.4) * B().turretDmg, color: "#d5e6ff", src: 0, pierce: 0, prev: 0,
+      });
+    }
+    if (n) state.turretFlash = 0.08;
+  }
+
+  function applyGateMax() {
+    const b = B();
+    const base = state.gateBase || BASE_HP0;
+    const max = Math.max(40, Math.round((base + b.gateAdd) * b.gateMul));
+    if (max === state.baseMax) return;
+    const d = max - state.baseMax;
+    state.baseMax = max;
+    state.baseHp = d > 0 ? Math.min(max, state.baseHp + d) : Math.min(max, state.baseHp);
+  }
+
+  function healGate(amt) {
+    if (!(amt > 0) || state.baseHp <= 0) return 0;
+    const before = state.baseHp;
+    state.baseHp = Math.min(state.baseMax, state.baseHp + amt * B().healMul);
+    return state.baseHp - before;
+  }
+
+  // Cards, relics or sets changed: recompute, resize the gate, call out new sets.
+  function rebuild() {
+    const before = Object.assign({}, state.sets || {});
+    refreshMods();
+    applyGateMax();
+    if (state.runLive) {
+      for (const tg of TAG_IDS) {
+        const lv = state.sets[tg] || 0;
+        if (lv > (before[tg] || 0)) {
+          callout("SET BONUS · " + TAGS[tg].name.toUpperCase() + " " + lv, TAGS[tg].name + " " + lv, lv >= 5 ? TAGS[tg].t5 : TAGS[tg].t3, "set");
+        }
+      }
+    }
+    renderBuild();
+  }
+
+  // ---------- Deck ----------
+  function cardOk(c) {
+    if (!c) return false;
+    if (cc(c.id) >= (c.curse ? 1 : c.stack)) return false;
+    if (c.kind && !units.some((u) => u.kind === c.kind)) return false;
+    if (c.need === "mines" && !(state.ups.mines | 0)) return false;
+    if (c.need === "turret" && !(state.ups.turret | 0)) return false;
+    return true;
+  }
+
+  function epicWeight() { return 7 + Math.min(12, Math.max(0, state.wave - 10) * 0.14); }
+
+  // mode: "normal" (common 65 / rare 28 / epic 7+) or "rare" (rare and epic only).
+  function rollCardOffer(mode, curseChance) {
+    const want = clamp(B().choices, 1, 5);
+    const pools = { common: [], rare: [], epic: [] };
+    for (const c of CARDS) if (!c.curse && cardOk(c)) pools[c.rarity].push(c);
+    const out = [];
+    const taken = {};
+    for (let i = 0; i < want; i++) {
+      const w = mode === "rare" ? { common: 0, rare: 28, epic: epicWeight() * 1.6 } : { common: 65, rare: 28, epic: epicWeight() };
+      let total = 0;
+      for (const r in w) {
+        if (w[r] > 0 && pools[r].some((c) => !taken[c.id])) total += w[r];
+        else w[r] = 0;
+      }
+      if (total <= 0 && pools.common.some((c) => !taken[c.id])) { w.common = 65; total = 65; }
+      if (total <= 0) break;
+      let x = Math.random() * total;
+      let rar = "common";
+      for (const r of ["common", "rare", "epic"]) {
+        if (w[r] <= 0) continue;
+        rar = r;
+        x -= w[r];
+        if (x <= 0) break;
+      }
+      const list = pools[rar].filter((c) => !taken[c.id]);
+      let tw = 0;
+      for (const c of list) tw += c.instant ? 0.4 : 1;
+      let y = Math.random() * tw;
+      let got = list[list.length - 1];
+      for (const c of list) { y -= c.instant ? 0.4 : 1; if (y <= 0) { got = c; break; } }
+      taken[got.id] = 1;
+      out.push(got);
+    }
+    if (curseChance > 0 && out.length && Math.random() < curseChance) {
+      const curses = CARDS.filter((c) => c.curse && cardOk(c));
+      if (curses.length) out[(Math.random() * out.length) | 0] = curses[(Math.random() * curses.length) | 0];
+    }
+    return out;
+  }
+
+  // Kept for the old harness: a rare-or-better roll.
+  function rollCards() { return rollCardOffer("rare", 0); }
+
+  function applyCard(id) {
+    const c = CARD_BY_ID[id];
+    if (!c || cc(id) >= (c.curse ? 1 : c.stack)) return false;
+    state.cards.push(id);
+    state.cardSet[id] = cc(id) + 1;
+    if (c.rarity === "epic") {
+      meta.epics = (meta.epics || 0) + 1;
+      saveMeta();
+      if (meta.epics >= 5) earnMedal("epic5");
+    }
+    if ((id === "chainmines" || id === "minelayer" || id === "sapper" || id === "powderkeg") && !(state.ups.mines | 0)) { state.ups.mines = 1; state.mineCd = MINES[1].every; }
+    if ((id === "twinbarrel" || id === "glassgate") && !(state.ups.turret | 0)) state.ups.turret = 1;
+    if (id === "scavenge") { const v = 40 + 2 * state.wave; state.cash += v; state.earned += v; }
+    if (id === "surplus") state.sale = 0.6;
+    rebuild();
+    if (id === "fieldmedic") healGate(state.baseMax * 0.35);
+    return true;
+  }
+
+  function removeCard(id) {
+    const i = state.cards.lastIndexOf(id);
+    if (i < 0) return false;
+    state.cards.splice(i, 1);
+    state.cardSet[id] = Math.max(0, cc(id) - 1);
+    if (!state.cardSet[id]) delete state.cardSet[id];
+    rebuild();
+    return true;
+  }
+
+  function ownedCurse() {
+    for (let i = state.cards.length - 1; i >= 0; i--) if (CARD_BY_ID[state.cards[i]] && CARD_BY_ID[state.cards[i]].curse) return state.cards[i];
+    return "";
+  }
+
+  function randomCurse() {
+    const list = CARDS.filter((c) => c.curse && cardOk(c));
+    return list.length ? list[(Math.random() * list.length) | 0].id : "";
+  }
+
+  function cardTagText(c) {
+    if (c.curse) return "CURSED";
+    return RARITY[c.rarity].name.toUpperCase() + (c.kind ? "  ·  " + HEROES[c.kind].short.toUpperCase() : "");
+  }
+
+  function tagPill(tg) {
+    const t = el("i", "tagPill", TAGS[tg].name);
+    t.style.setProperty("--tc", TAGS[tg].color);
+    return t;
+  }
+
+  function cardChoiceEl(card) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "choice card r-" + card.rarity + (card.curse ? " cursed" : "");
+    b.dataset.card = card.id;
+    b.appendChild(el("em", "rar", cardTagText(card)));
+    const row = el("span", "tagRow");
+    for (const tg of card.tags) row.appendChild(tagPill(tg));
+    const have = cc(card.id);
+    if (card.stack > 1 && !card.instant) row.appendChild(el("i", "stackPill", have ? "x" + have + " → x" + (have + 1) : "STACKS x" + card.stack));
+    for (const tg of card.tags) {
+      const now = (state.tagN && state.tagN[tg]) || 0;
+      if (now + 1 === 3 || now + 1 === 5) row.appendChild(el("i", "setPill", TAGS[tg].name.toUpperCase() + " " + (now + 1) + " SET"));
+    }
+    b.appendChild(row);
+    b.appendChild(el("b", "", card.name));
+    b.appendChild(el("span", "", card.desc));
+    if (card.curse) b.appendChild(el("span", "down", "Downside: " + card.down));
+    return b;
+  }
+
+  // ---------- Relics ----------
+  function relicPool() { return RELICS.filter((r) => !hasRelic(r.id)); }
+  function randomRelic() {
+    const pool = relicPool();
+    return pool.length ? pool[(Math.random() * pool.length) | 0].id : "";
+  }
+
+  function addRelic(id, quiet) {
+    const r = RELIC_BY_ID[id];
+    if (!r || hasRelic(id)) return false;
+    state.relics.push(id);
+    state.relicSet[id] = true;
+    if (id === "sapper" && !(state.ups.mines | 0)) { state.ups.mines = 1; state.mineCd = MINES[1].every; }
+    if (id === "sparebarrel" && !(state.ups.turret | 0)) state.ups.turret = 1;
+    rebuild();
+    if (id === "papers") {
+      const k = ORDER[(Math.random() * ORDER.length) | 0];
+      addUnit(k);
+      layoutHomes();
+      if (!quiet) toast(HEROES[k].name + " joins the squad", 1600);
+    }
+    if (!quiet && state.runLive) callout("RELIC", r.name, r.desc, "relic");
+    return true;
+  }
+
+  function relicBadge(r, tag) {
+    const b = document.createElement(tag || "span");
+    b.className = "relic";
+    b.style.setProperty("--rc", r.color);
+    b.textContent = r.mono;
+    return b;
+  }
+
+  // ---------- Map ----------
+  function mapRow(n) {
+    const m = state.map;
+    if (n <= m.start) return [{ lane: 1, type: "start" }];
+    if (n % 10 === 0 || n === FINALE) return [{ lane: 1, type: "boss" }];
+    const rng = seeded(hashStr("row:" + m.seed + ":" + n));
+    const w = { fight: 40, elite: n >= 6 ? 15 : 0, shop: n >= 2 ? 13 : 0, rest: n >= 4 ? 10 : 0, mystery: n >= 3 ? 15 : 0, treasure: n >= 8 ? 5 : 0 };
+    if (n % 10 === 9) { w.rest += 10; w.shop += 6; }
+    if (n % 10 === 1) w.elite = Math.round(w.elite * 0.4);
+    const row = [];
+    const used = {};
+    for (let lane = 0; lane < 3; lane++) {
+      let total = 0;
+      for (const t in w) if (w[t] > 0 && !used[t]) total += w[t];
+      const fresh = total > 0;
+      if (!fresh) for (const t in w) total += w[t];
+      let x = rng() * total;
+      let type = "fight";
+      for (const t in w) {
+        if (w[t] <= 0 || (fresh && used[t])) continue;
+        type = t;
+        x -= w[t];
+        if (x <= 0) break;
+      }
+      used[type] = 1;
+      row.push({ lane: lane, type: type });
+    }
+    return row;
+  }
+
+  function mapNext(n, lane) {
+    const next = mapRow(n + 1);
+    if (next.length === 1) return [next[0].lane];
+    if (mapRow(n).length === 1) return [0, 1, 2];
+    if (lane === 0) return [0, 1];
+    if (lane === 2) return [1, 2];
+    const r = seeded(hashStr("edge:" + state.map.seed + ":" + n))();
+    return r < 0.45 ? [0, 1, 2] : r < 0.72 ? [0, 1] : [1, 2];
+  }
+
+  function nodeAt(n, lane) {
+    const row = mapRow(n);
+    for (const nd of row) if (nd.lane === lane) return nd;
+    return row[0];
+  }
+
+  function nodeGlyph(type) {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (NODE_GLYPH[type] || NODE_GLYPH.fight) + "</svg>";
+  }
+
+  function nodeBlurb(n, type) {
+    if (type === "boss") {
+      const spec = stageSpec(n);
+      return spec.name + ". " + NODES.boss.desc;
+    }
+    if (type === "rest") return "Heal the gate 35% now (+" + Math.round(state.baseMax * 0.35) + " HP). A shorter, easier wave with no twist.";
+    return NODES[type].desc;
+  }
+
+  const MAP_ROWS = 4;
+  const MAP_ROW_H = 70;
+  function renderMapView(box, cur, curLane, pickable) {
+    const H = MAP_ROWS * MAP_ROW_H;
+    const X = [17, 50, 83];
+    const yOf = (n) => (MAP_ROWS - 1 - (n - cur)) * MAP_ROW_H + MAP_ROW_H / 2;
+    const reach = {};
+    reach[cur + ":" + curLane] = true;
+    for (let n = cur; n < cur + MAP_ROWS - 1; n++) {
+      for (const nd of mapRow(n)) {
+        if (!reach[n + ":" + nd.lane]) continue;
+        for (const l of mapNext(n, nd.lane)) reach[(n + 1) + ":" + l] = true;
+      }
+    }
+    let svg = '<svg class="mapLines" viewBox="0 0 100 ' + H + '" preserveAspectRatio="none" aria-hidden="true">';
+    for (let n = cur; n < cur + MAP_ROWS - 1; n++) {
+      for (const nd of mapRow(n)) {
+        if (n === cur && nd.lane !== curLane) continue;
+        for (const l of mapNext(n, nd.lane)) {
+          const cls = n === cur ? "go" : reach[n + ":" + nd.lane] ? "on" : "off";
+          svg += '<line class="' + cls + '" x1="' + X[nd.lane] + '" y1="' + yOf(n) + '" x2="' + X[l] + '" y2="' + yOf(n + 1) + '" vector-effect="non-scaling-stroke"/>';
+        }
+      }
+    }
+    svg += "</svg>";
+    const grid = el("div", "mapGrid");
+    grid.style.height = H + "px";
+    grid.innerHTML = svg;
+    const nexts = mapNext(cur, curLane);
+    for (let n = cur; n < cur + MAP_ROWS; n++) {
+      const lab = el("span", "mapStage", String(n));
+      lab.style.top = yOf(n) + "px";
+      grid.appendChild(lab);
+      for (const nd of mapRow(n)) {
+        const here = n === cur && nd.lane === curLane;
+        const can = pickable && n === cur + 1 && nexts.indexOf(nd.lane) >= 0;
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "mapNode t-" + nd.type + (here ? " here" : "") + (can ? " pick" : "") + (reach[n + ":" + nd.lane] ? " reach" : "") + (nd.type === "boss" ? " big" : "");
+        b.style.left = X[nd.lane] + "%";
+        b.style.top = yOf(n) + "px";
+        b.style.setProperty("--nc", NODES[nd.type].color);
+        b.innerHTML = nodeGlyph(nd.type) + "<small>" + (here ? "HERE" : nd.type === "boss" && n === FINALE ? "LAST KING" : NODES[nd.type].name.toUpperCase()) + "</small>";
+        b.setAttribute("aria-label", "Stage " + n + ": " + NODES[nd.type].name);
+        b.dataset.lane = String(nd.lane);
+        b.dataset.stage = String(n);
+        b.disabled = !can;
+        if (can) b.addEventListener("click", () => chooseNode(nd.lane));
+        grid.appendChild(b);
+      }
+    }
+    box.appendChild(grid);
+  }
+
+  function setNode(type) {
+    state.node = type || "fight";
+    if (type === "rest") {
+      const got = healGate(state.baseMax * 0.35);
+      if (got > 0) toast("Rest  ·  gate +" + Math.round(got) + " HP", 1600);
+    }
+    if (type === "rest" || type === "treasure") setTwists([]);
+  }
+
+  // ---------- Post-stage steps: card pick, relic, map, mystery, stage intro ----------
+  function beginPost(cleared, opts) {
+    opts = opts || {};
+    const spec = stageSpec(cleared);
+    const node = opts.endlessStart ? "boss" : (state.node || "fight");
+    const boss = spec.boss || !!opts.endlessStart;
+    const p = {
+      cleared: cleared, node: node, steps: [], i: -1, picked: false, offer: [], relicOffer: [], mystery: "",
+      cardMode: boss || node === "elite" ? "rare" : "normal",
+      curse: node === "elite" ? 0.25 : node === "mystery" ? 0.3 : 0.15,
+      relicMode: "",
+    };
+    p.steps.push("cards");
+    if (boss || node === "treasure") p.relicMode = "pick";
+    else if (node === "elite" && Math.random() < 0.4) p.relicMode = "one";
+    if (p.relicMode && relicPool().length) p.steps.push("relic");
+    p.steps.push("map", "intro");
+    state.post = p;
+    hideMenus();
+    forceCloseShop();
+    if (cardOpen) closeCard();
+    state.phase = "brief";
+    bolts.length = 0;
+    lobs.length = 0;
+    patches.length = 0;
+    $("pauseScreen").classList.add("hidden");
+    const ov = $("overlay");
+    ov.dataset.art = (spec.boss || spec.finale) ? "boss" : state.wave >= 51 ? "chapel" : state.wave >= 21 ? "marsh" : "yard";
+    setRandomSplash(ov);
+    ov.classList.add("splash");
+    ov.classList.remove("hidden");
+    nextPostStep();
+  }
+
+  function stepName(p) { return p && p.steps[p.i] ? p.steps[p.i].split(":")[0] : ""; }
+  function stepArg(p) { return p && p.steps[p.i] ? (p.steps[p.i].split(":")[1] || "") : ""; }
+  function stepNeedsPick(p) { const s = stepName(p); return s === "cards" || s === "relic" || s === "map" || s === "mystery"; }
+  function insertStep(name) { const p = state.post; if (p) p.steps.splice(p.i + 1, 0, name); }
+
+  function nextPostStep() {
+    const p = state.post;
+    if (!p) return;
+    clearTimeout(postTimer);
+    p.i++;
+    p.picked = false;
+    p.offer = [];
+    p.relicOffer = [];
+    if (p.i >= p.steps.length) { finishPost(); return; }
+    renderPostStep();
+  }
+
+  function autoAdvance(p) {
+    const at = p.i;
+    clearTimeout(postTimer);
+    postTimer = setTimeout(() => {
+      if (state.post === p && p.i === at && state.phase === "brief") nextPostStep();
+    }, 430);
+  }
+
+  function finishPost() {
+    clearTimeout(postTimer);
+    state.post = null;
+    state.phase = "shop";
+    const ov = $("overlay");
+    ov.classList.add("hidden");
+    delete ov.dataset.step;
+    clearSplashArt();
+    ensureStock();
+  }
+
+  function resetOverlayBits() {
+    $("ovDebut").hidden = true;
+    $("ovDebut").innerHTML = "";
+    $("ovTwist").hidden = true;
+    $("ovTwist").innerHTML = "";
+    $("ovMap").hidden = true;
+    $("ovMap").innerHTML = "";
+    $("ovChoices").innerHTML = "";
+    $("ovSummary").hidden = true;
+    $("ovPerk").hidden = true;
+    $("ovHint").hidden = true;
+    $("ovEndless").hidden = true;
+    $("ovRestart").hidden = false;
+    $("ovBtn").hidden = false;
+    $("ovBtn").disabled = false;
+    $("ovBtn").textContent = "CONTINUE";
+  }
+
+  function renderPostStep() {
+    const p = state.post;
+    resetOverlayBits();
+    const ov = $("overlay");
+    const step = stepName(p);
+    ov.dataset.step = step;
+    if (step === "cards") renderCardStep(p);
+    else if (step === "relic") renderRelicStep(p);
+    else if (step === "map") renderMapStep(p);
+    else if (step === "mystery") renderMysteryStep(p);
+    else renderIntroStep(p);
+    const panel = ov.querySelector(".panel");
+    if (panel) panel.scrollTop = 0;
+  }
+
+  function lockChoices(picked) {
+    const kids = $("ovChoices").querySelectorAll("button");
+    for (const k of kids) k.disabled = k !== picked;
+    if (picked) picked.classList.add("picked");
+    $("ovBtn").disabled = false;
+  }
+
+  function skipCash() { return 10 + Math.round(state.wave * 0.8); }
+
+  function renderCardStep(p) {
+    const mode = stepArg(p) || p.cardMode;
+    const bonus = !!stepArg(p);
+    const spec = stageSpec(p.cleared);
+    const nodeTag = p.node && NODES[p.node] && p.node !== "fight" && p.node !== "start" ? "  ·  " + NODES[p.node].name.toUpperCase() : "";
+    $("ovKicker").textContent = bonus ? "BONUS PICK" : (state.endless && p.cleared === FINALE ? "ENDLESS" : "STAGE " + p.cleared + " CLEARED" + nodeTag);
+    $("ovTitle").textContent = mode === "rare" ? "Pick a rare card" : "Pick a card";
+    $("ovBody").textContent = mode === "rare"
+      ? (spec.boss && !bonus ? "Boss down. Rare or better, and it stays for the run." : "Rare or better. It stays for the run.")
+      : "It stays for the run. Same-tag cards build toward set bonuses at 3 and 5.";
+    p.offer = rollCardOffer(mode, bonus ? 0 : p.curse);
+    state.offer = p.offer;
+    const box = $("ovChoices");
+    for (const card of p.offer) {
+      const b = cardChoiceEl(card);
+      b.addEventListener("click", () => {
+        if (p.picked || stepName(p) !== "cards") return;
+        applyCard(card.id);
+        p.picked = true;
+        lockChoices(b);
+        toast(card.curse ? card.name + "  ·  cursed" : card.name);
+        blip(card.curse ? 210 : 620, 0.09, "triangle", 0.035);
+        autoAdvance(p);
+      });
+      box.appendChild(b);
+    }
+    const cash = skipCash();
+    const s = document.createElement("button");
+    s.type = "button";
+    s.className = "choice skip";
+    s.dataset.skip = "1";
+    s.innerHTML = "<b>SKIP</b><span>Take $" + cash + " instead.</span>";
+    s.addEventListener("click", () => {
+      if (p.picked || stepName(p) !== "cards") return;
+      state.cash += cash;
+      state.earned += cash;
+      state.skips = (state.skips | 0) + 1;
+      p.picked = true;
+      lockChoices(s);
+      toast("Skipped  +$" + cash);
+      blip(420, 0.06, "square", 0.025);
+      autoAdvance(p);
+    });
+    box.appendChild(s);
+    $("ovBtn").disabled = true;
+  }
+
+  function renderRelicStep(p) {
+    const mode = stepArg(p) || p.relicMode || "pick";
+    const pool = relicPool();
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0;
+      const t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+    }
+    p.relicOffer = pool.slice(0, mode === "one" ? 1 : 2).map((r) => r.id);
+    $("ovKicker").textContent = "RELIC";
+    $("ovTitle").textContent = p.relicOffer.length > 1 ? "Pick a relic" : "You found a relic";
+    $("ovBody").textContent = "Relics bend the rules for the rest of this run.";
+    const box = $("ovChoices");
+    for (const id of p.relicOffer) {
+      const r = RELIC_BY_ID[id];
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "choice relicOpt";
+      b.dataset.relic = id;
+      b.style.setProperty("--rc", r.color);
+      b.appendChild(relicBadge(r));
+      const txt = el("span", "relicTxt");
+      txt.appendChild(el("b", "", r.name));
+      txt.appendChild(el("span", "", r.desc));
+      b.appendChild(txt);
+      b.addEventListener("click", () => {
+        if (p.picked || stepName(p) !== "relic") return;
+        addRelic(id);
+        p.picked = true;
+        lockChoices(b);
+        blip(700, 0.1, "triangle", 0.035);
+        autoAdvance(p);
+      });
+      box.appendChild(b);
+    }
+    if (!p.relicOffer.length) { p.picked = true; $("ovBtn").disabled = false; }
+    else $("ovBtn").disabled = true;
+  }
+
+  function renderMapStep(p) {
+    const n = state.wave;
+    const cur = n - 1;
+    const lane = state.map.lane;
+    $("ovKicker").textContent = state.endless ? "ENDLESS  ·  THE ROAD AHEAD" : "THE ROAD AHEAD";
+    $("ovTitle").textContent = "Choose stage " + n;
+    $("ovBody").textContent = "Every stop is the next stage. Bosses wait on every tenth.";
+    const box = $("ovMap");
+    box.hidden = false;
+    renderMapView(box, cur, lane, true);
+    const choices = $("ovChoices");
+    for (const l of mapNext(cur, lane)) {
+      const nd = nodeAt(n, l);
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "choice nodeOpt t-" + nd.type;
+      b.dataset.lane = String(l);
+      b.dataset.node = nd.type;
+      b.style.setProperty("--nc", NODES[nd.type].color);
+      b.innerHTML = '<span class="nGlyph">' + nodeGlyph(nd.type) + "</span>";
+      const txt = el("span", "nTxt");
+      txt.appendChild(el("b", "", NODES[nd.type].name + (l === 0 ? "  ·  left" : l === 2 ? "  ·  right" : nd.type === "boss" ? "" : "  ·  middle")));
+      txt.appendChild(el("span", "", nodeBlurb(n, nd.type)));
+      b.appendChild(txt);
+      b.addEventListener("click", () => chooseNode(l));
+      choices.appendChild(b);
+    }
+    $("ovBtn").disabled = true;
+  }
+
+  function chooseNode(lane) {
+    const p = state.post;
+    if (!p || stepName(p) !== "map" || p.picked) return false;
+    const n = state.wave;
+    if (mapNext(n - 1, state.map.lane).indexOf(lane) < 0) return false;
+    const nd = nodeAt(n, lane);
+    p.picked = true;
+    state.map.lane = lane;
+    setNode(nd.type);
+    if (nd.type === "mystery") insertStep("mystery");
+    let pickedBtn = null;
+    for (const b of $("ovChoices").querySelectorAll("button")) if (b.dataset.lane === String(lane)) pickedBtn = b;
+    lockChoices(pickedBtn);
+    for (const b of $("ovMap").querySelectorAll(".mapNode.pick")) {
+      b.disabled = true;
+      if (b.dataset.lane === String(lane)) b.classList.add("chosen");
+      else b.classList.add("passed");
+    }
+    blip(520, 0.07, "triangle", 0.03);
+    autoAdvance(p);
+    return true;
+  }
+
+  // ---------- Mystery encounters ----------
+  const WALK = { label: () => "Walk away", desc: () => "Nothing happens.", run: () => "You leave it be and move on." };
+  function gambleBet() { return Math.min(150, Math.floor(state.cash / 2 / 5) * 5); }
+  function bleedAmt() { return Math.round(state.baseMax * 0.2); }
+  function merchantPrice() { return 90 + 2 * state.wave; }
+  const MYSTERIES = [
+    {
+      id: "gambler", name: "The Gambler", text: "A man in a church coat shuffles knucklebones on a crate. \"Double or nothing, friend.\"",
+      choices: [
+        {
+          label: () => "Bet $" + gambleBet(), desc: () => "50%: win it back doubled. 50%: lose it.", ok: () => gambleBet() >= 10,
+          run: () => {
+            const bet = gambleBet();
+            if (Math.random() < 0.5) { state.cash += bet; state.earned += bet; return "The bones land your way. +$" + bet + "."; }
+            state.cash -= bet;
+            return "Snake eyes. He pockets your $" + bet + " and tips his hat.";
+          },
+        },
+        WALK,
+      ],
+    },
+    {
+      id: "altar", name: "Blood Altar", text: "A stone slab, still warm. Something under the yard wants a taste of the gate.",
+      choices: [
+        {
+          label: () => "Bleed the gate", desc: () => "Lose " + bleedAmt() + " gate HP now. Pick a rare or better card.", ok: () => state.baseHp > bleedAmt() + 1,
+          run: () => { state.baseHp = Math.max(1, state.baseHp - bleedAmt()); insertStep("cards:rare"); return "The slab drinks. A card rises out of the ash."; },
+        },
+        WALK,
+      ],
+    },
+    {
+      id: "idol", name: "Cursed Idol", text: "A grinning idol sits in a nest of candles. It hums when you get close.",
+      choices: [
+        {
+          label: () => "Take the idol", desc: () => "Gain a random relic, and a random cursed card with it.", ok: () => relicPool().length > 0,
+          run: () => {
+            const r = randomRelic();
+            addRelic(r, true);
+            const cu = randomCurse();
+            if (cu) applyCard(cu);
+            return "You gain " + RELIC_BY_ID[r].name + ". " + (cu ? "The curse comes too: " + CARD_BY_ID[cu].name + " (" + CARD_BY_ID[cu].down + ")" : "Somehow, no curse follows.");
+          },
+        },
+        WALK,
+      ],
+    },
+    {
+      id: "cache", name: "Abandoned Cache", text: "A ranger's lockbox under a tarp. Room for one armful.",
+      choices: [
+        { label: () => "Take the cash", desc: () => "+$" + (40 + 2 * state.wave) + ".", run: () => { const v = 40 + 2 * state.wave; state.cash += v; state.earned += v; return "Folded bills and a few coins. +$" + v + "."; } },
+        { label: () => "Take the medkit", desc: () => "Heal the gate " + Math.round(state.baseMax * 0.3) + " HP.", run: () => { const got = healGate(state.baseMax * 0.3); return "Bandages and a staple gun. Gate +" + Math.round(got) + " HP."; } },
+      ],
+    },
+    {
+      id: "merchant", name: "Wandering Merchant", text: "A woman with a cart of oddities. \"Everything has a price. Mine is fair.\"",
+      choices: [
+        {
+          label: () => "Buy a relic for $" + merchantPrice(), desc: () => "Pick 1 of 2 relics.", ok: () => state.cash >= merchantPrice() && relicPool().length > 0,
+          run: () => { state.cash -= merchantPrice(); insertStep("relic:pick"); return "She folds back the tarp."; },
+        },
+        WALK,
+      ],
+    },
+    {
+      id: "shrine", name: "Old Shrine", text: "A roadside shrine. The candles have burned down to stubs.",
+      choices: [
+        {
+          label: () => "Pray", desc: () => "60%: a free card pick. 40%: the gate takes " + Math.round(state.baseMax * 0.2) + " damage.",
+          run: () => {
+            if (Math.random() < 0.6) { insertStep("cards:normal"); return "A quiet answer. Pick a card."; }
+            state.baseHp = Math.max(1, state.baseHp - Math.round(state.baseMax * 0.2));
+            return "The candles gutter out. The gate shudders.";
+          },
+        },
+        {
+          label: () => "Cleanse a curse", desc: () => { const c = ownedCurse(); return "Pay $60 to lose " + (c ? CARD_BY_ID[c].name : "a cursed card") + "."; },
+          show: () => ownedCurse() !== "", ok: () => state.cash >= 60,
+          run: () => { const c = ownedCurse(); state.cash -= 60; removeCard(c); return CARD_BY_ID[c].name + " burns away."; },
+        },
+        WALK,
+      ],
+    },
+    {
+      id: "deserter", name: "The Deserter", text: "A fighter from another camp, out of food and out of luck. She asks for a bed.",
+      choices: [
+        {
+          label: () => "Take her in", desc: () => "A random heroine joins free. Gate max HP -10 for the run.", ok: () => units.length < squadCap(),
+          run: () => {
+            const k = ORDER[(Math.random() * ORDER.length) | 0];
+            addUnit(k);
+            layoutHomes();
+            state.gateBase = (state.gateBase || BASE_HP0) - 10;
+            applyGateMax();
+            return HEROES[k].name + " joins. The gate gives up a little to make room.";
+          },
+        },
+        WALK,
+      ],
+    },
+  ];
+  const MYSTERY_BY_ID = {};
+  for (const m of MYSTERIES) MYSTERY_BY_ID[m.id] = m;
+
+  function renderMysteryStep(p) {
+    if (!p.mystery) {
+      const pool = MYSTERIES.filter((m) => m.id !== state.lastMystery);
+      p.mystery = pool[(Math.random() * pool.length) | 0].id;
+      state.lastMystery = p.mystery;
+    }
+    const m = MYSTERY_BY_ID[p.mystery];
+    $("ovKicker").textContent = "STAGE " + state.wave + "  ·  MYSTERY";
+    $("ovTitle").textContent = m.name;
+    $("ovBody").textContent = m.text;
+    const box = $("ovChoices");
+    for (const ch of m.choices) {
+      if (ch.show && !ch.show()) continue;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "choice myst";
+      b.appendChild(el("b", "", ch.label()));
+      b.appendChild(el("span", "", ch.desc()));
+      if (ch.ok && !ch.ok()) b.disabled = true;
+      b.addEventListener("click", () => {
+        if (p.picked || stepName(p) !== "mystery") return;
+        const res = ch.run();
+        p.picked = true;
+        lockChoices(b);
+        $("ovPerk").hidden = false;
+        $("ovPerk").textContent = res;
+        blip(480, 0.08, "triangle", 0.03);
+      });
+      box.appendChild(b);
+    }
+    $("ovBtn").disabled = true;
+  }
+
+  function renderIntroStep(p) {
+    const spec = stageSpec(state.wave);
+    const entered = announceRegion(state.wave);
+    const node = state.node;
+    const special = node && NODES[node] && node !== "fight" && node !== "start" && node !== "boss";
+    const kind = spec.finale ? "FINALE" : spec.boss ? "BOSS" : special ? NODES[node].name.toUpperCase() : spec.challenge ? "CHALLENGE" : "NEXT";
+    if (state.endless) $("ovKicker").textContent = "ENDLESS  ·  STAGE " + state.wave + (spec.boss ? "  ·  BOSS" : special ? "  ·  " + NODES[node].name.toUpperCase() : "");
+    else if (entered && state.wave >= 51) $("ovKicker").textContent = "THE CHAPEL  ·  STAGE " + state.wave;
+    else if (entered && state.wave >= 21) $("ovKicker").textContent = "THE MARSH  ·  STAGE " + state.wave;
+    else $("ovKicker").textContent = "STAGE " + state.wave + "  ·  " + kind;
+    $("ovTitle").textContent = spec.name;
+    $("ovBody").textContent = spec.blurb;
+    fillDebuts(debutsOn(state.wave));
+    fillTwist();
+    if (special) {
+      $("ovPerk").hidden = false;
+      $("ovPerk").textContent = NODES[node].name + ": " + nodeBlurb(state.wave, node);
+    }
+    $("ovHint").hidden = false;
+    $("ovHint").textContent = "Continue, gear up, then start the wave. It will not start on its own.";
+    ensureStock();
+  }
+
+  // ---------- Shop stock ----------
+  const stockTiles = [];
+  function stockSlots() {
+    const n = state.wave;
+    const shopNode = state.node === "shop";
+    return {
+      base: 3 + (n >= 30 ? 1 : 0) + (n >= 60 ? 1 : 0) + (shopNode ? 1 : 0),
+      hire: 2 + (n >= 40 ? 1 : 0) + (shopNode ? 1 : 0),
+    };
+  }
+  function hireKinds() { return ORDER.filter((k) => state.wave >= (HEROES[k].unlock || 1)); }
+  function upOpen(id) { return (state.ups[id] | 0) < BASE_UPS[id].max; }
+  function pickWeighted(list, wf) {
+    let total = 0;
+    for (const x of list) total += wf(x);
+    let r = Math.random() * total;
+    for (const x of list) { r -= wf(x); if (r <= 0) return x; }
+    return list[list.length - 1];
+  }
+  function fillStock(items, slots, avoid) {
+    avoid = avoid || {};
+    const has = (kind, id) => items.some((it) => it.kind === kind && it.id === id);
+    let nh = 0, nb = 0;
+    for (const it of items) { if (it.kind === "hire") nh++; else nb++; }
+    const full = units.length >= squadCap();
+    const wantH = full ? 0 : slots.hire;
+    const wantB = slots.base + (full ? 1 : 0);
+    while (nh < wantH) {
+      let pool = hireKinds().filter((k) => !has("hire", k));
+      if (pool.some((k) => !avoid["hire:" + k])) pool = pool.filter((k) => !avoid["hire:" + k]);
+      if (!pool.length) break;
+      const k = pickWeighted(pool, (x) => (units.some((u) => u.kind === x) ? 1 : 2.2));
+      items.push({ kind: "hire", id: k, locked: false, sold: false });
+      nh++;
+    }
+    while (nb < wantB) {
+      let pool = UP_IDS.filter((id) => upOpen(id) && !has("up", id));
+      if (pool.some((id) => !avoid["up:" + id])) pool = pool.filter((id) => !avoid["up:" + id]);
+      if (!pool.length) break;
+      const id = pickWeighted(pool, (x) => (x === "squad" ? (units.length >= squadCap() - 1 ? 2.5 : 0.6) : 1));
+      items.push({ kind: "up", id: id, locked: false, sold: false });
+      nb++;
+    }
+    items.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "hire" ? -1 : 1));
+    return items;
+  }
+
+  function rollStock() {
+    const old = state.stock;
+    const items = [];
+    if (old) {
+      for (const it of old.items) {
+        if (!it.locked || it.sold) continue;
+        if (it.kind === "up" && !upOpen(it.id)) continue;
+        items.push({ kind: it.kind, id: it.id, locked: false, sold: false, kept: true });
+      }
+    }
+    fillStock(items, stockSlots());
+    state.stock = { wave: state.wave, items: items, rerolls: 0, paid: 0, free: B().freeRerolls, disc: state.node === "shop" ? 0.75 : 1 };
+    return state.stock;
+  }
+
+  function ensureStock() {
+    if (!state.stock || state.stock.wave !== state.wave) rollStock();
+    return state.stock;
+  }
+
+  function rerollCost() {
+    const s = ensureStock();
+    return s.free > 0 ? 0 : 15 + 10 * s.paid;
+  }
+
+  function reroll() {
+    if (!canShop()) return false;
+    const s = ensureStock();
+    const cost = rerollCost();
+    if (state.cash < cost) { toast("Need $" + cost + " to reroll"); return false; }
+    state.cash -= cost;
+    if (s.free > 0) s.free--;
+    else s.paid++;
+    s.rerolls++;
+    const avoid = {};
+    const items = [];
+    for (const it of s.items) {
+      if (it.locked && !it.sold) items.push(it);
+      else avoid[it.kind + ":" + it.id] = 1;
+    }
+    s.items = fillStock(items, stockSlots(), avoid);
+    renderStock();
+    toast(cost ? "Rerolled  -$" + cost : "Free reroll", 1000);
+    blip(360, 0.06, "square", 0.025);
+    return true;
+  }
+
+  function toggleLock(slot) {
+    const s = ensureStock();
+    const it = s.items[slot];
+    if (!it || it.sold) return false;
+    it.locked = !it.locked;
+    syncStock();
+    blip(it.locked ? 600 : 420, 0.05, "triangle", 0.025);
+    return true;
+  }
+
+  function offerPrice(it) {
+    const s = ensureStock();
+    const d = s.disc * B().disc;
+    if (it.kind === "hire") return Math.max(1, Math.round(priceOf(it.id) * d));
+    const lv = state.ups[it.id] | 0;
+    const up = BASE_UPS[it.id];
+    return lv >= up.max ? 0 : Math.max(1, Math.round(up.costs[lv] * d));
+  }
+
+  function buyOffer(slot) {
+    if (!canShop()) return false;
+    const s = ensureStock();
+    const it = s.items[slot];
+    if (!it || it.sold) return false;
+    const cost = offerPrice(it);
+    if (it.kind === "hire") {
+      if (units.length >= squadCap()) { toast("Squad is full"); return false; }
+      if (state.cash < cost) { toast("Need $" + cost); return false; }
+      state.cash -= cost;
+      state.sale = 0;
+      const u = addUnit(it.id);
+      layoutHomes();
+      toast(u.named ? HEROES[it.id].name + " joins" : HEROES[it.id].extra + " joins (lower rank)");
+      blip(520, 0.07, "square", 0.03);
+    } else {
+      const up = BASE_UPS[it.id];
+      if (!upOpen(it.id)) { it.sold = true; renderStock(); toast(up.name + " is maxed"); return false; }
+      if (state.cash < cost) { toast("Need $" + cost); return false; }
+      state.cash -= cost;
+      state.ups[it.id] += 1;
+      if (it.id === "mines" && state.ups.mines === 1) state.mineCd = MINES[1].every;
+      toast(up.name + " LV " + state.ups[it.id]);
+      blip(300, 0.08, "square", 0.035);
+    }
+    it.sold = true;
+    it.locked = false;
+    renderStock();
+    return true;
+  }
+
+  const LOCK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path class="shackle" d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+
+  function lockButton(it, i) {
+    const lb = document.createElement("button");
+    lb.type = "button";
+    lb.className = "lockBtn";
+    lb.innerHTML = LOCK_SVG + "<span>LOCK</span>";
+    lb.addEventListener("click", (ev) => { ev.stopPropagation(); toggleLock(i); });
+    return lb;
+  }
+
+  function hireTile(it, i) {
+    const id = it.id;
+    const h = HEROES[id];
+    const tile = el("div", "hire offer");
+    tile.dataset.id = id;
+    tile.dataset.slot = String(i);
+    tile.dataset.frame = frameOf(id);
+    const cardBtn = document.createElement("button");
+    cardBtn.type = "button";
+    cardBtn.className = "hireCard";
+    cardBtn.setAttribute("aria-label", "Open " + h.name + "'s card");
+    const img = document.createElement("img");
+    img.className = "face";
+    img.alt = "";
+    img.draggable = false;
+    img.onerror = () => { img.style.display = "none"; };
+    img.src = "assets/" + id + ".png";
+    cardBtn.appendChild(img);
+    cardBtn.appendChild(el("span", "iBadge", "i"));
+    cardBtn.addEventListener("click", () => { unlock(); openCard(id, "shop"); });
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "hireBuy";
+    b.setAttribute("aria-label", "Hire " + h.name);
+    const metaEl = el("span", "meta");
+    metaEl.appendChild(el("b", "", JOBS[id] || h.short));
+    metaEl.appendChild(el("small", "", h.short));
+    const price = el("em", "price");
+    const own = el("i", "own");
+    metaEl.appendChild(price);
+    metaEl.appendChild(own);
+    b.appendChild(metaEl);
+    b.addEventListener("click", () => buyOffer(i));
+    const lb = lockButton(it, i);
+    tile.appendChild(cardBtn);
+    tile.appendChild(b);
+    tile.appendChild(lb);
+    stockTiles.push({ it: it, i: i, tile: tile, buy: b, price: price, own: own, lock: lb });
+    return tile;
+  }
+
+  function upTile(it, i) {
+    const id = it.id;
+    const up = BASE_UPS[id];
+    const tile = el("div", "up offer");
+    tile.dataset.id = id;
+    tile.dataset.slot = String(i);
+    tile.title = up.blurb;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "upBuy";
+    b.setAttribute("aria-label", "Buy " + up.name);
+    const label = { wall: "Wall", aura: "Aura", turret: "Turret", spikes: "Spikes", mend: "Mend", mines: "Mines", ammo: "Ammo", squad: "Squad" }[id] || up.name;
+    b.innerHTML = '<span class="mark">' + up.mark + '</span><span class="meta"><b>' + label + '</b><em class="lv"></em><i class="fx"></i></span>';
+    b.addEventListener("click", () => buyOffer(i));
+    const lb = lockButton(it, i);
+    tile.appendChild(b);
+    tile.appendChild(lb);
+    stockTiles.push({ it: it, i: i, tile: tile, buy: b, price: b.querySelector(".lv"), own: b.querySelector(".fx"), lock: lb });
+    return tile;
+  }
+
+  function renderStock() {
+    const s = ensureStock();
+    const roster = $("roster");
+    const base = $("baseShop");
+    if (!roster || !base) return;
+    roster.innerHTML = "";
+    base.innerHTML = "";
+    stockTiles.length = 0;
+    s.items.forEach((it, i) => {
+      if (it.kind === "hire") roster.appendChild(hireTile(it, i));
+      else base.appendChild(upTile(it, i));
+    });
+    if (!roster.children.length) roster.appendChild(el("p", "stockEmpty", units.length >= squadCap() ? "Squad is full. A Squad Call upgrade makes room." : "No hires in stock. Reroll for more."));
+    if (!base.children.length) base.appendChild(el("p", "stockEmpty", UP_IDS.some(upOpen) ? "No upgrades in stock. Reroll for more." : "Every base upgrade is maxed."));
+    renderOwned();
+    syncStock();
+  }
+
+  function renderOwned() {
+    const row = $("ownedRow");
+    if (!row) return;
+    row.innerHTML = "";
+    let n = 0;
+    for (const id of UP_IDS) {
+      const lv = state.ups[id] | 0;
+      if (!lv) continue;
+      const up = BASE_UPS[id];
+      const chip = el("span", "ownChip" + (lv >= up.max ? " max" : ""));
+      chip.dataset.id = id;
+      chip.appendChild(el("i", "mark"));
+      chip.appendChild(el("b", "", ({ wall: "Wall", aura: "Aura", turret: "Turret", spikes: "Spikes", mend: "Mend", mines: "Mines", ammo: "Ammo", squad: "Squad" })[id]));
+      chip.appendChild(el("small", "", lv >= up.max ? "MAX" : lv + "/" + up.max));
+      row.appendChild(chip);
+      n++;
+    }
+    if (!n) row.appendChild(el("span", "buildEmpty", "Nothing built yet."));
+  }
+
+  function syncStock() {
+    const s = state.stock;
+    if (!s) return;
+    const locked = !canShop();
+    const full = units.length >= squadCap();
+    for (const t of stockTiles) {
+      const it = t.it;
+      const cost = it.sold ? 0 : offerPrice(it);
+      let txt;
+      if (it.kind === "hire") {
+        txt = it.sold ? "HIRED" : (state.sale ? "SALE $" : "$") + cost;
+        const owned = units.filter((u) => u.kind === it.id);
+        const named = owned.some((u) => u.named);
+        const extras = owned.length - (named ? 1 : 0);
+        let own = "Not hired";
+        if (named && extras) own = "Hero + " + extras + " lower rank";
+        else if (named) own = "Hero on field (next: lower rank)";
+        else if (extras) own = extras + " on field";
+        if (t.own.textContent !== own) t.own.textContent = own;
+        t.own.classList.toggle("has", owned.length > 0);
+        t.tile.classList.toggle("broke", !it.sold && (locked || full || state.cash < cost));
+        t.tile.classList.toggle("due", pendingTier(it.id) >= 0);
+      } else {
+        const lv = state.ups[it.id] | 0;
+        const up = BASE_UPS[it.id];
+        txt = it.sold ? "BOUGHT · LV " + lv : "LV " + lv + " → " + (lv + 1) + " · $" + cost;
+        const fx = it.sold ? upEffect(it.id, lv) : upEffect(it.id, Math.min(up.max, lv + 1));
+        if (t.own.textContent !== fx) t.own.textContent = fx;
+        t.tile.classList.toggle("broke", !it.sold && (locked || state.cash < cost));
+      }
+      if (t.price.textContent !== txt) t.price.textContent = txt;
+      t.tile.classList.toggle("sold", !!it.sold);
+      t.tile.classList.toggle("locked", !!it.locked);
+      t.tile.classList.toggle("kept", !!it.kept && !it.sold);
+      t.lock.hidden = !!it.sold;
+      t.lock.setAttribute("aria-pressed", it.locked ? "true" : "false");
+      t.lock.setAttribute("aria-label", (it.locked ? "Unlock " : "Lock ") + (it.kind === "hire" ? HEROES[it.id].short : BASE_UPS[it.id].name) + " for next stage");
+      const lt = it.locked ? "LOCKED" : "LOCK";
+      const span = t.lock.querySelector("span");
+      if (span.textContent !== lt) span.textContent = lt;
+    }
+    const rb = $("rerollBtn");
+    if (rb) {
+      const cost = rerollCost();
+      const txt = cost ? "REROLL · $" + cost : "REROLL · FREE";
+      if (rb.querySelector("b").textContent !== txt) rb.querySelector("b").textContent = txt;
+      rb.disabled = locked || state.cash < cost;
+    }
+    const info = $("stockInfo");
+    if (info) {
+      const parts = ["Stage " + s.wave];
+      if (s.disc < 1) parts.push("Shop stop · 25% off, extra stock");
+      if (B().disc < 1) parts.push(Math.round((1 - B().disc) * 100) + "% off");
+      const txt = parts.join("  ·  ");
+      if (info.textContent !== txt) info.textContent = txt;
+    }
+  }
+
+  // ---------- BUILD row: sets, relics, synergies, cards ----------
+  function buildDetail(title, body, color) {
+    const d = $("buildDetail");
+    if (!d) return;
+    d.innerHTML = "";
+    const b = el("b", "", title);
+    if (color) b.style.color = color;
+    d.appendChild(b);
+    d.appendChild(el("span", "", body));
+    d.classList.add("on");
+  }
+
+  function renderBuild() {
+    const row = $("buildRow");
+    if (!row) return;
+    row.innerHTML = "";
+    // Tag sets.
+    row.appendChild(el("p", "buildLbl", "SETS  ·  3 and 5 of a tag"));
+    const sets = el("div", "setRow");
+    for (const tg of TAG_IDS) {
+      const t = TAGS[tg];
+      const n = (state.tagN && state.tagN[tg]) || 0;
+      const lv = n >= 5 ? 5 : n >= 3 ? 3 : 0;
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "setChip" + (lv ? " on" : "") + (n ? "" : " none") + (lv >= 5 ? " max" : "");
+      chip.dataset.tag = tg;
+      chip.style.setProperty("--tc", t.color);
+      const pips = el("span", "pips");
+      for (let i = 1; i <= 5; i++) pips.appendChild(el("i", (i <= n ? "f" : "") + (i === 3 || i === 5 ? " mk" : "")));
+      chip.appendChild(el("b", "", t.name));
+      chip.appendChild(el("em", "", String(n)));
+      chip.appendChild(pips);
+      chip.addEventListener("click", () => buildDetail(t.name + "  ·  " + n + (n === 1 ? " card" : " cards"), "3: " + t.t3 + (lv >= 3 ? " (ON)" : "") + "   5: " + t.t5 + (lv >= 5 ? " (ON)" : ""), t.color));
+      sets.appendChild(chip);
+    }
+    row.appendChild(sets);
+    // Relics.
+    row.appendChild(el("p", "buildLbl", "RELICS" + (state.relics.length ? "  ·  " + state.relics.length : "")));
+    const rel = el("div", "relicRow");
+    for (const id of state.relics) {
+      const r = RELIC_BY_ID[id];
+      const b = relicBadge(r, "button");
+      b.type = "button";
+      b.dataset.relic = id;
+      b.setAttribute("aria-label", r.name);
+      b.addEventListener("click", () => buildDetail(r.name, r.desc, r.color));
+      rel.appendChild(b);
+    }
+    if (!state.relics.length) rel.appendChild(el("span", "buildEmpty", "None yet. Bosses, elites and treasure stops drop them."));
+    row.appendChild(rel);
+    // Synergies.
+    const syn = SYNERGIES.filter((sy) => synOn(sy.id));
+    if (syn.length) {
+      row.appendChild(el("p", "buildLbl", "SYNERGIES"));
+      const sr = el("div", "chipRow");
+      for (const sy of syn) {
+        const chip = el("span", "buildChip syn");
+        chip.title = sy.desc;
+        chip.appendChild(el("b", "", sy.name));
+        chip.appendChild(el("small", "", HEROES[sy.a].short + " + " + HEROES[sy.b].short + ". " + sy.desc));
+        sr.appendChild(chip);
+      }
+      row.appendChild(sr);
+    }
+    // Cards, grouped with stack counts.
+    const order = [];
+    const counts = {};
+    for (const id of state.cards) { if (!counts[id]) order.push(id); counts[id] = (counts[id] || 0) + 1; }
+    row.appendChild(el("p", "buildLbl", "CARDS" + (state.cards.length ? "  ·  " + state.cards.length : "")));
+    const cr = el("div", "chipRow cards");
+    const show = buildAll ? order : order.slice(-12);
+    for (const id of show) {
+      const c = CARD_BY_ID[id];
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "cardChip r-" + c.rarity + (c.curse ? " cursed" : "");
+      chip.dataset.card = id;
+      chip.appendChild(el("b", "", c.name));
+      if (counts[id] > 1) chip.appendChild(el("em", "", "x" + counts[id]));
+      for (const tg of c.tags) { const d = el("i", "dot"); d.style.background = TAGS[tg].color; chip.appendChild(d); }
+      chip.addEventListener("click", () => buildDetail(c.name + (counts[id] > 1 ? "  x" + counts[id] : ""), c.desc + (c.curse ? "  Downside: " + c.down : "") + "  Tags: " + (c.tags.map((tg) => TAGS[tg].name).join(", ") || "none") + ".", c.curse ? "#ff6a8a" : ""));
+      cr.appendChild(chip);
+    }
+    if (order.length > show.length) {
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "cardChip more";
+      more.textContent = "+" + (order.length - show.length) + " more";
+      more.addEventListener("click", () => { buildAll = true; renderBuild(); });
+      cr.appendChild(more);
+    }
+    if (!order.length) cr.appendChild(el("span", "buildEmpty", "Clear a stage to pick your first card."));
+    row.appendChild(cr);
+    const det = el("div", "buildDetail");
+    det.id = "buildDetail";
+    det.appendChild(el("span", "", "Tap a set, relic or card for details."));
+    row.appendChild(det);
+  }
+
+  // ---------- Loadouts ----------
+  function loadoutOwned(id) { return id === "default" || !!(meta.loadouts && meta.loadouts[id]); }
+  function activeLoadout() {
+    const lo = LOADOUT_BY_ID[meta.loadout];
+    return lo && loadoutOwned(lo.id) ? lo : LOADOUT_BY_ID.default;
+  }
+
+  function applyLoadout(lo, startN) {
+    let kinds = lo.units.slice();
+    if (lo.gamble) kinds = [ORDER[(Math.random() * ORDER.length) | 0]];
+    for (const k of kinds) addUnit(k);
+    const vet = meta.veteran;
+    if ((startN === 21 || startN === 51) && vet && HEROES[vet] && kinds.indexOf(vet) < 0) addUnit(vet);
+    if (lo.cash) state.cash += lo.cash;
+    if (lo.ups) for (const id in lo.ups) state.ups[id] = Math.max(state.ups[id] | 0, lo.ups[id]);
+    if (lo.cards) for (const id of lo.cards) applyCard(id);
+    if (lo.relics) for (const id of lo.relics) addRelic(id, true);
+    if (lo.gamble) {
+      const cu = randomCurse();
+      if (cu) applyCard(cu);
+      const r = randomRelic();
+      if (r) addRelic(r, true);
+    }
+    layoutHomes();
+    state.loadout = lo.id;
+    return kinds;
+  }
+
+  function loadoutFaces(lo, box) {
+    box.innerHTML = "";
+    for (const k of lo.units) {
+      if (k === "?") { box.appendChild(el("span", "loQ", "?")); continue; }
+      const img = document.createElement("img");
+      img.src = "assets/" + k + ".png";
+      img.alt = "";
+      img.draggable = false;
+      img.className = "loFace";
+      img.style.setProperty("--ac", HEROES[k].accent);
+      box.appendChild(img);
+    }
+  }
+
+  function renderLoadoutBtn() {
+    const lo = activeLoadout();
+    const name = $("loadoutName");
+    if (!name) return;
+    name.textContent = lo.name;
+    loadoutFaces(lo, $("loadoutFaces"));
+  }
+
+  function renderLoadouts() {
+    const box = $("loadoutList");
+    box.innerHTML = "";
+    $("loadoutAsh").textContent = (meta.ash || 0) + " ash";
+    const cur = activeLoadout().id;
+    for (const lo of LOADOUTS) {
+      const owned = loadoutOwned(lo.id);
+      const row = el("div", "loRow" + (owned ? "" : " locked") + (lo.id === cur ? " on" : ""));
+      row.dataset.id = lo.id;
+      const faces = el("span", "loFaces");
+      loadoutFaces(lo, faces);
+      row.appendChild(faces);
+      const txt = el("div", "loTxt");
+      txt.appendChild(el("b", "", lo.name));
+      txt.appendChild(el("span", "", lo.desc));
+      row.appendChild(txt);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "miniBuy loBtn";
+      if (lo.id === cur) { btn.textContent = "SELECTED"; btn.disabled = true; }
+      else if (owned) { btn.textContent = "SELECT"; btn.addEventListener("click", () => selectLoadout(lo.id)); }
+      else {
+        btn.textContent = "UNLOCK · " + lo.cost + " ASH";
+        btn.disabled = (meta.ash || 0) < lo.cost;
+        btn.addEventListener("click", () => unlockLoadout(lo.id));
+      }
+      row.appendChild(btn);
+      box.appendChild(row);
+    }
+  }
+
+  function unlockLoadout(id) {
+    const lo = LOADOUT_BY_ID[id];
+    if (!lo || loadoutOwned(id)) return false;
+    if ((meta.ash || 0) < lo.cost) { toast("Need " + lo.cost + " ash"); return false; }
+    meta.ash -= lo.cost;
+    if (!meta.loadouts) meta.loadouts = { default: 1 };
+    meta.loadouts[id] = 1;
+    meta.loadout = id;
+    saveMeta();
+    toast(lo.name + " unlocked");
+    blip(700, 0.1, "triangle", 0.035);
+    renderLoadouts();
+    renderLoadoutBtn();
+    return true;
+  }
+
+  function selectLoadout(id) {
+    if (!loadoutOwned(id)) return false;
+    meta.loadout = id;
+    saveMeta();
+    renderLoadouts();
+    renderLoadoutBtn();
+    blip(520, 0.06, "triangle", 0.025);
+    return true;
+  }
+
+  function openLoadouts() {
+    hideMenus();
+    renderLoadouts();
+    $("loadoutScreen").classList.remove("hidden");
+  }
+
+  // For tests and the auto bot: resolve the current post-stage step with a choice (index or "skip").
+  function autoPost(pickFn) {
+    const p = state.post;
+    if (!p || state.phase !== "brief") return false;
+    if (stepNeedsPick(p) && !p.picked) {
+      const btns = [...$("ovChoices").querySelectorAll("button")].filter((b) => !b.disabled);
+      if (!btns.length) { p.picked = true; }
+      else {
+        const b = pickFn ? pickFn(btns, stepName(p)) : btns[0];
+        (b || btns[0]).click();
+      }
+    }
+    clearTimeout(postTimer);
+    if (state.post === p && (p.picked || !stepNeedsPick(p))) nextPostStep();
+    return true;
+  }
+
+  function finishBrief(pickFn) {
+    for (let i = 0; i < 20 && state.phase === "brief"; i++) {
+      if (!state.post) { dismissBrief(); break; }
+      autoPost(pickFn);
+    }
+    return state.phase;
+  }
+
 
   // ---------- Drag to move ----------
   function worldFromEvent(ev) {
@@ -7465,6 +8731,9 @@
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushMeta(); });
   $("skillClose").addEventListener("click", () => { $("skillScreen").classList.add("hidden"); });
   $("labClose").addEventListener("click", () => { $("labScreen").classList.add("hidden"); });
+  $("loadoutBtn").addEventListener("click", () => { unlock(); openLoadouts(); });
+  $("loadoutClose").addEventListener("click", () => { $("loadoutScreen").classList.add("hidden"); renderLoadoutBtn(); });
+  $("rerollBtn").addEventListener("click", () => { unlock(); reroll(); });
   document.addEventListener("pointerdown", (ev) => {
     unlock();
     if (state.muted || !state.runLive) return;
@@ -7484,7 +8753,7 @@
     if (ev.target && ev.target.tagName === "BUTTON" && (ev.key === " " || ev.code === "Space")) return;
     if (ev.key === "Escape") {
       if (!$("restartConfirm").classList.contains("hidden")) { cancelRestart(); return; }
-      if (!$("labScreen").classList.contains("hidden") || !$("skillScreen").classList.contains("hidden") || !$("medalScreen").classList.contains("hidden")) { hideMenus(); return; }
+      if (!$("labScreen").classList.contains("hidden") || !$("skillScreen").classList.contains("hidden") || !$("medalScreen").classList.contains("hidden") || !$("loadoutScreen").classList.contains("hidden")) { hideMenus(); return; }
       if (shopOpen) { closeShop(); return; }
       togglePause();
       return;
@@ -7499,13 +8768,8 @@
       startWave();
     }
     else if (state.phase === "fight" && !shopOpen && ev.key >= "1" && ev.key <= "6") fireAbilityButton(ORDER[+ev.key - 1]);
-    else if (ev.key === "1") buy("vera");
-    else if (ev.key === "2") buy("roxie");
-    else if (ev.key === "3") buy("lila");
-    else if (ev.key === "4") buy("nyx");
-    else if (ev.key === "5") buyUp("wall");
-    else if (ev.key === "6") buyUp("aura");
-    else if (ev.key === "7") buyUp("turret");
+    else if (ev.key >= "1" && ev.key <= "9" && canShop() && state.stock) { buyOffer(+ev.key - 1); if (shopOpen) renderStock(); }
+    else if ((ev.key === "x" || ev.key === "X") && canShop()) reroll();
     else if (ev.key === "r" || ev.key === "R") { requestRestart(); }
     else if (ev.key === "m" || ev.key === "M") onMute();
     else if (ev.key === "p" || ev.key === "P") togglePause();
@@ -7515,9 +8779,8 @@
 
   loadSprites();
   refreshMods();
-  buildRoster();
-  buildUps();
   renderRegions();
+  renderLoadoutBtn();
   renderEndlessLine();
   syncSoundLabels();
 

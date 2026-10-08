@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#07080d">
   <title>Last Gate</title>
-  <link rel="stylesheet" href="css/style.css?v=22">
+  <link rel="stylesheet" href="css/style.css?v=23">
 </head>
 <body>
   <div id="app">
@@ -44,12 +44,15 @@
               <p id="mods"></p>
               <p id="twistLine" hidden></p>
             </div>
-            <h3 class="shopSec">BUILD <small>Boss cards and synergies</small></h3>
+            <h3 class="shopSec stockHead">STOCK <small id="stockInfo"></small><button id="rerollBtn" type="button" aria-label="Reroll the stock"><b>REROLL · $15</b></button></h3>
+            <p class="stockNote">New stock every stage. LOCK keeps an offer for the next one.</p>
+            <h4 class="stockSub">HIRE <small id="squadCount">0 / 10</small><small class="hint">Tap a face for her card</small></h4>
+            <div id="roster" aria-label="Heroines for hire"></div>
+            <h4 class="stockSub">BASE <small>Next level</small></h4>
+            <div id="baseShop" aria-label="Base upgrades in stock"></div>
+            <div id="ownedRow" aria-label="Built so far"></div>
+            <h3 class="shopSec">BUILD <small>Sets, relics, cards</small></h3>
             <div id="buildRow"></div>
-            <h3 class="shopSec">HIRE <small id="squadCount">0 / 10</small><small class="hint">Tap a face for her card</small></h3>
-            <div id="roster" aria-label="Hire heroines"></div>
-            <h3 class="shopSec">BASE <small>Passive upgrades</small></h3>
-            <div id="baseShop" aria-label="Passive base upgrades"></div>
             <h3 class="shopSec">TRAIN</h3>
             <div class="shopMore">
               <button id="skillsBtn" type="button"><b>SKILLS</b><small>This run · cash</small></button>
@@ -79,6 +82,7 @@
       <p id="veteranLine" class="veteranLine" hidden></p>
       <p id="endlessLine" class="endlessLine" hidden></p>
       <div id="regionRow" hidden></div>
+      <button id="loadoutBtn" type="button" aria-label="Choose a starting loadout"><span class="loFaces" id="loadoutFaces"></span><span class="loLbl"><small>LOADOUT</small><b id="loadoutName">Default</b></span><span class="loGo" aria-hidden="true">&#x203A;</span></button>
       <button id="play" type="button">PLAY</button>
       <div class="titleRow">
         <button id="titleLab" type="button">LAB</button>
@@ -106,6 +110,16 @@
       <p>Permanent. Ash stays when the run does not.</p>
       <div id="labList"></div>
       <button id="labClose" type="button">CLOSE</button>
+    </div>
+  </div>
+
+  <div id="loadoutScreen" class="hidden">
+    <div class="panel">
+      <p class="kicker">START WITH <span id="loadoutAsh">0 ash</span></p>
+      <h2>Loadout</h2>
+      <p>Who walks out of the gate with you. Unlock with ash. It stays unlocked.</p>
+      <div id="loadoutList"></div>
+      <button id="loadoutClose" type="button">DONE</button>
     </div>
   </div>
 
@@ -178,6 +192,7 @@
       <div id="ovDebut" hidden></div>
       <div id="ovTwist" hidden></div>
       <p id="ovPerk" hidden>Pick one. It stays for the run.</p>
+      <div id="ovMap" hidden></div>
       <div id="ovChoices"></div>
       <div id="ovSummary" hidden></div>
       <p id="ovHint" hidden></p>
@@ -188,6 +203,6 @@
       </div>
     </div>
   </div>
-  <script src="js/game.js?v=22"></script>
+  <script src="js/game.js?v=23"></script>
 </body>
 </html>
