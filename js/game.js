@@ -196,7 +196,7 @@
     // Cards and abilities add power, so the back half gets a little thicker.
     mul *= 1 + Math.max(0, n - 25) * 0.004;
     // Levels, traits, bonds and synergies add power from the mid game on. Thicken a little more.
-    mul *= 1 + Math.max(0, n - 20) * 0.004;
+    mul *= 1 + Math.max(0, n - 20) * 0.011;
     // Endless: every stage past 100 is 3% tougher than the one before.
     if (n > FINALE) mul *= Math.pow(1.03, n - FINALE);
     return mul;
@@ -521,8 +521,8 @@
   const LV_MAX = 10;
   // Total XP needed to reach each level (index = level).
   const LV_XP = [0, 0, 14, 38, 76, 130, 205, 305, 435, 600, 800];
-  const LV_DMG = 0.03;
-  const LV_RATE = 0.012;
+  const LV_DMG = 0.02;
+  const LV_RATE = 0.01;
   const TRAIT_LV = [3, 6, 9];
   const TRAITS = {
     vera: [
@@ -5830,9 +5830,9 @@
     state.cardDue = card;
     state.cardPicked = !card;
     const kind = spec.finale ? "FINALE" : spec.boss ? "BOSS" : spec.challenge ? "CHALLENGE" : "NEXT";
-    if (entered && state.wave >= 51) $("ovKicker").textContent = "THE CHAPEL  ·  STAGE " + state.wave;
+    if (state.endless) $("ovKicker").textContent = "ENDLESS  ·  STAGE " + state.wave + (spec.boss ? "  ·  BOSS" : "");
+    else if (entered && state.wave >= 51) $("ovKicker").textContent = "THE CHAPEL  ·  STAGE " + state.wave;
     else if (entered && state.wave >= 21) $("ovKicker").textContent = "THE MARSH  ·  STAGE " + state.wave;
-    else if (state.endless) $("ovKicker").textContent = "ENDLESS  ·  STAGE " + state.wave + (spec.boss ? "  ·  BOSS" : "");
     else $("ovKicker").textContent = "STAGE " + state.wave + "  ·  " + kind;
     $("ovTitle").textContent = spec.name;
     $("ovBody").textContent = spec.blurb;
@@ -6573,20 +6573,20 @@
     state.comboPop = 0.22;
     if (state.combo > state.comboBest) state.comboBest = state.combo;
     if (state.combo > (meta.bestCombo || 0)) meta.bestCombo = state.combo;
-    if (state.combo === 25) shout("25 STREAK", "#ffd36a");
-    else if (state.combo === 50) { shout("50 STREAK", "#ff9a3c"); earnMedal("combo50"); }
-    else if (state.combo === 100) shout("UNSTOPPABLE", "#ff5d8f");
+    if (state.combo === 25) shout("25 STREAK", "#ffd36a", 1);
+    else if (state.combo === 50) { shout("50 STREAK", "#ff9a3c", 1); earnMedal("combo50"); }
+    else if (state.combo === 100) shout("UNSTOPPABLE", "#ff5d8f", 2);
     if (state.multiT > 0) state.multiN++;
     else state.multiN = 1;
     state.multiT = 0.7;
-    if (state.multiN === 4) shout("MULTI-KILL", "#ffe36a");
-    else if (state.multiN === 9) shout("MASSACRE", "#ff5d6c");
-    else if (state.multiN === 16) shout("ANNIHILATION", "#ff7ad0");
+    if (state.multiN === 4) shout("MULTI-KILL", "#ffe36a", 2);
+    else if (state.multiN === 9) shout("MASSACRE", "#ff5d6c", 3);
+    else if (state.multiN === 16) shout("ANNIHILATION", "#ff7ad0", 4);
     if (state.kills >= 1000) earnMedal("k1000");
     if (e.boss) {
       state.slowmo = 0.4;
       if (!reduceMotion) state.shake = Math.min(1.8, state.shake + 1.1);
-      shout(((BOSS_KINDS[e.bossKind] || BOSS_KINDS.graveking).label) + " DOWN", "#d7c4ff");
+      shout(((BOSS_KINDS[e.bossKind] || BOSS_KINDS.graveking).label) + " DOWN", "#d7c4ff", 9);
     }
   }
 
@@ -6618,15 +6618,19 @@
   }
 
   // In-canvas shout: big word for a moment (MULTI-KILL, MASSACRE, BOSS DOWN).
-  function shout(text, color) {
-    state.shout = { text: text, color: color || "#ffe36a", life: 1.1, max: 1.1 };
+  function shout(text, color, pri) {
+    pri = pri || 1;
+    // A bigger call (boss down, massacre) is not stepped on by a smaller one while it is still fresh.
+    const cur = state.shout;
+    if (cur && cur.life > 0.35 && (cur.pri || 1) > pri) return;
+    state.shout = { text: text, color: color || "#ffe36a", life: 1.1, max: 1.1, pri: pri };
   }
 
   // DOM callout under the toast for medals, synergies, levels, bonds. Queued so none are lost.
   const calloutQ = [];
   let calloutBusy = false;
   function callout(kicker, title, sub, cls) {
-    if (calloutQ.length > 6) calloutQ.shift();
+    if (calloutQ.length > 2) calloutQ.shift(); // keep it snappy: only the latest few wait their turn
     calloutQ.push({ kicker: kicker, title: title, sub: sub, cls: cls || "" });
     if (!calloutBusy) nextCallout();
   }
@@ -6704,7 +6708,7 @@
       const grow = reduceMotion ? 1 : 1 + Math.max(0, k - 0.75) * 1.6;
       ctx.save();
       ctx.globalAlpha = Math.min(1, k * 2.2);
-      ctx.translate(WORLD_W / 2, 24);
+      ctx.translate(WORLD_W / 2, 40);
       ctx.scale(grow, grow);
       ctx.textAlign = "center";
       ctx.font = "700 5.6px Passion One, Impact, sans-serif";
@@ -7197,7 +7201,7 @@
     bar.appendChild(fill);
     bar.style.margin = "5px 0 4px";
     bInfo.appendChild(bar);
-    bInfo.appendChild(el("span", "sub", bond >= 5 ? "Fully bonded." : life.kills + " / " + next + " kills to Bond " + (bond + 1)));
+    bInfo.appendChild(el("span", "sub", bond >= 5 ? "Fully bonded." : life.kills + " / " + next + " kills to Bond " + (bond + 1) + "."));
     bInfo.appendChild(el("span", "sub", "+" + bond * 3 + "% damage, always. Each bond adds +3%."));
     bondRow.appendChild(bInfo);
     inner.appendChild(bondRow);

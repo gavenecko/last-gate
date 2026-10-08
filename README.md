@@ -13,10 +13,10 @@ Then visit `http://localhost:8080`. Or just open `index.html` in a browser.
 1. Tap PLAY. You start with Vera, Roxie, and $100. Hire the others when you can. The first of each name is the hero. Further copies are the same kit at a lower rank. They walk and shoot on their own. Squad cap is 10.
 2. Tap SHOP to hire and upgrade (the run freezes while the menu is open; new hires appear beside the gate). Close it, then press START WAVE in the top bar. Zombies come from all four edges toward the gate. Base HP is on the top of the yard and on the gate itself. If it hits 0, the run ends.
 3. After a stage, a card names the next one, any new enemy, and any twist. Pick a perk when it is offered (every 3 stages), or a reward card after a boss. Continue, spend cash, then start the wave yourself. It does not auto-start.
-4. During a wave, tap a face in the slim strip under the field to fire that heroine's ability. Drag a heroine to move her; double-tap her to let her roam again.
-5. Clear stage 100 to win. Every 10th stage is a boss (four bosses rotate). Stage 100 is the Last King. Pause, mute, and restart sit in the top bar. Restart asks first.
+4. During a wave, tap a face in the slim strip under the field to fire that heroine's ability. Hold it to open her card instead. Drag a heroine to move her; double-tap her to let her roam again; quick-tap her to open her card.
+5. Clear stage 100 to win, then keep going in Endless if you like. Every 10th stage is a boss (four bosses rotate). Stage 100 is the Last King. Pause, mute, and restart sit in the top bar. Restart asks first.
 
-Keyboard: during a wave `1`–`6` fire abilities (Vera, Roxie, Lila, Nyx, Sable, Wren). Between waves `1`–`4` hire and `5` Wall, `6` Aura, `7` Turret. `B` or `U` opens or closes the shop, Space starts the wave, `P` pauses, `Esc` closes the top menu (or pauses), `R` restarts, `M` mutes. With a mouse, drag and double-click work like touch.
+Keyboard: during a wave `1`–`6` fire abilities (Vera, Roxie, Lila, Nyx, Sable, Wren). Between waves `1`–`4` hire and `5` Wall, `6` Aura, `7` Turret. `B` or `U` opens or closes the shop, Space starts the wave, `P` pauses, `Esc` closes the top menu or card (or pauses), `F` flips an open card and the arrow keys browse cards, `R` restarts, `M` mutes. With a mouse, drag and double-click work like touch.
 
 Sound is a drone made in the browser with the Web Audio API. It starts on PLAY, and on the first tap if the title is skipped, unless sound is off. No music files.
 
@@ -139,9 +139,81 @@ Drag a heroine (touch or mouse) and drop her anywhere on the field. A flag marks
 
 Perks show up on the between-stage card after stages 3, 6, 9, and so on. The same perk can be taken again later in a long run. A loss or a win shows stage reached, kills, and cash earned.
 
-Health climbs a little faster after stage 25 to keep late stages hard with the new tools.
+Health climbs a little faster after stage 25 to keep late stages hard with cards and abilities, and again from stage 20 (about +1.1% per stage on top of that) because levels, traits, bonds, and synergies add power.
 
-Only one new thing is saved locally: a flag so the one-time tips are not repeated.
+Saved locally (localStorage): ash and Lab upgrades, tips already seen, and the card collection: each heroine's lifetime kills, runs, best stage and bond, plus medals and the best Endless stage. Nothing leaves the device.
+
+## Heroine cards
+
+Every heroine has a collectible card: her full portrait, a frame, a foil shine that follows your finger, and a back side.
+
+Open a card three ways. Each one pauses the game, just like the shop:
+
+- **Shop:** tap her face (the small `i`) in the HIRE grid. The price button under it still hires, separately.
+- **Ability strip:** hold her ability button for half a second (or right-click it). A quick tap still fires the ability.
+- **Field:** quick-tap a heroine. Dragging still moves her, and double-tap still releases her.
+- Title screen: CARDS opens the deck.
+
+Drag across the card to tilt it (phones with motion sensors also tilt with the phone where the browser allows it; iOS asks for permission, so it falls back to drag). Tap the art or press FLIP to turn it over. The arrows browse the six heroines. Keyboard: `F` flips, left/right browse, `Esc` closes.
+
+**Front:** name, title, role, a short bio, live stats for this run (damage, attacks per second, range, kills), her level and XP bar, her ability and its cooldown, her signature skill rank, the traits she has picked, active synergies, and the reward cards that boost her. **Back:** lifetime kills, runs, best stage, her bond level and progress to the next, the frame ladder, and a quote.
+
+| Heroine | Title |
+| --- | --- |
+| Vera Voss | The Spotter |
+| Roxie Kane | The Wrecking Ball |
+| Lila Marsh | The Torch |
+| Nyx Calder | The Hex Warden |
+| Sable | The Quickdraw |
+| Wren | The Lancer |
+
+## Levels and traits
+
+During a run each heroine levels from 1 to 10 on her own kills. Each level adds +2% damage and +1% attack rate. At LV 3, 6, and 9 she earns a trait: a toast fires, her ability button gets a glowing star, and a pip floats over her on the field. Open her card (the game pauses) and pick one of two. Levels and traits reset every run.
+
+| Heroine | LV 3 | LV 6 | LV 9 |
+| --- | --- | --- | --- |
+| Vera | Headhunter (+40% vs elites, bounties, giants, bosses) or Overwatch (+20% range, clears Fog) | Executioner (double damage under 35% HP) or Rapid Bolt (+25% rate) | Penetrator (+1 pierce) or Kill Confirmed (kills cut Deadeye cooldown 1 s) |
+| Roxie | Slug Rounds (2 fewer targets, +60% damage) or Wide Choke (+2 targets, wider spread) | Point Blank (+50% up close) or Pump Action (+22% rate) | Knockdown (shove and stagger) or Shredder (ignores armor) |
+| Lila | Napalm (patches hotter and longer) or Heat Wave (+35% radius) | Firestarter (direct hits ignite) or Quick Fuse (+25% rate) | Inferno (Fire Wall longer and hotter) or Fireball (every 4th throw: double radius, triple damage) |
+| Nyx | Chronomancer (Time Freeze +1.5 s, 20% faster recharge) or Plaguecaller (pulse rots zombies) | Deep Freeze (longer stuns, deeper slow) or Wide Hex (+35% radius) | Curse of Frailty (hexed zombies take +15% from all) or Soul Siphon (hexed kills cut Time Freeze cooldown) |
+| Sable | Gunslinger (+30% rate) or Trick Shot (+1 ricochet) | Hollow Tips (+25% damage) or Fan the Hammer (+1 bullet per volley) | Dead Eye (+15% crit, 2.5x crits) or Bullet Hell (Bullet Storm longer and harder) |
+| Wren | Vanguard (shove and stagger) or Reaper (kills heal the gate 1) | Long Haft (+30% reach) or Fury (+25% rate) | Impale (+60% vs elites and bosses) or Whirling Death (Whirlwind longer and harder) |
+
+## Bonds and frames
+
+Bonds are saved. Each heroine's lifetime kills raise her bond: 100, 400, 1,200, 3,000, and 7,000 kills reach Bond 1 to 5. Each bond adds +3% damage forever. Higher bonds unlock card frames that also show on her face in the shop: Bronze at Bond 2, Silver at 3, Gold at 4, and animated Holo at 5. Progress is on the back of her card.
+
+## Duo synergies
+
+Hire both heroines of a pair and a synergy turns on. A callout announces it, both cards list it, and the BUILD row in the shop shows it.
+
+| Synergy | Pair | Effect |
+| --- | --- | --- |
+| Pinned | Vera + Nyx | Zombies slowed by Nyx take +20% from Vera. |
+| Scorched Earth | Roxie + Lila | Roxie's pellets set zombies alight briefly. |
+| Crossfire | Sable + Wren | Sable hits 25% harder on zombies within Wren's reach. |
+| Hexfire | Lila + Nyx | Nyx's pulse ignites, and slowed zombies burn 30% hotter. |
+| Sharpshooters | Vera + Sable | Both gain +10% crit chance. |
+| Front Line | Roxie + Wren | Both attack 12% faster and hit gate-biters 20% harder. |
+
+## Medals
+
+17 medals, saved. Each pays ash once and pops a callout. See them from MEDALS on the title screen or in the shop.
+
+Holdout (clear 25), Deep Water (50), The Last Gate (100), Kingslayer, Egg Breaker, Immovable, and Acid Test (beat each boss), Thousand Cuts (1,000 kills in a run), Double Trouble (clear a stage with two twists), Iron Gate (clear a boss stage above 50% gate), Fully Trained (a heroine at LV 10), Collector (5 epic cards across runs), Massacre (50-kill streak), Full House (all six hired), Chemistry (3 synergies at once), Kindred (Bond 3), No End (clear Endless stage 110).
+
+## Endless
+
+Clearing stage 100 wins the run and offers ENDLESS. Stage 101 and on keep going: health rises another 3% per stage on top of the normal climb, and twists stack (one, then two from 105, sometimes three from 120). The best Endless stage is shown on the title screen.
+
+## Combat juice
+
+- A kill streak counter sits at the top left of the field with a timer bar. Keep killing to keep it alive.
+- Big bursts call out MULTI-KILL or MASSACRE.
+- Critical hits pop bigger numbers (only a few at once so the field stays readable).
+- Huge hits shake the screen a little. Reduced-motion settings turn the shake off.
+- Killing a boss slows time for a moment and calls it out.
 
 ## Art
 
