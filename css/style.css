@@ -2180,3 +2180,4 @@ button.relic:active { transform: rotate(-3deg) scale(0.94); }
   font-size: 14px;
   letter-spacing: 0.12em;
 }
+.choice .relic { display: inline-grid; margin: 0; color: var(--rc); font-size: 22px; }

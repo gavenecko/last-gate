@@ -1098,7 +1098,7 @@
     const p = opts.x != null ? { x: opts.x, y: opts.y } : edgePoint();
     let mul = proto.boss ? spec.bossHp : spec.hpMul;
     if (opts.hpMul) mul *= opts.hpMul;
-    mul *= B().enemyHp;
+    mul *= B().enemyHp * rogueHp(state.wave);
     if (state.node === "elite" && !proto.boss) mul *= 1.2;
     const hp = Math.max(1, Math.round(proto.hp * mul));
     const foe = {
@@ -7272,6 +7272,10 @@
     state.bm = b;
     return b;
   }
+
+  // Cards every stage plus relics stack up, so the dead toughen up past the opening stages.
+  const ROGUE_HP = { start: 8, per: 0.036, cap: 5 };
+  function rogueHp(n) { return Math.min(ROGUE_HP.cap, 1 + ROGUE_HP.per * Math.max(0, Math.min(n, 140) - ROGUE_HP.start)); }
 
   function thornDmg() { return B().thorns * (20 + state.wave); }
 
