@@ -181,7 +181,7 @@
   function hpMul(n, isBoss) {
     let mul;
     if (isBoss) {
-      if (n >= FINALE) mul = 3.8;
+      if (n === FINALE) mul = 3.8;
       else mul = 1 + Math.max(0, n - 10) * 0.02;
     } else {
       mul = 1 + Math.max(0, n - 1) * 0.037;
@@ -195,6 +195,10 @@
     if (n >= 30) mul *= 1.18;
     // Cards and abilities add power, so the back half gets a little thicker.
     mul *= 1 + Math.max(0, n - 25) * 0.004;
+    // Levels, traits, bonds and synergies add power from the mid game on. Thicken a little more.
+    mul *= 1 + Math.max(0, n - 20) * 0.004;
+    // Endless: every stage past 100 is 3% tougher than the one before.
+    if (n > FINALE) mul *= Math.pow(1.03, n - FINALE);
     return mul;
   }
 
@@ -390,7 +394,10 @@
   const META_KEY = "last-gate-meta";
 
   function defaultMeta() {
-    return { ash: 0, power: 0, tempo: 0, gate: 0, veteran: "", regions: { yard: true, marsh: false, chapel: false } };
+    return {
+      ash: 0, power: 0, tempo: 0, gate: 0, veteran: "", regions: { yard: true, marsh: false, chapel: false },
+      medals: {}, life: {}, epics: 0, bestEndless: 0, bestCombo: 0,
+    };
   }
 
   function loadMeta() {
@@ -409,6 +416,19 @@
         meta.regions.chapel = !!data.regions.chapel;
       }
       if (typeof data.veteran === "string" && HEROES[data.veteran]) meta.veteran = data.veteran;
+      if (data.medals && typeof data.medals === "object") {
+        for (const id in data.medals) if (data.medals[id]) meta.medals[id] = 1;
+      }
+      if (data.life && typeof data.life === "object") {
+        for (const k of ORDER) {
+          const L = data.life[k];
+          if (!L || typeof L !== "object") continue;
+          meta.life[k] = { kills: Math.max(0, L.kills | 0), runs: Math.max(0, L.runs | 0), best: Math.max(0, L.best | 0) };
+        }
+      }
+      meta.epics = Math.max(0, data.epics | 0);
+      meta.bestEndless = Math.max(0, data.bestEndless | 0);
+      meta.bestCombo = Math.max(0, data.bestCombo | 0);
       return meta;
     } catch (err) {
       return defaultMeta();
@@ -488,6 +508,128 @@
     wren: { name: "Whirlwind", cd: 26, desc: "Wren spins into the nearest crowd, cutting everything." },
   };
 
+
+  // ---------- Heroine cards: lore, levels, traits, bonds, synergies, medals ----------
+  const HERO_LORE = {
+    vera: { title: "The Spotter", bio: "Ex-county marksman who counts her shots and never her sleep. Talks to the wind like it owes her money.", quote: "One breath. One shot. Then coffee." },
+    roxie: { title: "The Wrecking Ball", bio: "Bar bouncer turned yard brawler. Thinks every problem is a door, and every door needs a shotgun.", quote: "Knock knock." },
+    lila: { title: "The Torch", bio: "Chemistry dropout with a gift for things that go whoomp. Keeps a lighter in every pocket, just in case.", quote: "Stand back. Further. No, further." },
+    nyx: { title: "The Hex Warden", bio: "Reads old books nobody else can, and the dead slow down to listen. Calm voice, cold hands.", quote: "Time is a door. I hold the handle." },
+    sable: { title: "The Quickdraw", bio: "Courier who outran three cities' worth of trouble. Two pistols, zero patience, very good aim.", quote: "Count to three. I won't." },
+    wren: { title: "The Lancer", bio: "Ranch hand who held a fence line alone for a week. Keeps her spear sharp and her boots muddy.", quote: "They come to the line. The line holds." },
+  };
+  const LV_MAX = 10;
+  // Total XP needed to reach each level (index = level).
+  const LV_XP = [0, 0, 14, 38, 76, 130, 205, 305, 435, 600, 800];
+  const LV_DMG = 0.03;
+  const LV_RATE = 0.012;
+  const TRAIT_LV = [3, 6, 9];
+  const TRAITS = {
+    vera: [
+      [{ id: "headhunter", name: "Headhunter", desc: "+40% damage to elites, bounties, giants and bosses.", fx: (m) => { m.eliteDmg *= 1.4; } },
+        { id: "overwatch", name: "Overwatch", desc: "+20% range, and her light cuts a wide hole in Fog.", fx: (m) => { m.range *= 1.2; m.fogSight = 30; } }],
+      [{ id: "executioner", name: "Executioner", desc: "Shots on zombies under 35% health deal double.", fx: (m) => { m.execute = true; } },
+        { id: "rapidbolt", name: "Rapid Bolt", desc: "+25% attack rate.", fx: (m) => { m.rate *= 1.25; } }],
+      [{ id: "penetrator", name: "Penetrator", desc: "Every shot punches through one more zombie.", fx: (m) => { m.pierce += 1; } },
+        { id: "killconfirmed", name: "Kill Confirmed", desc: "Each of her kills takes 1s off Deadeye's cooldown.", fx: (m) => { m.cdOnKill = 1; } }],
+    ],
+    roxie: [
+      [{ id: "slug", name: "Slug Rounds", desc: "Hits 2 fewer zombies, but every hit deals +60%.", fx: (m) => { m.cap -= 2; m.dmg *= 1.6; } },
+        { id: "widechoke", name: "Wide Choke", desc: "+2 targets per blast and a 35% wider spread.", fx: (m) => { m.cap += 2; m.aoe *= 1.35; } }],
+      [{ id: "pointblank", name: "Point Blank", desc: "+50% damage to zombies right in her face.", fx: (m) => { m.pointBlank = true; } },
+        { id: "pump", name: "Pump Action", desc: "+22% attack rate.", fx: (m) => { m.rate *= 1.22; } }],
+      [{ id: "knockdown", name: "Knockdown", desc: "Every blast shoves zombies back and staggers them.", fx: (m) => { m.knock = 2.6; m.stagger = 0.25; } },
+        { id: "shredder", name: "Shredder", desc: "Pellets ignore armor and Ironhide plating.", fx: (m) => { m.armorPierce = true; } }],
+    ],
+    lila: [
+      [{ id: "napalm", name: "Napalm", desc: "Fire patches burn 35% hotter and last 50% longer.", fx: (m) => { m.patchDps *= 1.35; m.patchTime *= 1.5; } },
+        { id: "heatwave", name: "Heat Wave", desc: "Bigger blasts: +35% fire radius.", fx: (m) => { m.aoe *= 1.35; } }],
+      [{ id: "firestarter", name: "Firestarter", desc: "Direct hits set zombies on fire.", fx: (m) => { m.ignite = 0.6; } },
+        { id: "quickfuse", name: "Quick Fuse", desc: "+25% throw rate.", fx: (m) => { m.rate *= 1.25; } }],
+      [{ id: "inferno", name: "Inferno", desc: "Fire Wall lasts 50% longer and burns 50% hotter.", fx: (m) => { m.abilPow *= 1.5; m.abilDur *= 1.5; } },
+        { id: "fireball", name: "Fireball", desc: "Every 4th throw is a fireball: double radius, triple damage.", fx: (m) => { m.fireball = true; } }],
+    ],
+    nyx: [
+      [{ id: "chrono", name: "Chronomancer", desc: "Time Freeze lasts 1.5s longer and recharges 20% faster.", fx: (m) => { m.freezePlus = 1.5; m.abilCd *= 0.8; } },
+        { id: "plaguecaller", name: "Plaguecaller", desc: "Her pulse curses zombies. They rot for damage every second.", fx: (m) => { m.rot = true; } }],
+      [{ id: "deepfreeze", name: "Deep Freeze", desc: "Stuns last 60% longer and her slow bites deeper.", fx: (m) => { m.stun *= 1.6; m.slow *= 0.85; } },
+        { id: "widehex", name: "Wide Hex", desc: "+35% pulse radius.", fx: (m) => { m.aoe *= 1.35; } }],
+      [{ id: "frailty", name: "Curse of Frailty", desc: "Zombies she hexes take 15% more damage from everything.", fx: (m) => { m.frailty = true; } },
+        { id: "siphon", name: "Soul Siphon", desc: "Every hexed zombie that dies takes 0.5s off Time Freeze.", fx: (m) => { m.siphon = true; } }],
+    ],
+    sable: [
+      [{ id: "gunslinger", name: "Gunslinger", desc: "+30% fire rate.", fx: (m) => { m.rate *= 1.3; } },
+        { id: "trickshot", name: "Trick Shot", desc: "Bullets ricochet to one more zombie.", fx: (m) => { m.rico += 1; } }],
+      [{ id: "hollowtips", name: "Hollow Tips", desc: "+25% damage.", fx: (m) => { m.dmg *= 1.25; } },
+        { id: "fan", name: "Fan the Hammer", desc: "+1 bullet in every volley.", fx: (m) => { m.volley += 1; } }],
+      [{ id: "deadeye", name: "Dead Eye", desc: "+15% crit chance, and her crits hit 2.5x.", fx: (m) => { m.crit += 0.15; m.critMul = 2.5; } },
+        { id: "bullethell", name: "Bullet Hell", desc: "Bullet Storm lasts 2s longer and hits 30% harder.", fx: (m) => { m.abilDur *= 1.5; m.abilPow *= 1.3; } }],
+    ],
+    wren: [
+      [{ id: "vanguard", name: "Vanguard", desc: "Her cleave shoves zombies back and staggers them. She holds the line.", fx: (m) => { m.knock = 3; m.stagger = 0.35; } },
+        { id: "reaper", name: "Reaper", desc: "Every Wren kill heals the gate 1 HP.", fx: (m) => { m.heal = 1; } }],
+      [{ id: "longhaft", name: "Long Haft", desc: "+30% reach and a wider swing.", fx: (m) => { m.range *= 1.3; m.aoe *= 1.15; } },
+        { id: "fury", name: "Fury", desc: "+25% attack rate.", fx: (m) => { m.rate *= 1.25; } }],
+      [{ id: "impale", name: "Impale", desc: "+60% damage to elites and bosses.", fx: (m) => { m.eliteDmg *= 1.6; } },
+        { id: "whirling", name: "Whirling Death", desc: "Whirlwind lasts 50% longer and hits 40% harder.", fx: (m) => { m.abilDur *= 1.5; m.abilPow *= 1.4; } }],
+    ],
+  };
+  const TRAIT_BY_ID = {};
+  for (const k in TRAITS) for (const tier of TRAITS[k]) for (const t of tier) TRAIT_BY_ID[t.id] = t;
+  const BOND_AT = [0, 100, 400, 1200, 3000, 7000];
+  const FRAMES = ["standard", "standard", "bronze", "silver", "gold", "holo"];
+  const FRAME_INFO = [
+    { id: "bronze", name: "Bronze", bond: 2, color: "#c98a52" },
+    { id: "silver", name: "Silver", bond: 3, color: "#dfe5ef" },
+    { id: "gold", name: "Gold", bond: 4, color: "#ffcf5a" },
+    { id: "holo", name: "Holo", bond: 5, color: "#c49bff" },
+  ];
+  const SYNERGIES = [
+    { id: "pinned", a: "vera", b: "nyx", name: "Pinned", desc: "Zombies slowed by Nyx take +20% from Vera." },
+    { id: "scorched", a: "roxie", b: "lila", name: "Scorched Earth", desc: "Roxie's pellets set zombies alight for a moment." },
+    { id: "crossfire", a: "sable", b: "wren", name: "Crossfire", desc: "Sable's bullets hit 25% harder on zombies within Wren's reach." },
+    { id: "hexfire", a: "lila", b: "nyx", name: "Hexfire", desc: "Nyx's pulse ignites. Slowed zombies burn 30% hotter." },
+    { id: "sharp", a: "vera", b: "sable", name: "Sharpshooters", desc: "Vera and Sable gain +10% crit chance." },
+    { id: "frontline", a: "roxie", b: "wren", name: "Front Line", desc: "Roxie and Wren attack 12% faster and hit gate-biters 20% harder." },
+  ];
+  const MEDALS = [
+    { id: "s25", name: "Holdout", desc: "Clear stage 25.", ash: 15 },
+    { id: "s50", name: "Deep Water", desc: "Clear stage 50.", ash: 30 },
+    { id: "s100", name: "The Last Gate", desc: "Clear stage 100.", ash: 60 },
+    { id: "b_graveking", name: "Kingslayer", desc: "Beat the Graveking.", ash: 10 },
+    { id: "b_brood", name: "Egg Breaker", desc: "Beat the Brood Mother.", ash: 10 },
+    { id: "b_juggernaut", name: "Immovable", desc: "Beat the Juggernaut.", ash: 12 },
+    { id: "b_bile", name: "Acid Test", desc: "Beat the Bile Queen.", ash: 12 },
+    { id: "k1000", name: "Thousand Cuts", desc: "Kill 1,000 zombies in one run.", ash: 15 },
+    { id: "double", name: "Double Trouble", desc: "Clear a stage with two twists at once.", ash: 15 },
+    { id: "iron", name: "Iron Gate", desc: "Clear a boss stage without the gate dropping below 50%.", ash: 15 },
+    { id: "maxlv", name: "Fully Trained", desc: "Raise a heroine to LV 10 in one run.", ash: 15 },
+    { id: "epic5", name: "Collector", desc: "Pick 5 epic reward cards (across runs).", ash: 20 },
+    { id: "combo50", name: "Massacre", desc: "Reach a 50-kill streak.", ash: 10 },
+    { id: "fullsquad", name: "Full House", desc: "Hire all six heroines in one run.", ash: 8 },
+    { id: "syn3", name: "Chemistry", desc: "Have 3 synergies active at once.", ash: 10 },
+    { id: "bond3", name: "Kindred", desc: "Reach Bond 3 with any heroine.", ash: 15 },
+    { id: "endless", name: "No End", desc: "Clear stage 110 in Endless.", ash: 30 },
+  ];
+  const MEDAL_BY_ID = {};
+  for (const m of MEDALS) MEDAL_BY_ID[m.id] = m;
+  const NEUTRAL_MODS = baseMods();
+  const kindMods = {};
+
+  function baseMods() {
+    return {
+      dmg: 1, rate: 1, range: 1, aoe: 1, cap: 0, volley: 0, patchTime: 1, patchDps: 1, stun: 1, slow: 1,
+      crit: 0, critMul: 0, pierce: 0, rico: 0, abilCd: 1, abilPow: 1, abilDur: 1, freezePlus: 0,
+      knock: 0, stagger: 0, armorPierce: false, eliteDmg: 1, execute: false, heal: 0, cdOnKill: 0,
+      fogSight: 0, ignite: 0, pointBlank: false, fireball: false, rot: false, frailty: false, siphon: false,
+    };
+  }
+  function kindMap(v) {
+    const o = {};
+    for (const k of ORDER) o[k] = typeof v === "function" ? v(k) : v;
+    return o;
+  }
+
   const BOSS_KINDS = {
     graveking: { name: "Graveking", label: "GRAVEKING", filter: "none", blurb: "Boss: the Graveking. He raises the dead and hides behind them. Kill the risen to break his shield.", debut: "The Graveking. He raises the dead around him and is shielded while they stand." },
     brood: { name: "Brood Mother", label: "BROOD MOTHER", filter: "hue-rotate(70deg) saturate(1.5) brightness(0.95)", blurb: "Boss: the Brood Mother. She lays eggs that hatch into crawlers. Break them early.", debut: "The Brood Mother. She lays eggs on the way in. Shoot them before they hatch." },
@@ -497,7 +639,7 @@
   };
   const BOSS_CYCLE = ["graveking", "brood", "juggernaut", "bile"];
   function bossKindFor(n) {
-    if (n >= FINALE) return "lastking";
+    if (n === FINALE) return "lastking";
     return BOSS_CYCLE[((Math.max(10, n) / 10 | 0) - 1) % BOSS_CYCLE.length];
   }
   const BOUNTY_NAMES = ["Butcher Hank", "Mother Rot", "Old Sawtooth", "Gravel Jaw", "Sister Ash", "The Deacon", "Big Marrow", "Hollow Tom", "Lady Lye", "Rattlebone"];
@@ -614,6 +756,11 @@
       // Mid-stage events.
       event: null, eventAt: -1, eventKind: "", lastEvent: "", breachT: 0,
       abilMax: {},
+      // Heroine levels, traits and synergies (this run only).
+      xp: kindMap(0), lv: kindMap(1), traits: kindMap(() => ["", "", ""]), runKills: kindMap(0),
+      hired: {}, syn: {}, endless: false, minHpFrac: 1,
+      // Juice.
+      combo: 0, comboT: 0, comboPop: 0, comboBest: 0, multiN: 0, multiT: 0, shout: null, slowmo: 0,
     };
   }
   const state = freshState();
@@ -628,6 +775,7 @@
   let pickedRegion = "yard";
   let toastTimer = 0;
   const rosterButtons = {};
+  const rosterTiles = {};
   const upButtons = {};
   // Shop drawer. While open the simulation is frozen; phase stays "shop"/"fight" so buying works.
   let shopOpen = false;
@@ -683,24 +831,26 @@
     if (state.spreeT > 0) tempRate *= 1.35;
     if (u.slowT > 0) tempRate *= 0.5;
     const tempMove = u.slowT > 0 ? 0.55 : 1;
+    // Level, traits, bond and synergies for her kind.
+    const km = kindMods[u.kind] || NEUTRAL_MODS;
     return {
       kind: h.attack,
       accent: h.accent,
-      dmg: h.dmg * low * state.dmgMult * skillDmg * labDmg * ammoDmg,
-      range: range,
-      rate: h.rate * (u.named ? 1 : 0.9) * state.rateMult * skillRate * labRate * tempRate,
+      dmg: h.dmg * low * state.dmgMult * skillDmg * labDmg * ammoDmg * km.dmg,
+      range: range * km.range,
+      rate: h.rate * (u.named ? 1 : 0.9) * state.rateMult * skillRate * labRate * tempRate * km.rate,
       move: h.move * (u.named ? 1 : 0.92) * state.moveMult * tempMove,
       leash: h.leash,
-      seek: seek,
+      seek: seek * km.range,
       post: h.post,
-      aoe: (h.aoe || 0) * (u.named ? 1 : 0.78),
-      patch: (h.patch || 0) * low * state.dmgMult * skillDmg * labDmg * ammoDmg,
-      patchTime: patchTime,
-      slow: slow,
+      aoe: (h.aoe || 0) * (u.named ? 1 : 0.78) * km.aoe,
+      patch: (h.patch || 0) * low * state.dmgMult * skillDmg * labDmg * ammoDmg * km.dmg * km.patchDps,
+      patchTime: patchTime * km.patchTime,
+      slow: Math.max(0.12, slow * km.slow),
       slowTime: slowTime,
-      stun: stun,
-      cap: cap,
-      volley: volley,
+      stun: stun * km.stun,
+      cap: Math.max(1, cap + km.cap),
+      volley: volley + km.volley,
       cleave: cleave,
     };
   }
@@ -733,9 +883,17 @@
       dazeT: 0, slowT: 0,
       stormT: 0, stormCd: 0,
       whirlT: 0, whirlCd: 0,
-      knockId: 0,
+      knockId: 0, throws: 0,
     };
     units.push(u);
+    if (state.hired && !state.hired[kind]) {
+      state.hired[kind] = true;
+      lifeOf(kind).runs++;
+      let all = true;
+      for (const k of ORDER) if (!state.hired[k]) all = false;
+      if (all) earnMedal("fullsquad");
+    }
+    checkSynergies();
     return u;
   }
 
@@ -858,6 +1016,7 @@
       burnT: 0, burnDps: 0, spreadCd: 0, hexT: 0, hexDps: 0,
       hatchT: proto.egg ? 4.6 : 0,
       lit: true, plagueCd: rand(1.5, 4.5), reached: false,
+      lastBy: "", burnBy: "", hexBy: "", frailT: 0, nyxT: 0,
     };
     if (state.tw.bloodmoon) foe.speed *= 1.25;
     if (opts.small) {
@@ -981,6 +1140,10 @@
     state.rallyT = 0;
     state.spreeT = 0;
     state.streak = 0;
+    state.combo = 0;
+    state.comboT = 0;
+    state.multiN = 0;
+    state.minHpFrac = state.baseMax > 0 ? Math.max(0, state.baseHp) / state.baseMax : 1;
     state.mortarCd = 4;
     state.windUsed = false;
     state.event = null;
@@ -991,7 +1154,7 @@
     bursts.length = 0;
     fxs.length = 0;
     scheduleEvent(spec, lastT);
-    const kind = spec.finale ? "FINALE" : spec.boss ? "BOSS" : spec.challenge ? "CHALLENGE" : "STAGE";
+    const kind = spec.finale ? "FINALE" : state.endless ? (spec.boss ? "ENDLESS BOSS" : "ENDLESS") : spec.boss ? "BOSS" : spec.challenge ? "CHALLENGE" : "STAGE";
     let twistNames = "";
     for (const id of state.twists) twistNames += (twistNames ? " + " : "") + TWISTS[id].name;
     toast(kind + " " + state.wave + " — " + spec.name + (twistNames ? "  ·  " + twistNames : ""));
@@ -1001,24 +1164,61 @@
     showTips();
   }
 
-  function critFloat(e) {
-    if (floaters.length < 22) floaters.push({ x: e.x + rand(-1, 1), y: e.y - e.r * 2.2, text: "CRIT", life: 0.5, color: "#ffe36a" });
+  // Crit numbers pop over the zombie. Capped so a big crowd does not flood the screen.
+  function critFloat(e, dealt) {
+    if (floaters.length >= 26) return;
+    let n = 0;
+    for (const f of floaters) if (f.crit) n++;
+    if (n >= 6) return;
+    floaters.push({ x: e.x + rand(-1.2, 1.2), y: e.y - e.r * 2.2 - 1, text: Math.max(1, Math.round(dealt)) + "!", life: 0.7, color: "#ffe36a", crit: true, big: true });
+  }
+
+  // Who is dealing damage right now (set while a heroine attacks or uses her ability).
+  let curBy = "";
+
+  function nearKind(e, kind, r) {
+    for (const u of units) {
+      if (u.kind !== kind) continue;
+      const dx = u.x - e.x, dy = u.y - e.y;
+      if (dx * dx + dy * dy <= r * r) return true;
+    }
+    return false;
   }
 
   // src: 0 = gate / turret / mines / bursts, 1 = heroine hit (can crit), 2 = damage over time (ignores flat armor).
-  function hurtEnemy(e, raw, src) {
+  // by: the heroine kind that gets the kill credit (falls back to whoever is attacking right now).
+  function hurtEnemy(e, raw, src, by) {
     if (!e || e.dead || state.phase !== "fight") return;
+    const who = (src === 1 || src === 2) ? (by || curBy) : "";
+    if (who) e.lastBy = who;
     let amt = raw;
-    if (src === 1 && state.cardSet.precision && Math.random() < 0.15) {
-      amt *= 2.5;
-      if (Math.random() < 0.35) critFloat(e);
+    let crit = false;
+    let pierceArmor = false;
+    if (src === 1) {
+      const km = (who && kindMods[who]) || NEUTRAL_MODS;
+      if (km.eliteDmg !== 1 && (e.elite || e.boss || e.bounty || e.giant)) amt *= km.eliteDmg;
+      if (km.execute && e.hp < e.max * 0.35) amt *= 2;
+      pierceArmor = km.armorPierce;
+      const cc = (state.cardSet.precision ? 0.15 : 0) + km.crit;
+      if (cc > 0 && Math.random() < cc) {
+        crit = true;
+        amt *= (state.cardSet.precision || km.critMul) ? 2.5 : 2;
+      }
+      const syn = state.syn;
+      if (who === "vera" && syn.pinned && e.slowT > 0) amt *= 1.2;
+      else if (who === "sable" && syn.crossfire && nearKind(e, "wren", 11)) amt *= 1.25;
+      else if ((who === "roxie" || who === "wren") && syn.frontline && distBase(e.x, e.y) <= BASE.r + e.r + 3.2) amt *= 1.2;
     }
-    if (src !== 2 && state.tw.ironhide) amt = Math.max(amt * 0.2, amt - state.ironArmor);
-    let dealt = amt * (1 - (e.armor || 0));
+    if (e.frailT > 0) amt *= 1.15;
+    if (src !== 2 && state.tw.ironhide && !pierceArmor) amt = Math.max(amt * 0.2, amt - state.ironArmor);
+    let dealt = amt * (1 - (pierceArmor ? 0 : (e.armor || 0)));
     if (e.shielded) dealt *= 0.25;
     if (dealt <= 0) return;
     e.hp -= dealt;
     if (src !== 2 || e.flash <= 0) e.flash = src === 2 ? 0.06 : 0.18;
+    if (crit) critFloat(e, dealt);
+    // Big hits shake the screen a little.
+    if (!reduceMotion && src === 1 && (dealt >= 450 || (crit && (e.boss || e.elite)))) state.shake = Math.min(1.1, state.shake + 0.16);
     if (e.hp <= 0) killEnemy(e);
   }
 
@@ -1042,6 +1242,7 @@
     state.cash += reward;
     state.earned += reward;
     state.kills++;
+    creditKill(e);
     if (state.cardSet.triage && state.baseHp > 0) state.baseHp = Math.min(state.baseMax, state.baseHp + 0.5);
     if (state.cardSet.spree) {
       state.streak++;
@@ -1076,6 +1277,7 @@
     const dmg = raw * (1 - WALL_CUT[state.ups.wall]);
     state.baseHp -= dmg;
     state.baseHurt += dmg;
+    if (state.baseMax > 0) state.minHpFrac = Math.min(state.minHpFrac, Math.max(0, state.baseHp) / state.baseMax);
     state.shake = Math.min(1.3, state.shake + (reduceMotion ? 0 : 0.45));
     state.baseFlash = 0.16;
     if (floaters.length < 20) {
@@ -1139,6 +1341,7 @@
   }
 
   function fire(u, target, s) {
+    const km = kindMods[u.kind] || NEUTRAL_MODS;
     u.cooldown = 1 / s.rate;
     u.muzzle = 0.1;
     u.lunge = 1;
@@ -1148,7 +1351,7 @@
     if (s.kind === "snipe") {
       let dmg = s.dmg;
       if (target.max > 0 && target.hp > target.max * 0.5) dmg *= u.named ? 1.35 : 1.15;
-      bolts.push({ x: u.x, y: u.y, ox: u.x, oy: u.y, targetId: target.id, dmg: dmg, color: s.accent, src: 1, pierce: state.cardSet.hollowpoint ? 2 : 0, prev: 0 });
+      bolts.push({ x: u.x, y: u.y, ox: u.x, oy: u.y, targetId: target.id, dmg: dmg, color: s.accent, src: 1, pierce: (state.cardSet.hollowpoint ? 2 : 0) + km.pierce, prev: 0, by: u.kind });
     } else if (s.kind === "blast") {
       const victims = [];
       for (const e of enemies) {
@@ -1162,18 +1365,30 @@
       const capHit = s.cap || 4;
       const n = Math.min(capHit, victims.length);
       const ignite = !!state.cardSet.dragonshells;
+      const scorch = !ignite && !!state.syn.scorched;
       for (let i = 0; i < n; i++) {
-        if (ignite) igniteEnemy(victims[i].e, s.dmg * 0.5, 2.2);
-        hurtEnemy(victims[i].e, s.dmg, 1);
+        const v = victims[i].e;
+        if (ignite) igniteEnemy(v, s.dmg * 0.5, 2.2, u.kind);
+        else if (scorch) igniteEnemy(v, s.dmg * 0.35, 1.2, u.kind);
+        if (km.knock && !v.boss) {
+          knockEnemy(v, u.x, u.y, km.knock);
+          v.stunT = Math.max(v.stunT, km.stagger * (1 - v.slowRes));
+        }
+        let hit = s.dmg;
+        if (km.pointBlank && Math.hypot(v.x - u.x, v.y - u.y) <= 6.5 + v.r * 0.5) hit *= 1.5;
+        hurtEnemy(v, hit, 1);
         flashes.push({ x: victims[i].e.x, y: victims[i].e.y, sx: u.x, sy: u.y, life: 0.1, max: 0.1, color: s.accent });
       }
       if (!n) flashes.push({ x: target.x, y: target.y, sx: u.x, sy: u.y, life: 0.08, max: 0.08, color: s.accent });
     } else if (s.kind === "patch") {
       const dist = Math.hypot(target.x - u.x, target.y - u.y);
+      u.throws = (u.throws || 0) + 1;
+      const big = km.fireball && u.throws % 4 === 0;
       lobs.push({
         x: u.x, y: u.y, sx: u.x, sy: u.y, tx: target.x, ty: target.y,
         t: 0, dur: Math.max(0.18, dist / 28),
-        dmg: s.dmg, aoe: s.aoe, patch: s.patch, patchTime: s.patchTime,
+        dmg: s.dmg * (big ? 3 : 1), aoe: s.aoe * (big ? 2 : 1), patch: s.patch * (big ? 1.5 : 1), patchTime: s.patchTime,
+        by: u.kind, ignite: km.ignite, big: big,
       });
     } else if (s.kind === "pulse") {
       rings.push({
@@ -1186,7 +1401,16 @@
           if (state.cardSet.hexthorns) {
             e.hexDps = Math.max(e.hexDps, s.dmg * 1.4);
             e.hexT = Math.max(e.hexT, s.slowTime);
+            e.hexBy = u.kind;
           }
+          if (km.rot) {
+            e.hexDps = Math.max(e.hexDps, s.dmg * 1.2);
+            e.hexT = Math.max(e.hexT, s.slowTime + 1);
+            e.hexBy = u.kind;
+          }
+          if (km.frailty) e.frailT = Math.max(e.frailT, s.slowTime + 1);
+          e.nyxT = Math.max(e.nyxT, s.slowTime);
+          if (state.syn.hexfire) igniteEnemy(e, s.dmg * 0.6, 1.6, u.kind);
           hurtEnemy(e, s.dmg, 1);
           applySlow(e, s.slow, s.slowTime);
           const stun = s.stun * (1 - e.slowRes);
@@ -1207,7 +1431,7 @@
         const off = spreads[i];
         const bx = u.x + px * off;
         const by = u.y + py * off;
-        bolts.push({ x: bx, y: by, ox: bx, oy: by, targetId: target.id, dmg: s.dmg, color: s.accent, src: 1, pierce: state.cardSet.ricochet ? 1 : 0, prev: 0 });
+        bolts.push({ x: bx, y: by, ox: bx, oy: by, targetId: target.id, dmg: s.dmg, color: s.accent, src: 1, pierce: (state.cardSet.ricochet ? 1 : 0) + km.rico, prev: 0, by: u.kind });
       }
     } else if (s.kind === "cleave") {
       const mult = s.cleave || (u.named ? 1.25 : 1);
@@ -1221,6 +1445,10 @@
           if (state.cardSet.shockhaft && !e.boss) {
             knockEnemy(e, u.x, u.y, 3.2);
             e.stunT = Math.max(e.stunT, 0.3 * (1 - e.slowRes));
+          }
+          if (km.knock && !e.boss) {
+            knockEnemy(e, u.x, u.y, km.knock);
+            e.stunT = Math.max(e.stunT, km.stagger * (1 - e.slowRes));
           }
           hurtEnemy(e, s.dmg * mult, 1);
           flashes.push({ x: e.x, y: e.y, sx: u.x, sy: u.y, life: 0.12, max: 0.12, color: s.accent });
@@ -1237,15 +1465,20 @@
   }
 
   function explodeLob(p) {
-    patches.push({ x: p.tx, y: p.ty, r: p.aoe, dps: p.patch, life: p.patchTime, max: p.patchTime });
+    patches.push({ x: p.tx, y: p.ty, r: p.aoe, dps: p.patch, life: p.patchTime, max: p.patchTime, by: p.by });
     for (const e of enemies) {
       if (e.dead) continue;
       if (Math.hypot(e.x - p.tx, e.y - p.ty) <= p.aoe + e.r * 0.3) {
-        if (state.cardSet.wildfire) igniteEnemy(e, p.patch * 0.6, 2.4);
-        hurtEnemy(e, p.dmg, 1);
+        if (state.cardSet.wildfire) igniteEnemy(e, p.patch * 0.6, 2.4, p.by);
+        if (p.ignite) igniteEnemy(e, p.dmg * p.ignite, 2.5, p.by);
+        hurtEnemy(e, p.dmg, 1, p.by);
       }
     }
-    burst(p.tx, p.ty, "#ff9a3c", 8, 5);
+    burst(p.tx, p.ty, "#ff9a3c", p.big ? 20 : 8, p.big ? 9 : 5);
+    if (p.big) {
+      rings.push({ x: p.tx, y: p.ty, r: 0.8, max: p.aoe, life: 0.35, color: "#ffb15a" });
+      if (!reduceMotion) state.shake = Math.min(1.1, state.shake + 0.2);
+    }
   }
 
   function pickTarget(u, s) {
@@ -1332,6 +1565,7 @@
   function updateUnits(dt) {
     const fighting = state.phase === "fight";
     for (const u of units) {
+      curBy = u.kind;
       const s = statsOf(u);
       u.idle += dt;
       u.step = 0;
@@ -1386,6 +1620,7 @@
       }
       clampUnit(u);
     }
+    curBy = "";
     separateUnits();
     for (const u of units) clampUnit(u);
   }
@@ -1436,14 +1671,19 @@
     for (let i = 0; i < units.length; i++) {
       const u = units[i];
       const dx = e.x - u.x, dy = e.y - u.y;
-      if (dx * dx + dy * dy < 16.5 * 16.5) return true;
+      const r = ((kindMods[u.kind] && kindMods[u.kind].fogSight) || 16.5);
+      if (dx * dx + dy * dy < r * r) return true;
     }
     return false;
   }
 
-  function igniteEnemy(e, dps, time) {
+  function igniteEnemy(e, dps, time, by) {
     if (!e || e.dead || e.egg) return;
-    if (e.burnT <= 0 || dps > e.burnDps) e.burnDps = dps;
+    by = by || curBy;
+    if (e.burnT <= 0 || dps > e.burnDps) {
+      e.burnDps = dps;
+      if (by) e.burnBy = by;
+    }
     e.burnT = Math.max(e.burnT, time);
   }
 
@@ -1463,6 +1703,7 @@
     const frenzy = !!state.tw.frenzy;
     const plague = !!state.tw.plague;
     const wild = !!state.cardSet.wildfire;
+    const hexfire = !!state.syn.hexfire;
     const ev = state.event;
     const surv = ev && ev.kind === "survivor" ? ev : null;
     for (const e of enemies) {
@@ -1474,9 +1715,11 @@
         if (e.slowT <= 0) e.slowFactor = 1;
       }
       e.lit = fog ? isLit(e) : true;
+      if (e.frailT > 0) e.frailT -= dt;
+      if (e.nyxT > 0) e.nyxT -= dt;
       if (e.burnT > 0) {
         e.burnT -= dt;
-        hurtEnemy(e, e.burnDps * dt, 2);
+        hurtEnemy(e, e.burnDps * dt * (hexfire && e.slowT > 0 ? 1.3 : 1), 2, e.burnBy || "lila");
         if (e.dead) continue;
         if (wild) {
           e.spreadCd -= dt;
@@ -1486,7 +1729,7 @@
             for (const o of enemies) {
               if (o === e || o.dead || o.burnT > 0.4) continue;
               if (Math.abs(o.x - e.x) < 5 && Math.abs(o.y - e.y) < 5) {
-                igniteEnemy(o, e.burnDps * 0.85, 2);
+                igniteEnemy(o, e.burnDps * 0.85, 2, e.burnBy);
                 if (++lit >= 2) break;
               }
             }
@@ -1495,7 +1738,7 @@
       }
       if (e.hexT > 0) {
         e.hexT -= dt;
-        hurtEnemy(e, e.hexDps * dt, 2);
+        hurtEnemy(e, e.hexDps * dt, 2, e.hexBy || "nyx");
         if (e.dead) continue;
       }
       if (e.egg) {
@@ -1589,13 +1832,14 @@
 
   function updatePatches(dt) {
     const wild = !!state.cardSet.wildfire;
+    const hexfire = !!state.syn.hexfire;
     for (const p of patches) {
       p.life -= dt;
       for (const e of enemies) {
         if (e.dead) continue;
         if (Math.hypot(e.x - p.x, e.y - p.y) <= p.r + e.r * 0.35) {
-          if (wild && e.burnT < 0.5) igniteEnemy(e, p.dps * 0.5, 2);
-          hurtEnemy(e, p.dps * dt, 2);
+          if (wild && e.burnT < 0.5) igniteEnemy(e, p.dps * 0.5, 2, p.by);
+          hurtEnemy(e, p.dps * dt * (hexfire && e.slowT > 0 ? 1.3 : 1), 2, p.by || "lila");
         }
       }
     }
@@ -1736,9 +1980,9 @@
             const dd = Math.abs(e.x - t.x) + Math.abs(e.y - t.y);
             if (dd < bestD) { bestD = dd; next = e; }
           }
-          if (next) bolts.push({ x: t.x, y: t.y, ox: t.x, oy: t.y, targetId: next.id, dmg: p.dmg * 0.8, color: p.color, src: p.src, pierce: p.pierce - 1, prev: t.id });
+          if (next) bolts.push({ x: t.x, y: t.y, ox: t.x, oy: t.y, targetId: next.id, dmg: p.dmg * 0.8, color: p.color, src: p.src, pierce: p.pierce - 1, prev: t.id, by: p.by });
         }
-        hurtEnemy(t, p.dmg, p.src || 0);
+        hurtEnemy(t, p.dmg, p.src || 0, p.by);
         burst(t.x, t.y, p.color, 3, 3);
       } else {
         p.x += (dx / d) * step;
@@ -2070,8 +2314,8 @@
       const d = distBase(e.x, e.y);
       if (Math.abs(d - w.r) <= w.w + e.r * 0.4 || d < w.r - w.w) {
         const k = d < w.r - w.w ? 0.35 : 1;
-        hurtEnemy(e, w.dps * k * dt, 2);
-        igniteEnemy(e, w.burn, 1.5);
+        hurtEnemy(e, w.dps * k * dt, 2, "lila");
+        igniteEnemy(e, w.burn, 1.5, "lila");
         applySlow(e, 0.6, 0.3);
       }
     }
@@ -2269,6 +2513,7 @@
     let cd = ABILITIES[kind].cd;
     if (state.cardSet.quickhands) cd *= 0.75;
     if (((state.skills && state.skills[kind]) | 0) >= 3) cd *= 0.88;
+    cd *= (kindMods[kind] || NEUTRAL_MODS).abilCd;
     return cd;
   }
 
@@ -2279,16 +2524,24 @@
   }
 
   function useAbility(kind) {
+    curBy = kind;
+    const ok = runAbility(kind);
+    curBy = "";
+    return ok;
+  }
+
+  function runAbility(kind) {
     if (!ABILITIES[kind]) return false;
-    if (state.phase !== "fight" || shopOpen) return false;
+    if (state.phase !== "fight" || shopOpen || cardOpen) return false;
     if (state.abil[kind] > 0) return false;
     const list = unitsOf(kind);
     if (!list.length) return false;
     let lead = list[0];
     for (const u of list) if (u.named) lead = u;
     const ls = statsOf(lead);
-    const oc = state.cardSet.overcharge ? 1.5 : 1;
-    const dur = state.cardSet.overcharge ? 1.25 : 1;
+    const km = kindMods[kind] || NEUTRAL_MODS;
+    const oc = (state.cardSet.overcharge ? 1.5 : 1) * km.abilPow;
+    const dur = (state.cardSet.overcharge ? 1.25 : 1) * km.abilDur;
     if (kind === "vera") {
       const alive = [];
       for (const e of enemies) if (!e.dead) alive.push(e);
@@ -2319,7 +2572,7 @@
       state.fireWall = { t: 7 * dur, max: 7 * dur, r: 20, w: 3.4, dps: (ls.dmg * 5 + 8) * oc * extra, burn: ls.dmg * 0.8 * oc };
       burst(BASE.x, BASE.y, "#ff9a3c", 18, 12);
     } else if (kind === "nyx") {
-      freezeAll(3.2 * dur);
+      freezeAll(3.2 * dur + km.freezePlus);
       fxs.push({ kind: "freeze", x: lead.x, y: lead.y - 6, r: 1, max: 70, life: 0.7, total: 0.7 });
     } else if (kind === "sable") {
       for (const u of list) {
@@ -2361,7 +2614,7 @@
       if (!t) break;
       u.facing = Math.atan2(t.y - u.y, t.x - u.x);
       u.muzzle = 0.06;
-      bolts.push({ x: u.x, y: u.y - 6, ox: u.x, oy: u.y - 6, targetId: t.id, dmg: u.stormDmg || s.dmg, color: "#9fd8ff", src: 1, pierce: state.cardSet.ricochet ? 1 : 0, prev: 0 });
+      bolts.push({ x: u.x, y: u.y - 6, ox: u.x, oy: u.y - 6, targetId: t.id, dmg: u.stormDmg || s.dmg, color: "#9fd8ff", src: 1, pierce: state.cardSet.ricochet ? 1 : 0, prev: 0, by: u.kind });
       playShot("volley");
     }
     if (u.stormCd < -1) u.stormCd = 0;
@@ -2410,7 +2663,7 @@
         f.t -= dt;
         if (f.t <= 0) {
           if (e && state.phase === "fight") {
-            hurtEnemy(e, f.dmg, 1);
+            hurtEnemy(e, f.dmg, 1, "vera");
             burst(f.x, f.y - 4, "#ffe9a0", 10, 8);
             state.shake = Math.min(1.5, state.shake + 0.25);
             playShot("snipe");
@@ -2448,6 +2701,7 @@
 
   // ---------- Twists and cards ----------
   function rollTwists(n) {
+    if (n > FINALE) return rollEndlessTwists(n);
     const spec = stageSpec(n);
     if (n < 5 || spec.finale || (spec.boss && n < 60)) { state.twistSince++; return []; }
     let chance = n < 30 ? 0.34 : n < 60 ? 0.46 : 0.58;
@@ -2504,6 +2758,11 @@
     if (!c || state.cardSet[id]) return false;
     state.cards.push(id);
     state.cardSet[id] = true;
+    if (c.rarity === "epic") {
+      meta.epics = (meta.epics || 0) + 1;
+      saveMeta();
+      if (meta.epics >= 5) earnMedal("epic5");
+    }
     if (id === "chainmines" && !(state.ups.mines | 0)) { state.ups.mines = 1; state.mineCd = MINES[1].every; }
     if (id === "twinbarrel" && !(state.ups.turret | 0)) state.ups.turret = 1;
     renderBuild();
@@ -2555,10 +2814,23 @@
     const row = $("buildRow");
     if (!row) return;
     row.innerHTML = "";
+    for (const sy of SYNERGIES) {
+      if (!synOn(sy.id)) continue;
+      const chip = document.createElement("span");
+      chip.className = "buildChip syn";
+      chip.title = sy.desc;
+      const b = document.createElement("b");
+      b.textContent = sy.name;
+      const sm = document.createElement("small");
+      sm.textContent = HEROES[sy.a].short + " + " + HEROES[sy.b].short + ". " + sy.desc;
+      chip.appendChild(b);
+      chip.appendChild(sm);
+      row.appendChild(chip);
+    }
     if (!state.cards.length) {
       const p = document.createElement("span");
       p.className = "buildEmpty";
-      p.textContent = "Beat a boss to pick your first card.";
+      p.textContent = row.children.length ? "Beat a boss to pick your first card." : "Beat a boss to pick your first card. Hire the right pairs for synergies.";
       row.appendChild(p);
       return;
     }
@@ -2614,6 +2886,9 @@
     } else if (!tips.drag && state.wave >= 2) {
       tips.drag = 1;
       setTimeout(() => toast("Drag a heroine to move her. Double-tap her to let her roam", 3400), 2600);
+    } else if (!tips.card && state.wave >= 3) {
+      tips.card = 1;
+      setTimeout(() => toast("Tap a heroine, or hold her ability, to open her card", 3400), 2600);
     } else return;
     try { localStorage.setItem(TIPS_KEY, JSON.stringify(tips)); } catch (err) { /* fine */ }
   }
@@ -2666,7 +2941,16 @@
     if (cleared >= 20) meta.regions.marsh = true;
     if (cleared >= 50) meta.regions.chapel = true;
     if (cleared === 20 || cleared === 50 || cleared === FINALE) meta.veteran = pickVeteranKind();
+    for (const k of ORDER) if (state.hired[k]) { const L = lifeOf(k); if (cleared > L.best) L.best = cleared; }
+    if (state.endless && cleared > (meta.bestEndless || 0)) meta.bestEndless = cleared;
     saveMeta();
+    if (cleared >= 25) earnMedal("s25");
+    if (cleared >= 50) earnMedal("s50");
+    if (cleared >= FINALE) earnMedal("s100");
+    if (specCleared.boss && !specCleared.finale) earnMedal("b_" + bossKindFor(cleared));
+    if (state.twists.length >= 2) earnMedal("double");
+    if (specCleared.boss && state.minHpFrac >= 0.5) earnMedal("iron");
+    if (state.endless && cleared >= 110) earnMedal("endless");
     state.log.push("w" + cleared + " hp" + Math.round(state.baseHp) + " $" + state.cash + " u" + units.length);
     let twBonus = 0, twAsh = 0;
     for (const id of state.twists) { twBonus += TWISTS[id].bonus; twAsh += TWISTS[id].ash; }
@@ -2689,7 +2973,7 @@
     if (interest > 0) msg += "  interest +$" + interest;
     toast(msg);
     blip(240, 0.08, "sine", 0.03);
-    if (cleared >= FINALE) { win(); return; }
+    if (cleared >= FINALE && !state.endless) { win(); return; }
     state.wave = cleared + 1;
     setTwists(rollTwists(state.wave));
     openBrief(cleared % 3 === 0, specCleared.boss);
@@ -2735,7 +3019,7 @@
 
   function update(dt) {
     if (state.phase === "paused" || state.phase === "title") return;
-    if (shopOpen) { musicTick(dt); return; }
+    if (shopOpen || cardOpen) { musicTick(dt); return; }
     state.time += dt;
     state.shake = Math.max(0, state.shake - dt * 1.8);
     state.baseFlash = Math.max(0, state.baseFlash - dt);
@@ -2743,6 +3027,7 @@
       state.banner.life -= dt;
       if (state.banner.life <= 0) state.banner = null;
     }
+    updateJuice(dt);
     if (state.phase === "fight") {
       state.fightT += dt;
       while (state.spawnQ.length && state.spawnQ[0].t <= state.fightT && state.phase === "fight") {
@@ -4625,6 +4910,24 @@
     }
   }
 
+  // A small glowing star over a heroine who has a trait to pick.
+  function drawDuePip(u) {
+    const h = heroHeight(u);
+    const x = u.x - h * 0.16, y = u.y - h - 0.6 + (reduceMotion ? 0 : Math.sin(state.time * 4) * 0.3);
+    ctx.globalAlpha = 0.5;
+    ctx.drawImage(glowSprite, x - 2, y - 2, 4, 4);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#ffe36a";
+    ctx.beginPath();
+    for (let k = 0; k < 5; k++) {
+      const b = k * 1.2566 - Math.PI / 2;
+      ctx.lineTo(x + Math.cos(b) * 0.9, y + Math.sin(b) * 0.9);
+      ctx.lineTo(x + Math.cos(b + 0.628) * 0.38, y + Math.sin(b + 0.628) * 0.38);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
   function drawAbilityFx() {
     for (const f of fxs) {
       if (f.kind === "mark") {
@@ -4837,6 +5140,7 @@
     for (const u of units) {
       drawUnit(u);
       drawUnitStatus(u);
+      if (u.named && pendingTier(u.kind) >= 0) drawDuePip(u);
     }
     drawSurvivor();
     for (const d of drops) if (d.fall > 0) drawDrop(d);
@@ -4852,10 +5156,20 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     for (const f of floaters) {
-      ctx.globalAlpha = Math.max(0, f.life / 0.7);
+      ctx.globalAlpha = Math.max(0, Math.min(1, f.life / 0.7));
       ctx.fillStyle = f.color;
-      ctx.font = "700 1.85px sans-serif";
-      ctx.fillText(f.text, f.x, f.y);
+      if (f.big) {
+        // Crit numbers and level ups pop in, then settle.
+        const pop = reduceMotion ? 1 : 1 + Math.max(0, f.life - 0.5) * 1.2;
+        ctx.font = "700 " + (2.7 * pop).toFixed(2) + "px Passion One, Impact, sans-serif";
+        ctx.lineWidth = 0.35;
+        ctx.strokeStyle = "rgba(0,0,0,0.7)";
+        ctx.strokeText(f.text, f.x, f.y);
+        ctx.fillText(f.text, f.x, f.y);
+      } else {
+        ctx.font = "700 1.85px sans-serif";
+        ctx.fillText(f.text, f.x, f.y);
+      }
     }
     ctx.globalAlpha = 1;
     if (state.tw.bloodmoon && (state.phase === "fight" || state.phase === "paused")) {
@@ -4884,6 +5198,7 @@
     ctx.textBaseline = "middle";
     drawThreatBar();
     drawBossBar();
+    drawJuice();
     if (state.banner && state.banner.life > 0) {
       ctx.globalAlpha = Math.min(1, state.banner.life * 2);
       ctx.fillStyle = "#f7f3ea";
@@ -4944,7 +5259,8 @@
     $("cash").textContent = String(state.cash);
     $("ash").textContent = String(meta.ash || 0);
     $("waveNum").textContent = String(state.wave);
-    $("waveOf").textContent = "/ " + FINALE;
+    const of = state.endless ? "ENDLESS" : "/ " + FINALE;
+    if ($("waveOf").textContent !== of) $("waveOf").textContent = of;
     const frac = state.baseMax > 0 ? Math.max(0, state.baseHp / state.baseMax) : 0;
     $("hpFill").style.transform = "scaleX(" + frac + ")";
     $("hpPill").classList.toggle("low", frac < 0.3);
@@ -4973,11 +5289,15 @@
     const locked = state.phase === "won" || state.phase === "lost" || state.phase === "brief" || state.phase === "paused" || state.phase === "title" || state.phase === "pick";
     for (const id of ORDER) {
       const btn = rosterButtons[id];
+      const tile = rosterTiles[id];
       const cost = priceOf(id);
       const need = HEROES[id].unlock || 1;
       const gated = state.wave < need;
       btn.disabled = gated;
-      btn.classList.toggle("locked", gated);
+      tile.classList.toggle("locked", gated);
+      tile.classList.toggle("due", pendingTier(id) >= 0);
+      const fr = frameOf(id);
+      if (tile.dataset.frame !== fr) tile.dataset.frame = fr;
       btn.querySelector(".price").textContent = gated ? "Stage " + need : (state.sale ? "SALE $" + cost : "$" + cost);
       const owned = units.filter((u) => u.kind === id);
       const named = owned.some((u) => u.named);
@@ -4989,7 +5309,7 @@
       const ownEl = btn.querySelector(".own");
       ownEl.textContent = own;
       ownEl.classList.toggle("has", owned.length > 0);
-      btn.classList.toggle("broke", !gated && (locked || units.length >= squadCap() || state.cash < cost));
+      tile.classList.toggle("broke", !gated && (locked || units.length >= squadCap() || state.cash < cost));
     }
     announceHires();
     for (const id of UP_IDS) {
@@ -5011,6 +5331,8 @@
     const sb = $("shopBtn");
     sb.disabled = !state.runLive || !(state.phase === "shop" || state.phase === "fight" || state.phase === "paused");
     if (shopOpen) {
+      const mc = medalCount() + " / " + MEDALS.length;
+      if ($("medalsCount").textContent !== mc) $("medalsCount").textContent = mc;
       $("shopCash").textContent = String(state.cash);
       $("shopAsh").textContent = String(meta.ash || 0);
       $("squadCount").textContent = "Squad " + units.length + " / " + squadCap();
@@ -5498,6 +5820,7 @@
     const crate = !perk && !card && !spec.boss && !spec.finale && Math.random() < 0.4;
     hideMenus();
     forceCloseShop();
+    if (cardOpen) closeCard();
     state.phase = "brief";
     state.perkDue = perk;
     state.perkPicked = !perk;
@@ -5509,6 +5832,7 @@
     const kind = spec.finale ? "FINALE" : spec.boss ? "BOSS" : spec.challenge ? "CHALLENGE" : "NEXT";
     if (entered && state.wave >= 51) $("ovKicker").textContent = "THE CHAPEL  ·  STAGE " + state.wave;
     else if (entered && state.wave >= 21) $("ovKicker").textContent = "THE MARSH  ·  STAGE " + state.wave;
+    else if (state.endless) $("ovKicker").textContent = "ENDLESS  ·  STAGE " + state.wave + (spec.boss ? "  ·  BOSS" : "");
     else $("ovKicker").textContent = "STAGE " + state.wave + "  ·  " + kind;
     $("ovTitle").textContent = spec.name;
     $("ovBody").textContent = spec.blurb;
@@ -5528,6 +5852,7 @@
     $("ovBtn").hidden = false;
     $("ovBtn").disabled = perk || crate || (card && !state.cardPicked);
     $("ovBtn").textContent = "CONTINUE";
+    $("ovEndless").hidden = true;
     $("ovRestart").hidden = false;
     bolts.length = 0;
     lobs.length = 0;
@@ -5565,8 +5890,8 @@
     $("ovKicker").textContent = kind === "won" ? "CLEARED" : "BREACHED";
     $("ovTitle").textContent = kind === "won" ? "The gate holds" : "Gate breached";
     $("ovBody").textContent = kind === "won"
-      ? "One hundred stages. The Graveking is down. The center is still yours."
-      : "The center fell on stage " + state.wave + ", " + stageSpec(state.wave).name + ". +" + (state.lossAsh || 0) + " ash";
+      ? "One hundred stages. The Last King is down. The center is still yours. Go Endless to see how far past 100 you can hold."
+      : (state.endless ? "Endless ends on stage " + state.wave + ". Best: " + (meta.bestEndless || state.wave - 1) + ". +" : "The center fell on stage " + state.wave + ", " + stageSpec(state.wave).name + ". +") + (state.lossAsh || 0) + " ash";
     $("ovDebut").hidden = true;
     $("ovDebut").innerHTML = "";
     $("ovTwist").hidden = true;
@@ -5578,6 +5903,7 @@
     $("ovBtn").hidden = false;
     $("ovBtn").disabled = false;
     $("ovBtn").textContent = "PLAY AGAIN";
+    $("ovEndless").hidden = kind !== "won";
     $("ovRestart").hidden = true;
     $("pauseScreen").classList.add("hidden");
     const ov = $("overlay");
@@ -5589,6 +5915,7 @@
 
   function win() {
     if (state.phase === "won" || state.phase === "lost") return;
+    if (cardOpen) closeCard();
     state.phase = "won";
     showEnd("won");
   }
@@ -5598,6 +5925,7 @@
     const ashGain = Math.max(4, Math.floor(state.wave * 0.5));
     meta.ash = (meta.ash || 0) + ashGain;
     saveMeta();
+    if (cardOpen) closeCard();
     state.lossAsh = ashGain;
     state.phase = "lost";
     state.baseHp = 0;
@@ -5629,6 +5957,7 @@
     next.runLive = live;
     Object.assign(state, next);
     applyMetaStats();
+    refreshMods();
     addUnit("vera");
     addUnit("roxie");
     layoutHomes();
@@ -5661,6 +5990,7 @@
   function hideMenus() {
     $("skillScreen").classList.add("hidden");
     $("labScreen").classList.add("hidden");
+    $("medalScreen").classList.add("hidden");
   }
 
   function requestRestart() {
@@ -5688,6 +6018,7 @@
     if (which === "marsh" && meta.regions.marsh) safe = "marsh";
     if (which === "chapel" && meta.regions.chapel) safe = "chapel";
     pickedRegion = safe;
+    if (cardOpen) closeCard();
     resetRun();
     const startN = safe === "chapel" ? 51 : safe === "marsh" ? 21 : 1;
     state.wave = startN;
@@ -5724,6 +6055,7 @@
     $("pauseScreen").classList.add("hidden");
     $("titleScreen").classList.remove("hidden");
     renderRegions();
+    renderEndlessLine();
   }
 
   function enterPause() {
@@ -5818,10 +6150,21 @@
     root.innerHTML = "";
     for (const id of ORDER) {
       const h = HEROES[id];
+      // Tile: face opens her card, the rest of the tile hires.
+      const tile = document.createElement("div");
+      tile.className = "hire";
+      tile.dataset.id = id;
+      const cardBtn = document.createElement("button");
+      cardBtn.type = "button";
+      cardBtn.className = "hireCard";
+      cardBtn.setAttribute("aria-label", "Open " + h.name + "'s card");
+      const badge = document.createElement("span");
+      badge.className = "iBadge";
+      badge.textContent = "i";
       const b = document.createElement("button");
       b.type = "button";
-      b.className = "hire";
-      b.dataset.id = id;
+      b.className = "hireBuy";
+      b.setAttribute("aria-label", "Hire " + h.name);
       const img = document.createElement("img");
       img.className = "face";
       img.alt = "";
@@ -5842,11 +6185,16 @@
       metaEl.appendChild(small);
       metaEl.appendChild(price);
       metaEl.appendChild(own);
-      b.appendChild(img);
+      cardBtn.appendChild(img);
+      cardBtn.appendChild(badge);
+      cardBtn.addEventListener("click", () => { unlock(); openCard(id, "shop"); });
       b.appendChild(metaEl);
       b.addEventListener("click", () => buy(id));
-      root.appendChild(b);
+      tile.appendChild(cardBtn);
+      tile.appendChild(b);
+      root.appendChild(tile);
       rosterButtons[id] = b;
+      rosterTiles[id] = tile;
     }
   }
 
@@ -5909,6 +6257,14 @@
     }
     el.hidden = false;
     el.textContent = "Veteran: " + hero.name;
+  }
+
+  function renderEndlessLine() {
+    const el = $("endlessLine");
+    if (!el) return;
+    const best = meta.bestEndless || 0;
+    el.hidden = best <= 0;
+    el.textContent = best > 0 ? "Best Endless: stage " + best : "";
   }
 
   function renderSkills() {
@@ -6072,6 +6428,329 @@
     $("labScreen").classList.remove("hidden");
   }
 
+
+  // ---------- Levels, traits, bonds, synergies, medals ----------
+  function lifeOf(kind) {
+    if (!meta.life) meta.life = {};
+    if (!meta.life[kind]) meta.life[kind] = { kills: 0, runs: 0, best: 0 };
+    return meta.life[kind];
+  }
+
+  function bondLevelFor(kills) {
+    let b = 0;
+    for (let i = 1; i < BOND_AT.length; i++) if (kills >= BOND_AT[i]) b = i;
+    return b;
+  }
+
+  function bondOf(kind) {
+    const L = meta.life && meta.life[kind];
+    return L ? bondLevelFor(L.kills) : 0;
+  }
+
+  function frameOf(kind) {
+    return FRAMES[bondOf(kind)] || "standard";
+  }
+
+  function synOn(id) { return !!(state.syn && state.syn[id]); }
+
+  function refreshMods() {
+    for (const k of ORDER) {
+      const m = baseMods();
+      const lv = (state.lv && state.lv[k]) || 1;
+      m.dmg *= 1 + LV_DMG * (lv - 1);
+      m.rate *= 1 + LV_RATE * (lv - 1);
+      m.dmg *= 1 + 0.03 * bondOf(k);
+      const picks = state.traits && state.traits[k];
+      if (picks) for (let t = 0; t < picks.length; t++) {
+        const tr = picks[t] && TRAIT_BY_ID[picks[t]];
+        if (tr) tr.fx(m);
+      }
+      kindMods[k] = m;
+    }
+    if (synOn("frontline")) { kindMods.roxie.rate *= 1.12; kindMods.wren.rate *= 1.12; }
+    if (synOn("sharp")) { kindMods.vera.crit += 0.1; kindMods.sable.crit += 0.1; }
+  }
+
+  function checkSynergies() {
+    if (!state.syn) return;
+    let changed = false;
+    let n = 0;
+    for (const sy of SYNERGIES) {
+      const on = units.some((u) => u.kind === sy.a) && units.some((u) => u.kind === sy.b);
+      if (on && !state.syn[sy.id]) {
+        state.syn[sy.id] = true;
+        changed = true;
+        if (state.runLive) callout("SYNERGY · " + HEROES[sy.a].short.toUpperCase() + " + " + HEROES[sy.b].short.toUpperCase(), sy.name, sy.desc, "syn");
+      }
+      if (state.syn[sy.id]) n++;
+    }
+    if (changed) {
+      refreshMods();
+      renderBuild();
+    }
+    if (n >= 3) earnMedal("syn3");
+  }
+
+  function synergiesOf(kind) {
+    const out = [];
+    for (const sy of SYNERGIES) if (sy.a === kind || sy.b === kind) out.push(sy);
+    return out;
+  }
+
+  function xpFor(e) {
+    if (e.boss) return 30;
+    if (e.elite || e.bounty) return 5;
+    if (e.giant) return 3;
+    if (e.type === "tank" || e.type === "brute" || e.type === "bloater" || e.type === "shrieker") return 2;
+    return 1;
+  }
+
+  function grantXp(kind, amt) {
+    if (!HEROES[kind] || !state.xp) return;
+    state.xp[kind] += amt;
+    let lv = state.lv[kind];
+    while (lv < LV_MAX && state.xp[kind] >= LV_XP[lv + 1]) {
+      lv++;
+      onLevel(kind, lv);
+    }
+  }
+
+  function onLevel(kind, lv) {
+    state.lv[kind] = lv;
+    refreshMods();
+    for (const u of units) {
+      if (u.kind !== kind || floaters.length >= 26) continue;
+      floaters.push({ x: u.x, y: u.y - heroHeight(u) - 1.5, text: "LV " + lv, life: 1.1, color: "#7dffb3", big: true });
+    }
+    const h = HEROES[kind];
+    if (TRAIT_LV.indexOf(lv) >= 0) {
+      callout("LEVEL " + lv + " · " + h.short.toUpperCase(), "Pick a trait", "Open her card: tap her on the field, long-press her ability, or tap her face in the shop.", "lv");
+    } else if (lv === LV_MAX) {
+      callout("LEVEL " + LV_MAX + " · MAX", h.name, "Fully trained for this run.", "lv");
+    }
+    if (lv >= LV_MAX) earnMedal("maxlv");
+    blip(780, 0.07, "triangle", 0.025);
+  }
+
+  function pendingTier(kind) {
+    if (!state.lv || !state.traits || !state.traits[kind]) return -1;
+    for (let t = 0; t < TRAIT_LV.length; t++) {
+      if (state.lv[kind] >= TRAIT_LV[t] && !state.traits[kind][t]) return t;
+    }
+    return -1;
+  }
+
+  function pickTrait(kind, tier, idx) {
+    if (!TRAITS[kind] || pendingTier(kind) !== tier) return false;
+    const tr = TRAITS[kind][tier] && TRAITS[kind][tier][idx];
+    if (!tr) return false;
+    state.traits[kind][tier] = tr.id;
+    refreshMods();
+    toast(HEROES[kind].short + " learns " + tr.name, 1400);
+    blip(660, 0.09, "triangle", 0.035);
+    blip(990, 0.1, "sine", 0.02);
+    return true;
+  }
+
+  function creditKill(e) {
+    const by = e.lastBy;
+    if (by && HEROES[by]) {
+      state.runKills[by]++;
+      grantXp(by, xpFor(e));
+      const life = lifeOf(by);
+      const before = bondLevelFor(life.kills);
+      life.kills++;
+      const after = bondLevelFor(life.kills);
+      if (after > before) bondUp(by, after);
+      const km = kindMods[by] || NEUTRAL_MODS;
+      if (km.heal && state.baseHp > 0) state.baseHp = Math.min(state.baseMax, state.baseHp + km.heal);
+      if (km.cdOnKill && state.abil[by] > 0) state.abil[by] = Math.max(0, state.abil[by] - km.cdOnKill);
+    }
+    if (e.nyxT > 0 && kindMods.nyx && kindMods.nyx.siphon && state.abil.nyx > 0) state.abil.nyx = Math.max(0, state.abil.nyx - 0.5);
+    // Kill streak and multi-kill callouts.
+    state.combo++;
+    state.comboT = 2.2;
+    state.comboPop = 0.22;
+    if (state.combo > state.comboBest) state.comboBest = state.combo;
+    if (state.combo > (meta.bestCombo || 0)) meta.bestCombo = state.combo;
+    if (state.combo === 25) shout("25 STREAK", "#ffd36a");
+    else if (state.combo === 50) { shout("50 STREAK", "#ff9a3c"); earnMedal("combo50"); }
+    else if (state.combo === 100) shout("UNSTOPPABLE", "#ff5d8f");
+    if (state.multiT > 0) state.multiN++;
+    else state.multiN = 1;
+    state.multiT = 0.7;
+    if (state.multiN === 4) shout("MULTI-KILL", "#ffe36a");
+    else if (state.multiN === 9) shout("MASSACRE", "#ff5d6c");
+    else if (state.multiN === 16) shout("ANNIHILATION", "#ff7ad0");
+    if (state.kills >= 1000) earnMedal("k1000");
+    if (e.boss) {
+      state.slowmo = 0.4;
+      if (!reduceMotion) state.shake = Math.min(1.8, state.shake + 1.1);
+      shout(((BOSS_KINDS[e.bossKind] || BOSS_KINDS.graveking).label) + " DOWN", "#d7c4ff");
+    }
+  }
+
+  function bondUp(kind, level) {
+    const h = HEROES[kind];
+    const fr = FRAMES[level];
+    const extra = fr !== FRAMES[level - 1] ? " " + fr.charAt(0).toUpperCase() + fr.slice(1) + " card frame unlocked." : "";
+    callout("BOND " + level + " · " + h.short.toUpperCase(), h.name, "+" + (level * 3) + "% damage for good." + extra, "bond");
+    refreshMods();
+    saveMeta();
+    if (level >= 3) earnMedal("bond3");
+  }
+
+  function earnMedal(id) {
+    const m = MEDAL_BY_ID[id];
+    if (!m || !meta.medals || meta.medals[id]) return false;
+    meta.medals[id] = 1;
+    meta.ash = (meta.ash || 0) + m.ash;
+    saveMeta();
+    callout("MEDAL  ·  +" + m.ash + " ASH", m.name, m.desc, "medal");
+    blip(880, 0.12, "triangle", 0.035);
+    return true;
+  }
+
+  function medalCount() {
+    let n = 0;
+    for (const m of MEDALS) if (meta.medals && meta.medals[m.id]) n++;
+    return n;
+  }
+
+  // In-canvas shout: big word for a moment (MULTI-KILL, MASSACRE, BOSS DOWN).
+  function shout(text, color) {
+    state.shout = { text: text, color: color || "#ffe36a", life: 1.1, max: 1.1 };
+  }
+
+  // DOM callout under the toast for medals, synergies, levels, bonds. Queued so none are lost.
+  const calloutQ = [];
+  let calloutBusy = false;
+  function callout(kicker, title, sub, cls) {
+    if (calloutQ.length > 6) calloutQ.shift();
+    calloutQ.push({ kicker: kicker, title: title, sub: sub, cls: cls || "" });
+    if (!calloutBusy) nextCallout();
+  }
+  function nextCallout() {
+    const el = $("callout");
+    const c = calloutQ.shift();
+    if (!c || !el) { calloutBusy = false; return; }
+    calloutBusy = true;
+    el.className = c.cls;
+    el.innerHTML = "";
+    const k = document.createElement("em");
+    k.textContent = c.kicker;
+    const b = document.createElement("b");
+    b.textContent = c.title;
+    el.appendChild(k);
+    el.appendChild(b);
+    if (c.sub) {
+      const s = document.createElement("span");
+      s.textContent = c.sub;
+      el.appendChild(s);
+    }
+    void el.offsetWidth;
+    el.classList.add("show");
+    setTimeout(() => {
+      el.classList.remove("show");
+      setTimeout(nextCallout, 240);
+    }, 2500);
+  }
+
+  function updateJuice(dt) {
+    if (state.comboT > 0) {
+      state.comboT -= dt;
+      if (state.comboT <= 0) state.combo = 0;
+    }
+    state.comboPop = Math.max(0, state.comboPop - dt);
+    if (state.multiT > 0) state.multiT -= dt;
+    if (state.shout) {
+      state.shout.life -= dt;
+      if (state.shout.life <= 0) state.shout = null;
+    }
+  }
+
+  function drawJuice() {
+    if (state.phase !== "fight" && state.phase !== "paused") return;
+    ctx.textBaseline = "middle";
+    if (state.combo >= 5) {
+      const pop = reduceMotion ? 1 : 1 + state.comboPop * 1.4;
+      const c = state.combo;
+      const col = c >= 100 ? "#ff7ad0" : c >= 50 ? "#ff9a3c" : c >= 25 ? "#ffd36a" : "#f4f1ea";
+      const fade = Math.min(1, state.comboT / 0.5);
+      ctx.save();
+      ctx.globalAlpha = 0.9 * fade;
+      ctx.translate(3, 10.5);
+      ctx.scale(pop, pop);
+      ctx.textAlign = "left";
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.font = "700 4.2px Passion One, Impact, sans-serif";
+      ctx.fillText(c + "", 0.25, 0.25);
+      ctx.fillStyle = col;
+      ctx.fillText(c + "", 0, 0);
+      const w = ctx.measureText(c + "").width;
+      ctx.font = "700 1.6px sans-serif";
+      ctx.fillStyle = "#f4f1ea";
+      ctx.fillText("STREAK", w + 0.8, 0.6);
+      ctx.restore();
+      // Streak timer: a thin bar under the count.
+      ctx.globalAlpha = 0.7 * fade;
+      ctx.fillStyle = col;
+      ctx.fillRect(3, 13.4, 12 * Math.max(0, state.comboT / 2.2), 0.35);
+      ctx.globalAlpha = 1;
+    }
+    const sh = state.shout;
+    if (sh) {
+      const k = sh.life / sh.max;
+      const grow = reduceMotion ? 1 : 1 + Math.max(0, k - 0.75) * 1.6;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, k * 2.2);
+      ctx.translate(WORLD_W / 2, 24);
+      ctx.scale(grow, grow);
+      ctx.textAlign = "center";
+      ctx.font = "700 5.6px Passion One, Impact, sans-serif";
+      ctx.lineWidth = 0.6;
+      ctx.strokeStyle = "rgba(0,0,0,0.75)";
+      ctx.strokeText(sh.text, 0, 0);
+      ctx.fillStyle = sh.color;
+      ctx.fillText(sh.text, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  // Endless: more twists, stacking.
+  function rollEndlessTwists(n) {
+    const spec = stageSpec(n);
+    let want = 1;
+    if (n >= 105) want = 2;
+    if (n >= 120 && Math.random() < 0.5) want = 3;
+    if (spec.boss) want = Math.min(2, want);
+    const pool = [];
+    for (const id of TWIST_IDS) {
+      if (spec.boss && !TWISTS[id].boss) continue;
+      pool.push(id);
+    }
+    const out = [];
+    while (out.length < want && pool.length) {
+      const i = (Math.random() * pool.length) | 0;
+      const id = pool.splice(i, 1)[0];
+      if ((id === "giants" && out.indexOf("swarm") >= 0) || (id === "swarm" && out.indexOf("giants") >= 0)) continue;
+      out.push(id);
+    }
+    state.lastTwist = out[0] || "";
+    state.twistSince = 0;
+    return out;
+  }
+
+  function startEndless() {
+    if (state.phase !== "won") return;
+    state.endless = true;
+    state.wave = FINALE + 1;
+    setTwists(rollTwists(state.wave));
+    $("ovEndless").hidden = true;
+    toast("ENDLESS. Every stage is tougher than the last.", 2400);
+    openBrief(false, true);
+  }
+
   // ---------- Ability strip (outside the field) ----------
   const abilButtons = {};
   let abilKey = "";
@@ -6107,10 +6786,31 @@
       b.appendChild(img);
       b.appendChild(cd);
       b.appendChild(key);
-      b.addEventListener("pointerdown", (ev) => { ev.preventDefault(); unlock(); fireAbilityButton(k); });
+      // Tap fires on release; holding for half a second opens her card instead.
+      let press = null;
+      b.addEventListener("pointerdown", (ev) => {
+        ev.preventDefault();
+        unlock();
+        if (press) clearTimeout(press.timer);
+        press = { id: ev.pointerId, long: false, timer: 0 };
+        const mine = press;
+        mine.timer = setTimeout(() => { mine.long = true; openCard(k, "ability"); }, 450);
+        try { b.setPointerCapture(ev.pointerId); } catch (err) { /* fine */ }
+      });
+      const release = (ev, fire) => {
+        if (!press || ev.pointerId !== press.id) return;
+        ev.preventDefault();
+        clearTimeout(press.timer);
+        const wasLong = press.long;
+        press = null;
+        if (fire && !wasLong && !b.classList.contains("idle")) fireAbilityButton(k);
+      };
+      b.addEventListener("pointerup", (ev) => release(ev, true));
+      b.addEventListener("pointercancel", (ev) => release(ev, false));
+      b.addEventListener("contextmenu", (ev) => { ev.preventDefault(); if (!press) openCard(k, "ability"); });
       b.addEventListener("click", (ev) => ev.preventDefault());
       row.appendChild(b);
-      abilButtons[k] = { btn: b, cd: cd, p: -1, cls: "" };
+      abilButtons[k] = { btn: b, cd: cd, p: -1, cls: "", due: false };
     }
   }
 
@@ -6136,10 +6836,12 @@
     const kinds = hiredKinds();
     const key = kinds.join(",");
     if (key !== abilKey) { abilKey = key; buildAbilBar(kinds); }
-    const live = state.phase === "fight" && !shopOpen;
+    const live = state.phase === "fight" && !shopOpen && !cardOpen;
     for (const k of kinds) {
       const slot = abilButtons[k];
       if (!slot) continue;
+      const due = pendingTier(k) >= 0;
+      if (due !== slot.due) { slot.due = due; slot.btn.classList.toggle("due", due); }
       const left = state.abil[k] || 0;
       const max = state.abilMax[k] || abilityCd(k);
       const p = left > 0 ? Math.round((left / max) * 100) / 100 : 0;
@@ -6149,7 +6851,7 @@
         slot.cls = cls;
         slot.btn.classList.toggle("ready", cls === "ready");
         slot.btn.classList.toggle("idle", cls === "idle");
-        slot.btn.disabled = cls === "idle";
+        slot.btn.setAttribute("aria-disabled", cls === "idle" ? "true" : "false");
       }
     }
     const spec = stageSpec(state.wave);
@@ -6175,6 +6877,426 @@
         box.appendChild(t);
       }
     }
+  }
+
+
+  // ---------- Heroine card (collectible, interactive) ----------
+  let cardOpen = false;
+  let cardArmed = false; // backdrop clicks only count once a press has started on the card layer
+  let cardKind = "vera";
+  let cardFlipped = false;
+  let cardTilt = null;
+  let tapTimer = 0;
+
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  function cardInRun() {
+    return state.runLive && state.phase !== "title";
+  }
+
+  function canOpenCard() {
+    if (!$("restartConfirm").classList.contains("hidden")) return false;
+    if (!$("titleScreen").classList.contains("hidden")) return true;
+    return state.runLive && (state.phase === "fight" || state.phase === "shop");
+  }
+
+  function openCard(kind, from) {
+    if (!HEROES[kind] || !canOpenCard()) return false;
+    cardKind = kind;
+    cardOpen = true;
+    cardArmed = false;
+    drag = null;
+    clearTimeout(tapTimer);
+    tapTimer = 0;
+    saveMeta();
+    setFlip(false);
+    resetTilt();
+    renderCard();
+    const box = $("heroCard");
+    box.dataset.from = from || "";
+    box.classList.remove("hidden");
+    box.classList.remove("opening");
+    void box.offsetWidth;
+    box.classList.add("opening");
+    blip(560, 0.06, "triangle", 0.025);
+    return true;
+  }
+
+  function closeCard() {
+    if (!cardOpen) return;
+    cardOpen = false;
+    cardTilt = null;
+    $("heroCard").classList.add("hidden");
+    setFlip(false);
+    resetTilt();
+  }
+
+  function stepCard(dir) {
+    const i = ORDER.indexOf(cardKind);
+    cardKind = ORDER[(i + dir + ORDER.length) % ORDER.length];
+    renderCard();
+    blip(480, 0.04, "triangle", 0.02);
+  }
+
+  function setFlip(on) {
+    cardFlipped = !!on;
+    $("hcFlip").classList.toggle("flipped", cardFlipped);
+    $("hcFlipBtn").textContent = cardFlipped ? "FRONT" : "FLIP";
+  }
+
+  function resetTilt() {
+    const box = $("heroCard");
+    for (const k of ["--rx", "--ry", "--px", "--py", "--mx", "--my", "--fx", "--fy"]) box.style.removeProperty(k);
+    $("hcTilt").classList.remove("live");
+  }
+
+  // Pointer position over the card -> tilt, art parallax and foil highlight.
+  function tiltTo(cx, cy, live) {
+    const r = $("hcStage").getBoundingClientRect();
+    const nx = clamp(((cx - r.left) / Math.max(1, r.width)) * 2 - 1, -1, 1);
+    const ny = clamp(((cy - r.top) / Math.max(1, r.height)) * 2 - 1, -1, 1);
+    const amt = reduceMotion ? 0.35 : 1;
+    const box = $("heroCard");
+    box.style.setProperty("--rx", (-ny * 13 * amt).toFixed(2) + "deg");
+    box.style.setProperty("--ry", (nx * 16 * amt).toFixed(2) + "deg");
+    box.style.setProperty("--px", nx.toFixed(3));
+    box.style.setProperty("--py", ny.toFixed(3));
+    box.style.setProperty("--mx", ((nx + 1) * 50).toFixed(1) + "%");
+    box.style.setProperty("--my", ((ny + 1) * 50).toFixed(1) + "%");
+    box.style.setProperty("--fx", ((nx + 1) * 50).toFixed(1) + "%");
+    box.style.setProperty("--fy", ((ny + 1) * 50).toFixed(1) + "%");
+    $("hcTilt").classList.toggle("live", !!live);
+  }
+
+  function heroStats(kind) {
+    const lead = units.find((u) => u.kind === kind && u.named) || units.find((u) => u.kind === kind);
+    const virt = lead || { kind: kind, named: true, slowT: 0 };
+    const s = statsOf(virt);
+    return s;
+  }
+
+  function fmt(n) {
+    if (n >= 100) return String(Math.round(n));
+    if (n >= 10) return n.toFixed(0);
+    return n.toFixed(1);
+  }
+
+  function renderCard() {
+    const kind = cardKind;
+    const h = HEROES[kind];
+    const lore = HERO_LORE[kind];
+    const box = $("heroCard");
+    const inRun = cardInRun();
+    const bond = bondOf(kind);
+    const frame = FRAMES[bond];
+    box.dataset.kind = kind;
+    box.dataset.frame = frame;
+    box.style.setProperty("--ac", h.accent);
+    const img = $("hcImg");
+    const src = "assets/" + kind + ".png";
+    if (img.getAttribute("src") !== src) img.setAttribute("src", src);
+    img.alt = h.name;
+    $("hcRar").textContent = (frame === "standard" ? "HEROINE" : frame.toUpperCase()) + "  ·  BOND " + bond;
+    $("hcName").textContent = h.name;
+    $("hcTitle").textContent = lore.title + "  ·  " + h.role;
+    const lv = inRun ? state.lv[kind] : 1;
+    const due = inRun ? pendingTier(kind) : -1;
+    const lvEl = $("hcLv");
+    lvEl.querySelector("b").textContent = inRun ? String(lv) : "-";
+    lvEl.classList.toggle("due", due >= 0);
+    lvEl.setAttribute("aria-label", "Level " + lv);
+
+    // ----- Front body -----
+    const body = $("hcBody");
+    body.innerHTML = "";
+    const owned = units.filter((u) => u.kind === kind);
+    const named = owned.some((u) => u.named);
+    const role = el("div", "hcRole");
+    role.appendChild(el("span", "hcChip ac", JOBS[kind]));
+    let status = "Not hired";
+    if (!inRun) status = "Gallery";
+    else if (state.wave < (h.unlock || 1) && !owned.length) status = "Unlocks at stage " + h.unlock;
+    else if (named && owned.length > 1) status = "Hero + " + (owned.length - 1);
+    else if (owned.length) status = named ? "On the field" : owned.length + " on field";
+    role.appendChild(el("span", "hcChip" + (owned.length ? " ok" : ""), status));
+    role.appendChild(el("span", "hcChip", "Bond " + bond));
+    body.appendChild(role);
+    body.appendChild(el("p", "hcBio", lore.bio));
+
+    if (due >= 0) {
+      const pick = el("div", "hcPick");
+      pick.appendChild(el("p", "", "LV " + TRAIT_LV[due] + " TRAIT · PICK ONE (THIS RUN)"));
+      const row = el("div", "hcPickRow");
+      TRAITS[kind][due].forEach((tr, idx) => {
+        const b = el("button", "traitBtn");
+        b.type = "button";
+        b.dataset.trait = tr.id;
+        b.appendChild(el("b", "", tr.name));
+        b.appendChild(el("span", "", tr.desc));
+        b.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          if (pickTrait(kind, due, idx)) renderCard();
+        });
+        row.appendChild(b);
+      });
+      pick.appendChild(row);
+      body.appendChild(pick);
+    }
+
+    const s = heroStats(kind);
+    const stats = el("div", "hcStats");
+    let dmgTxt = fmt(s.dmg);
+    if (s.kind === "blast") dmgTxt += "×" + s.cap;
+    else if (s.kind === "volley") dmgTxt += "×" + s.volley;
+    const cells = [
+      [dmgTxt, "DAMAGE"],
+      [s.rate.toFixed(2), "ATK / S"],
+      [fmt(s.range), "RANGE"],
+      [inRun ? String(state.runKills[kind] || 0) : String(lifeOf(kind).kills), inRun ? "KILLS" : "ALL KILLS"],
+    ];
+    for (const c of cells) {
+      const d = el("div", "hcStat");
+      d.appendChild(el("b", "", c[0]));
+      d.appendChild(el("small", "", c[1]));
+      stats.appendChild(d);
+    }
+    body.appendChild(stats);
+    if (inRun) {
+      const xp = el("div", "hcXp");
+      const cur = state.xp[kind] || 0;
+      const lo = LV_XP[lv] || 0;
+      const hi = LV_XP[Math.min(LV_MAX, lv + 1)] || lo;
+      const pct = lv >= LV_MAX ? 100 : Math.round(((cur - lo) / Math.max(1, hi - lo)) * 100);
+      xp.appendChild(el("span", "", lv >= LV_MAX ? "LV MAX" : "LV " + lv));
+      const bar = el("span", "hcBar");
+      const fill = el("i");
+      fill.style.setProperty("--w", clamp(pct, 0, 100) + "%");
+      bar.appendChild(fill);
+      xp.appendChild(bar);
+      xp.appendChild(el("span", "", lv >= LV_MAX ? cur + " XP" : cur + " / " + hi + " XP"));
+      body.appendChild(xp);
+    }
+
+    // Ability
+    const ab = ABILITIES[kind];
+    const sec1 = el("h4", "hcSec", "ABILITY");
+    sec1.appendChild(el("small", "", "long-press her button for this card"));
+    body.appendChild(sec1);
+    const abBox = el("div", "hcBox on");
+    let abState = Math.round(abilityCd(kind)) + "s cooldown";
+    if (inRun && state.phase === "fight" && owned.length) abState = state.abil[kind] > 0 ? "Ready in " + Math.ceil(state.abil[kind]) + "s" : "READY";
+    abBox.appendChild(el("span", "right", abState));
+    abBox.appendChild(el("b", "", ab.name));
+    abBox.appendChild(el("span", "sub", ab.desc + " Cooldown " + Math.round(abilityCd(kind)) + "s."));
+    body.appendChild(abBox);
+
+    // Signature skill
+    const rank = (state.skills && state.skills[kind]) || 0;
+    const sig = SKILL_NODES[kind][2];
+    body.appendChild(el("h4", "hcSec", "SIGNATURE SKILL"));
+    const sigBox = el("div", "hcBox" + (inRun && rank >= 3 ? " on" : " off"));
+    sigBox.appendChild(el("span", "right", inRun ? (rank >= 3 ? "OWNED" : "Rank " + rank + " / 3") : "In SKILLS"));
+    sigBox.appendChild(el("b", "", sig.name));
+    sigBox.appendChild(el("span", "sub", sig.blurb + (inRun && rank < 3 ? ". Train it in the shop under SKILLS." : ".")));
+    body.appendChild(sigBox);
+
+    // Traits
+    const tsec = el("h4", "hcSec", "TRAITS");
+    tsec.appendChild(el("small", "", "one of two at LV 3, 6 and 9"));
+    body.appendChild(tsec);
+    for (let t = 0; t < TRAIT_LV.length; t++) {
+      const pair = TRAITS[kind][t];
+      const got = inRun ? state.traits[kind][t] : "";
+      const waiting = inRun && !got && lv >= TRAIT_LV[t];
+      const row = el("div", "hcBox hcTrait" + (got ? " got" : waiting ? " wait" : " off"));
+      row.appendChild(el("span", "tier", "LV" + TRAIT_LV[t]));
+      const txt = el("div");
+      if (got) {
+        const tr = TRAIT_BY_ID[got];
+        txt.appendChild(el("b", "", tr.name));
+        txt.appendChild(el("span", "sub", tr.desc));
+      } else {
+        txt.appendChild(el("b", "", pair[0].name + "  or  " + pair[1].name));
+        txt.appendChild(el("span", "sub", waiting ? "Ready to pick above." : pair[0].desc + " / " + pair[1].desc));
+      }
+      row.appendChild(txt);
+      body.appendChild(row);
+    }
+
+    // Synergies
+    body.appendChild(el("h4", "hcSec", "SYNERGIES"));
+    for (const sy of synergiesOf(kind)) {
+      const other = sy.a === kind ? sy.b : sy.a;
+      const on = inRun && synOn(sy.id);
+      const row = el("div", "hcBox syn" + (on ? " on" : " off"));
+      row.appendChild(el("span", "right", on ? "ACTIVE" : "Hire " + HEROES[other].short));
+      row.appendChild(el("b", "", sy.name + "  ·  with " + HEROES[other].short));
+      row.appendChild(el("span", "sub", sy.desc));
+      body.appendChild(row);
+    }
+
+    // Reward cards that touch her
+    const csec = el("h4", "hcSec", "REWARD CARDS");
+    csec.appendChild(el("small", "", "this run"));
+    body.appendChild(csec);
+    const general = { precision: 1, quickhands: 1, overcharge: 1, spree: 1 };
+    let nCards = 0;
+    if (inRun) {
+      for (const id of state.cards) {
+        const c = CARD_BY_ID[id];
+        if (!c || !(c.kind === kind || general[id])) continue;
+        const row = el("div", "hcBox r-" + c.rarity);
+        row.appendChild(el("span", "right", RARITY[c.rarity].name.toUpperCase()));
+        row.appendChild(el("b", "", c.name));
+        row.appendChild(el("span", "sub", c.desc));
+        body.appendChild(row);
+        nCards++;
+      }
+    }
+    if (!nCards) {
+      const mine = CARDS.filter((c) => c.kind === kind).map((c) => c.name).join(", ");
+      body.appendChild(el("div", "hcBox off", "None yet. Her boss card: " + (mine || "none") + "."));
+    }
+
+    // ----- Back -----
+    const back = $("hcBack");
+    back.innerHTML = "";
+    const inner = el("div", "hcIn");
+    const ghost = el("img", "hcGhost");
+    ghost.src = src;
+    ghost.alt = "";
+    ghost.draggable = false;
+    inner.appendChild(ghost);
+    inner.appendChild(el("p", "kicker", "LIFETIME  ·  " + h.name.toUpperCase()));
+    const life = lifeOf(kind);
+    const big = el("div", "hcBig");
+    for (const pair of [[life.kills, "KILLS"], [life.runs, "RUNS"], [life.best || "-", "BEST STAGE"]]) {
+      const d = el("div");
+      d.appendChild(el("b", "", String(pair[0])));
+      d.appendChild(el("small", "", pair[1]));
+      big.appendChild(d);
+    }
+    inner.appendChild(big);
+    const bondRow = el("div", "hcBond");
+    const medal = el("div", "medal");
+    medal.appendChild(el("b", "", String(bond)));
+    medal.appendChild(el("small", "", "BOND"));
+    bondRow.appendChild(medal);
+    const bInfo = el("div");
+    bInfo.appendChild(el("b", "", "Bond " + bond + (bond >= 5 ? "  ·  MAX" : "")));
+    const next = BOND_AT[bond + 1];
+    const prev = BOND_AT[bond];
+    const bar = el("div", "hcBar");
+    const fill = el("i");
+    fill.style.setProperty("--w", (bond >= 5 ? 100 : clamp(Math.round(((life.kills - prev) / (next - prev)) * 100), 0, 100)) + "%");
+    bar.appendChild(fill);
+    bar.style.margin = "5px 0 4px";
+    bInfo.appendChild(bar);
+    bInfo.appendChild(el("span", "sub", bond >= 5 ? "Fully bonded." : life.kills + " / " + next + " kills to Bond " + (bond + 1)));
+    bInfo.appendChild(el("span", "sub", "+" + bond * 3 + "% damage, always. Each bond adds +3%."));
+    bondRow.appendChild(bInfo);
+    inner.appendChild(bondRow);
+    inner.appendChild(el("p", "kicker", "CARD FRAMES"));
+    const frames = el("div", "hcFrames");
+    for (const f of FRAME_INFO) {
+      const sp = el("span", bond >= f.bond ? "on" : "", f.name + " · B" + f.bond);
+      sp.style.setProperty("--fc", f.color);
+      frames.appendChild(sp);
+    }
+    inner.appendChild(frames);
+    inner.appendChild(el("p", "hcQuote", "\u201C" + lore.quote + "\u201D"));
+    inner.appendChild(el("p", "hcTapHint", "TAP TO FLIP  ·  DRAG TO TILT"));
+    back.appendChild(inner);
+  }
+
+  // Tilt and flip: drag on the art or the back to tilt, a quick tap flips. Mouse hover tilts too.
+  (function wireCard() {
+    const stageEl = $("hcStage");
+    stageEl.addEventListener("pointerdown", (ev) => {
+      if (!cardOpen) return;
+      if (ev.target.closest && ev.target.closest("button, .hcBody")) return;
+      cardTilt = { id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, moved: false, t: performance.now() };
+      try { stageEl.setPointerCapture(ev.pointerId); } catch (err) { /* fine */ }
+      tiltTo(ev.clientX, ev.clientY, true);
+    });
+    stageEl.addEventListener("pointermove", (ev) => {
+      if (!cardOpen) return;
+      if (cardTilt && ev.pointerId === cardTilt.id) {
+        if (Math.hypot(ev.clientX - cardTilt.sx, ev.clientY - cardTilt.sy) > 8) cardTilt.moved = true;
+        tiltTo(ev.clientX, ev.clientY, true);
+      } else if (!cardTilt && ev.pointerType === "mouse") {
+        tiltTo(ev.clientX, ev.clientY, true);
+      }
+    });
+    const end = (ev) => {
+      if (!cardTilt || ev.pointerId !== cardTilt.id) return;
+      const t = cardTilt;
+      cardTilt = null;
+      try { stageEl.releasePointerCapture(ev.pointerId); } catch (err) { /* fine */ }
+      if (ev.type === "pointerup" && !t.moved && performance.now() - t.t < 450) {
+        setFlip(!cardFlipped);
+        blip(420, 0.05, "triangle", 0.02);
+      }
+      if (ev.pointerType !== "mouse") resetTilt();
+      else $("hcTilt").classList.remove("live");
+    };
+    stageEl.addEventListener("pointerup", end);
+    stageEl.addEventListener("pointercancel", end);
+    stageEl.addEventListener("pointerleave", (ev) => { if (!cardTilt && ev.pointerType === "mouse") resetTilt(); });
+    $("hcFlipBtn").addEventListener("click", () => { setFlip(!cardFlipped); blip(420, 0.05, "triangle", 0.02); });
+    $("hcClose").addEventListener("click", () => closeCard());
+    $("hcPrev").addEventListener("click", () => stepCard(-1));
+    $("hcNext").addEventListener("click", () => stepCard(1));
+    $("heroCard").addEventListener("click", (ev) => {
+      // The finger that opened the card (long-press, tap) lifts onto the backdrop; ignore that ghost click.
+      if (ev.target === $("heroCard") && cardArmed) closeCard();
+    });
+    $("heroCard").addEventListener("pointerdown", () => { cardArmed = true; });
+    // Gyro parallax where the browser gives it without asking (Android). Gentle, and only while no finger is down.
+    let gyroT = 0;
+    window.addEventListener("deviceorientation", (ev) => {
+      if (!cardOpen || cardTilt || ev.gamma == null || ev.beta == null) return;
+      const now = performance.now();
+      if (now - gyroT < 50) return;
+      gyroT = now;
+      const r = $("hcStage").getBoundingClientRect();
+      const nx = clamp(ev.gamma / 30, -1, 1);
+      const ny = clamp((ev.beta - 45) / 30, -1, 1);
+      tiltTo(r.left + (nx + 1) * r.width / 2, r.top + (ny + 1) * r.height / 2, true);
+    });
+  })();
+
+  // ---------- Medals panel ----------
+  function renderMedals() {
+    const box = $("medalList");
+    box.innerHTML = "";
+    let got = 0, ash = 0;
+    for (const m of MEDALS) {
+      const has = !!(meta.medals && meta.medals[m.id]);
+      if (has) { got++; ash += m.ash; }
+      const row = el("div", "medalRow" + (has ? " got" : ""));
+      row.dataset.medal = m.id;
+      row.appendChild(el("span", "mIco", has ? "\u2605" : "?"));
+      const txt = el("div");
+      txt.appendChild(el("b", "", m.name));
+      txt.appendChild(el("span", "", m.desc));
+      row.appendChild(txt);
+      row.appendChild(el("span", "mAsh", has ? "+" + m.ash + " \u2713" : "+" + m.ash + " ash"));
+      box.appendChild(row);
+    }
+    $("medalSum").textContent = got + " of " + MEDALS.length + " earned  ·  " + ash + " ash paid out. Each medal pays once." + (meta.bestCombo ? "  Best streak: " + meta.bestCombo + "." : "");
+  }
+
+  function openMedals() {
+    $("skillScreen").classList.add("hidden");
+    $("labScreen").classList.add("hidden");
+    renderMedals();
+    $("medalScreen").classList.remove("hidden");
   }
 
   // ---------- Drag to move ----------
@@ -6212,7 +7334,7 @@
   }
 
   function fieldInputOk() {
-    if (shopOpen || !state.runLive) return false;
+    if (shopOpen || cardOpen || !state.runLive) return false;
     if (state.phase !== "fight" && state.phase !== "shop") return false;
     if (!$("restartConfirm").classList.contains("hidden")) return false;
     return true;
@@ -6230,6 +7352,8 @@
     const now = performance.now();
     if (lastTap.id === u.id && now - lastTap.t < 360) {
       lastTap = { id: 0, t: 0 };
+      clearTimeout(tapTimer);
+      tapTimer = 0;
       if (u.hold) {
         u.hold = null;
         if (floaters.length < 24) floaters.push({ x: u.x, y: u.y - heroHeight(u) - 1, text: "FREE", life: 0.8, color: "#c8ffda" });
@@ -6239,7 +7363,7 @@
       return;
     }
     lastTap = { id: u.id, t: now };
-    drag = { id: u.id, pid: ev.pointerId, ox: u.x - w.x, oy: u.y - w.y, x: u.x, y: u.y, sx: w.px, sy: w.py, moved: false };
+    drag = { id: u.id, pid: ev.pointerId, ox: u.x - w.x, oy: u.y - w.y, x: u.x, y: u.y, sx: w.px, sy: w.py, moved: false, t0: now };
     try { canvas.setPointerCapture(ev.pointerId); } catch (err) { /* fine */ }
   }, { passive: false });
 
@@ -6260,6 +7384,18 @@
     const d = drag;
     drag = null;
     try { canvas.releasePointerCapture(ev.pointerId); } catch (err) { /* fine */ }
+    if (commit && !d.moved && fieldInputOk() && performance.now() - (d.t0 || 0) < 400) {
+      // A quick tap (not a drag): open her card, unless a second tap turns it into a double-tap.
+      const tapped = units.find((x) => x.id === d.id);
+      clearTimeout(tapTimer);
+      if (tapped) {
+        tapTimer = setTimeout(() => {
+          tapTimer = 0;
+          if (lastTap.id === tapped.id && fieldInputOk()) openCard(tapped.kind, "field");
+        }, 330);
+      }
+      return;
+    }
     if (!commit || !d.moved || !fieldInputOk()) return;
     const u = units.find((x) => x.id === d.id);
     if (!u) return;
@@ -6315,6 +7451,14 @@
   $("skillsBtn").addEventListener("click", () => { unlock(); openSkills(); });
   $("labBtn").addEventListener("click", () => { unlock(); openLab(); });
   $("titleLab").addEventListener("click", () => { unlock(); openLab(); });
+  $("titleMedals").addEventListener("click", () => { unlock(); openMedals(); });
+  $("titleCards").addEventListener("click", () => { unlock(); openCard(ORDER[0], "title"); });
+  $("medalsBtn").addEventListener("click", () => { unlock(); openMedals(); });
+  $("medalClose").addEventListener("click", () => { $("medalScreen").classList.add("hidden"); });
+  $("ovEndless").addEventListener("click", () => { unlock(); startEndless(); });
+  const flushMeta = () => { try { saveMeta(); } catch (err) { /* fine */ } };
+  window.addEventListener("pagehide", flushMeta);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushMeta(); });
   $("skillClose").addEventListener("click", () => { $("skillScreen").classList.add("hidden"); });
   $("labClose").addEventListener("click", () => { $("labScreen").classList.add("hidden"); });
   document.addEventListener("pointerdown", (ev) => {
@@ -6326,10 +7470,17 @@
   }, { passive: true });
   window.addEventListener("keydown", (ev) => {
     if (ev.repeat) return;
+    if (cardOpen) {
+      if (ev.key === "Escape") closeCard();
+      else if (ev.key === "f" || ev.key === "F") setFlip(!cardFlipped);
+      else if (ev.key === "ArrowLeft") stepCard(-1);
+      else if (ev.key === "ArrowRight") stepCard(1);
+      return;
+    }
     if (ev.target && ev.target.tagName === "BUTTON" && (ev.key === " " || ev.code === "Space")) return;
     if (ev.key === "Escape") {
       if (!$("restartConfirm").classList.contains("hidden")) { cancelRestart(); return; }
-      if (!$("labScreen").classList.contains("hidden") || !$("skillScreen").classList.contains("hidden")) { hideMenus(); return; }
+      if (!$("labScreen").classList.contains("hidden") || !$("skillScreen").classList.contains("hidden") || !$("medalScreen").classList.contains("hidden")) { hideMenus(); return; }
       if (shopOpen) { closeShop(); return; }
       togglePause();
       return;
@@ -6359,9 +7510,11 @@
   else window.addEventListener("resize", resize);
 
   loadSprites();
+  refreshMods();
   buildRoster();
   buildUps();
   renderRegions();
+  renderEndlessLine();
   syncSoundLabels();
 
   let last = 0;
@@ -6369,6 +7522,11 @@
     let dt = last ? (ts - last) / 1000 : 0.016;
     last = ts;
     dt = Math.min(0.034, Math.max(0, dt));
+    if (state.slowmo > 0 && !shopOpen && !cardOpen && state.phase !== "paused") {
+      // Boss down: the world drops to quarter speed for a beat.
+      state.slowmo -= dt;
+      dt *= 0.25;
+    }
     update(dt);
     draw();
     syncHud();

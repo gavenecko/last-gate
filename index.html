@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#07080d">
   <title>Last Gate</title>
-  <link rel="stylesheet" href="css/style.css?v=21">
+  <link rel="stylesheet" href="css/style.css?v=22">
 </head>
 <body>
   <div id="app">
@@ -44,9 +44,9 @@
               <p id="mods"></p>
               <p id="twistLine" hidden></p>
             </div>
-            <h3 class="shopSec">BUILD <small>Boss cards this run</small></h3>
+            <h3 class="shopSec">BUILD <small>Boss cards and synergies</small></h3>
             <div id="buildRow"></div>
-            <h3 class="shopSec">HIRE <small id="squadCount">0 / 10</small></h3>
+            <h3 class="shopSec">HIRE <small id="squadCount">0 / 10</small><small class="hint">Tap a face for her card</small></h3>
             <div id="roster" aria-label="Hire heroines"></div>
             <h3 class="shopSec">BASE <small>Passive upgrades</small></h3>
             <div id="baseShop" aria-label="Passive base upgrades"></div>
@@ -54,6 +54,7 @@
             <div class="shopMore">
               <button id="skillsBtn" type="button"><b>SKILLS</b><small>This run · cash</small></button>
               <button id="labBtn" type="button"><b>LAB</b><small>Permanent · ash</small></button>
+              <button id="medalsBtn" type="button"><b>MEDALS</b><small id="medalsCount">0 / 0</small></button>
             </div>
           </div>
           <div class="shopFoot">
@@ -62,6 +63,7 @@
         </div>
       </div>
       <div id="toast" role="status"></div>
+      <div id="callout" role="status" aria-live="polite"></div>
     </div>
     <div id="abilBar" hidden>
       <div id="abilRow" aria-label="Heroine abilities"></div>
@@ -75,9 +77,14 @@
       <h1>LAST<br><span>GATE</span></h1>
       <p class="tagline">They hold the center. The dead come from every side.</p>
       <p id="veteranLine" class="veteranLine" hidden></p>
+      <p id="endlessLine" class="endlessLine" hidden></p>
       <div id="regionRow" hidden></div>
       <button id="play" type="button">PLAY</button>
-      <button id="titleLab" type="button">LAB</button>
+      <div class="titleRow">
+        <button id="titleLab" type="button">LAB</button>
+        <button id="titleCards" type="button">CARDS</button>
+        <button id="titleMedals" type="button">MEDALS</button>
+      </div>
       <button id="titleMute" type="button">SOUND ON</button>
     </div>
   </div>
@@ -99,6 +106,46 @@
       <p>Permanent. Ash stays when the run does not.</p>
       <div id="labList"></div>
       <button id="labClose" type="button">CLOSE</button>
+    </div>
+  </div>
+
+  <div id="medalScreen" class="hidden">
+    <div class="panel">
+      <p class="kicker">FOREVER</p>
+      <h2>Medals</h2>
+      <p id="medalSum">Each medal pays ash once.</p>
+      <div id="medalList"></div>
+      <button id="medalClose" type="button">CLOSE</button>
+    </div>
+  </div>
+
+  <div id="heroCard" class="hidden" role="dialog" aria-modal="true" aria-labelledby="hcName">
+    <div class="hcStage" id="hcStage">
+      <div class="hcTilt" id="hcTilt">
+        <div class="hcFlip" id="hcFlip">
+          <section class="hcFace hcFront" id="hcFront">
+            <div class="hcArt" id="hcArt">
+              <img id="hcImg" alt="" draggable="false">
+              <div class="hcFoil" aria-hidden="true"></div>
+              <div class="hcShine" aria-hidden="true"></div>
+              <span class="hcRar" id="hcRar">STANDARD</span>
+              <span class="hcLv" id="hcLv"><b>1</b><small>LV</small></span>
+              <div class="hcPlate">
+                <h2 id="hcName">Vera Voss</h2>
+                <p id="hcTitle">The Spotter</p>
+              </div>
+            </div>
+            <div class="hcBody" id="hcBody"></div>
+          </section>
+          <section class="hcFace hcBack" id="hcBack"></section>
+        </div>
+      </div>
+    </div>
+    <div class="hcActions">
+      <button id="hcPrev" type="button" aria-label="Previous heroine">&#x2039;</button>
+      <button id="hcFlipBtn" type="button">FLIP</button>
+      <button id="hcClose" type="button">CLOSE</button>
+      <button id="hcNext" type="button" aria-label="Next heroine">&#x203A;</button>
     </div>
   </div>
 
@@ -135,11 +182,12 @@
       <div id="ovSummary" hidden></div>
       <p id="ovHint" hidden></p>
       <div id="ovActions">
+        <button id="ovEndless" type="button" hidden>ENDLESS <small>Keep going past 100</small></button>
         <button id="ovBtn" type="button" hidden>PLAY AGAIN</button>
         <button id="ovRestart" type="button" class="texty" hidden>Restart run</button>
       </div>
     </div>
   </div>
-  <script src="js/game.js?v=21"></script>
+  <script src="js/game.js?v=22"></script>
 </body>
 </html>
