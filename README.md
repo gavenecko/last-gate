@@ -1,6 +1,6 @@
 # Last Gate
 
-A phone-first compound defense. The gate sits in the center. The dead walk in from every edge. Your heroines move and shoot. The yard is the whole screen. One slim top bar holds base HP, cash, ash, stage, SHOP, START WAVE (between waves only), pause, mute, and restart. SHOP drops a menu over the field with hires, base upgrades, Skills, and Lab. The game is paused while it is open. PLAY on the title screen starts the run and the music. Open `index.html` offline. No build, no CDN, no network.
+A phone-first compound defense. The gate sits in the center. The dead walk in from every edge. Your heroines move and shoot. The yard is the whole screen. One slim top bar holds base HP, cash, ash, stage, SHOP, START WAVE (between waves only), pause, mute, and restart. SHOP drops a menu over the field with this stage's stock (a few hires and base upgrades, with REROLL and LOCK), your build (tag sets, relics, cards), Skills, and Lab. The game is paused while it is open. PLAY on the title screen starts the run and the music. Open `index.html` offline. No build, no CDN, no network.
 
 ```bash
 python3 -m http.server 8080
@@ -10,13 +10,13 @@ Then visit `http://localhost:8080`. Or just open `index.html` in a browser.
 
 ## How to play
 
-1. Tap PLAY. You start with Vera, Roxie, and $100. Hire the others when you can. The first of each name is the hero. Further copies are the same kit at a lower rank. They walk and shoot on their own. Squad cap is 10.
+1. Pick a LOADOUT on the title screen (Default is Vera, Roxie and $100), then tap PLAY. Hire the others when they show up in the shop stock. The first of each name is the hero. Further copies are the same kit at a lower rank. They walk and shoot on their own. Squad cap is 10.
 2. Tap SHOP to hire and upgrade (the run freezes while the menu is open; new hires appear beside the gate). Close it, then press START WAVE in the top bar. Zombies come from all four edges toward the gate. Base HP is on the top of the yard and on the gate itself. If it hits 0, the run ends.
-3. After a stage, a card names the next one, any new enemy, and any twist. Pick a perk when it is offered (every 3 stages), or a reward card after a boss. Continue, spend cash, then start the wave yourself. It does not auto-start.
+3. After every stage: pick a card (or skip it for cash), maybe a relic, then choose the next stop on the map. A card then names the next stage, any new enemy, and any twist. Continue, spend cash, then start the wave yourself. It does not auto-start.
 4. During a wave, tap a face in the slim strip under the field to fire that heroine's ability. Hold it to open her card instead. Drag a heroine to move her; double-tap her to let her roam again; quick-tap her to open her card.
 5. Clear stage 100 to win, then keep going in Endless if you like. Every 10th stage is a boss (four bosses rotate). Stage 100 is the Last King. Pause, mute, and restart sit in the top bar. Restart asks first.
 
-Keyboard: during a wave `1`–`6` fire abilities (Vera, Roxie, Lila, Nyx, Sable, Wren). Between waves `1`–`4` hire and `5` Wall, `6` Aura, `7` Turret. `B` or `U` opens or closes the shop, Space starts the wave, `P` pauses, `Esc` closes the top menu or card (or pauses), `F` flips an open card and the arrow keys browse cards, `R` restarts, `M` mutes. With a mouse, drag and double-click work like touch.
+Keyboard: during a wave `1`–`6` fire abilities (Vera, Roxie, Lila, Nyx, Sable, Wren). Outside a wave `1`–`9` buy the matching offer in the shop stock and `X` rerolls. `B` or `U` opens or closes the shop, Space starts the wave, `P` pauses, `Esc` closes the top menu or card (or pauses), `F` flips an open card and the arrow keys browse cards, `R` restarts, `M` mutes. With a mouse, drag and double-click work like touch.
 
 Sound is a drone made in the browser with the Web Audio API. It starts on PLAY, and on the first tap if the title is skipped, unless sound is off. No music files.
 
@@ -85,30 +85,160 @@ From stage 5, about every 2–3 stages (more often later), a stage gets a twist.
 | Gold Rush | Some zombies glow gold: tougher, and they drop five times the cash. | Gold zombies pay x5 |
 | Plague | The dead leave toxic puddles that slow heroines. | +35%, +1 ash |
 
-## Boss reward cards
+## The roguelike layer
 
-After every boss, pick one of three cards. Border color shows rarity: grey common, blue rare, purple epic. Cards for a heroine only show up if she is hired. Picked cards are listed under BUILD in the shop and reset on a new run. Perks still come every 3 stages.
+Every run plays differently: the shop stock is random, you build a deck one card per stage, relics bend the rules, and you choose your own road.
 
-| Card | Rarity | Effect |
+### Shop stock, reroll and lock
+
+The shop no longer lists everything. Each stage it rolls fresh **stock**: about 2 hire offers and 3 base-upgrade offers (the next level of that upgrade). More slots open later: +1 base offer at stage 30 and 60, +1 hire offer at stage 40, and a Shop stop on the map adds one of each at 25% off. Maxed upgrades never show up. A full squad turns hire slots into an extra base slot. The first stock of a run always has hires in it.
+
+- **REROLL** replaces every unlocked, unsold offer. It costs $15, then $25, $35 and so on (+$10 each), and goes back to $15 at the next stage. Lucky Coin cards and the Bone Dice relic give free rerolls.
+- **LOCK** (the strip under each offer) keeps that offer for the next stage. It shows up again marked KEPT, then the lock is used up. Tap again to unlock.
+- Bought offers stay greyed out until the next stage. Skills and Lab are unchanged.
+
+### Cards after every stage
+
+Clear a stage and pick 1 of 3 cards (4 with the Treasure Chart relic), or **SKIP** for a little cash ($10 + 0.8 x stage). Rarity weights are common 65 / rare 28 / epic 7, and epics get more common as the stages climb. Bosses and Elite stops offer rare-or-better. Cards for a heroine only show up once she is hired, and cards that need mines or a turret wait until you own one. Many cards stack: the same card can come back, and the pick shows the stack (x1 → x2). The old every-3-stages perks are gone; their effects are in the pool now (Hot Barrels, Hair Trigger, Quick Step, Field Medic, Surplus, Spotter Kit, Reinforced Gate, Scavenge).
+
+Every card carries 0–2 **tags**. Holding 3 or 5 cards of a tag (copies count) turns on its set bonus with a callout. Tags show as colored pills on each card, and the pick tells you when a card would complete a set. The BUILD row in the shop shows each tag's progress.
+
+| Tag | 3 cards | 5 cards |
 | --- | --- | --- |
-| Dragon Shells | Rare (Roxie) | Roxie's pellets set zombies on fire. |
-| Wildfire | Epic (Lila) | Lila's fire ignites zombies, and burning zombies spread it. |
-| Hex Thorns | Rare (Nyx) | Zombies slowed by Nyx take damage every second. |
-| Hollow Points | Rare (Vera) | Vera's shots pierce 2 more zombies. |
-| Ricochet | Rare (Sable) | Sable's bullets bounce to a second zombie. |
-| Shock Haft | Common (Wren) | Wren's cleave knocks back and staggers. |
-| Chain Mines | Rare | Mines blast an area and set off a second mine. Grants Mines LV 1. |
-| Thorned Gate | Common | Biters take heavy thorn damage. Spikes hit twice as hard. |
-| Twin Barrel | Rare | The turret fires a second barrel. Grants Turret LV 1. |
-| Field Triage | Common | Every kill heals the gate 0.5 HP. |
-| Deadly Precision | Rare | +15% crit chance on heroine hits, crits deal 2.5x. |
-| Quick Hands | Common | Ability cooldowns 25% shorter. |
-| Killing Spree | Rare | 12 quick kills: heroines attack 35% faster for 5 s. |
-| Compound Interest | Common | 5% of banked cash after each stage (up to $60). |
-| Overcharge | Epic | Abilities hit 50% harder and last 25% longer. |
-| Mortar Team | Epic | Every 6 s a shell lands on the biggest crowd. |
-| Gold Teeth | Common | Kills pay 25% more cash. |
-| Second Wind | Rare | Once per stage, below 30% the gate heals 35% and the dead freeze for 2 s. |
+| Fire | Burns spread to nearby zombies. | Fire deals +40%, and zombies that die burning burst. |
+| Hex | Ability cooldowns 15% shorter. | Abilities hit 25% harder and freeze the field for 1.2s. |
+| Gun | +10% crit chance. | +15% attack rate. Crits deal 3x. |
+| Blade | +12% heroine damage. | Hits finish off normal zombies under 15% health. Roxie and Wren +20% damage. |
+| Gate | +40 max gate HP. The gate takes 8% less damage. | The gate regenerates 2 HP/s in waves, and biters take thorn damage. |
+| Gold | +$1 cash per kill. | +$2 more per kill. Shop prices 15% off. |
+| Mine | Mines hit 25% harder. 1 extra mine arms each stage. | Every mine chains into a second blast. Mines trigger 40% faster. |
+
+| Card | Rarity | Tags | Stacks | Effect |
+| --- | --- | --- | --- | --- |
+| Hot Barrels | Common | Gun | x6 | +10% heroine damage. |
+| Hair Trigger | Common | Gun | x5 | +8% heroine attack rate. |
+| Spotter Kit | Common | Gun | x4 | +8% heroine range. |
+| Longshot | Common (Vera) | Gun | x3 | Vera: +15% damage and +6% range. |
+| Double Ought | Common (Roxie) | Gun | x2 | Roxie's blast hits 1 more zombie and deals +8%. |
+| Quickdraw | Common (Sable) | Gun | x3 | Sable: +12% attack rate. |
+| Gun Oil | Common | Gun, Gate | x3 | Turret: +25% damage and +10% fire rate. |
+| Hollow Points | Rare (Vera) | Gun | - | Vera's shots pierce through to 2 more zombies. |
+| Ricochet | Rare (Sable) | Gun | - | Sable's bullets bounce to a second zombie. |
+| Deadly Precision | Rare | Gun | - | Heroine hits: +15% crit chance. Crits deal 2.5x. |
+| Twin Barrel | Rare | Gun, Gate | - | The turret fires a second barrel at another zombie. Grants Turret LV 1 if you have none. |
+| Jellied Fuel | Common (Lila) | Fire | x3 | Lila: fire patches burn 25% hotter and last 20% longer. |
+| Accelerant | Common | Fire | x3 | All burns and fire patches deal +15%. |
+| Dragon Shells | Rare (Roxie) | Fire, Gun | - | Roxie's pellets set zombies on fire. |
+| Ember Rounds | Rare (Sable) | Fire, Gun | - | Sable's bullets set zombies on fire. |
+| Pyre | Rare | Fire | - | Burning zombies take +25% damage from heroine hits. |
+| Wildfire | Epic (Lila) | Fire | - | Lila's fire ignites zombies, and burning zombies spread it to their neighbours. |
+| Mortar Team | Epic | Mine, Fire | - | Every 6 seconds a shell lands on the biggest crowd. |
+| Hex Coil | Common (Nyx) | Hex | x2 | Nyx: +20% pulse radius and +10% damage. |
+| Quick Hands | Common | Hex | - | Ability cooldowns are 25% shorter. |
+| Refocus | Common | Hex | x3 | Ability cooldowns 8% shorter. |
+| Field Notes | Common | Hex | x2 | Heroines earn 30% more XP. |
+| Hex Thorns | Rare (Nyx) | Hex | - | Zombies slowed by Nyx take damage every second. |
+| Witchfire | Rare (Nyx) | Hex, Fire | - | Nyx's pulse sets zombies alight. |
+| Doom Mark | Rare | Hex | - | Elites, bounties and bosses take +20% damage from everything. |
+| Battle Trance | Rare | Hex | - | Firing an ability makes every heroine attack 30% faster for 5s. |
+| Overcharge | Epic | Hex | - | Abilities hit 50% harder and last 25% longer. |
+| Shock Haft | Common (Wren) | Blade | - | Wren's cleave knocks zombies back and staggers them. |
+| Spearhead | Common (Wren) | Blade | x3 | Wren: +18% damage. |
+| Quick Step | Common | Blade | x3 | Heroines move 15% faster. |
+| Butcher's Edge | Common | Blade | x3 | +12% heroine damage to zombies near the gate. |
+| Bloodlust | Rare | Blade | - | Roxie and Wren attack 20% faster. |
+| Killing Spree | Rare | Blade | - | 12 kills in a quick streak: heroines attack 35% faster for 5 seconds. |
+| Execution | Rare | Blade | - | Heroine hits finish off normal zombies under 15% health. |
+| Reinforced Gate | Common | Gate | x5 | Max gate HP +30, and heal 30. |
+| Field Medic | Common | Gate | x99 | Repair the gate by 35% of its max HP now. |
+| Bulwark | Common | Gate | x3 | The gate takes 8% less damage. |
+| Patch Kit | Common | Gate | x3 | The gate regenerates 1 HP/s during waves. |
+| Field Triage | Common | Gate | x3 | Every kill heals the gate 0.5 HP. |
+| Thorned Gate | Common | Gate, Blade | - | Biters take heavy thorn damage on every bite. Spikes hit twice as hard. |
+| Second Wind | Rare | Gate | - | Once per stage, when the gate drops below 30%, it heals 35% and the dead freeze for 2s. |
+| Scavenge | Common | Gold | x99 | Pocket $40 plus $2 per stage now. |
+| Surplus | Common | Gold | x99 | Your next hire is 40% off. |
+| Gold Teeth | Common | Gold | x3 | Kills pay 20% more cash. |
+| Compound Interest | Common | Gold | - | Earn 5% of your banked cash after each stage (up to $60). |
+| Bounty Board | Common | Gold | x2 | Elites pay +$20 more. |
+| Lucky Coin | Common | Gold | x2 | One free shop reroll every stage. |
+| War Chest | Rare | Gold | - | Stage clear bonus +50%. |
+| Blasting Caps | Common | Mine | x3 | Mines hit 30% harder. |
+| Sapper Kit | Common | Mine | x3 | Start every stage with 2 armed mines. Grants Mines LV 1 if you have none. |
+| Chain Mines | Rare | Mine | - | Mines blast an area and set off a second mine. Grants Mines LV 1 if you have none. |
+| Minelayer | Rare | Mine | - | Mines trigger 30% faster. Grants Mines LV 1 if you have none. |
+| Cluster Charge | Epic | Mine, Fire | - | Every mine blast leaves a fire patch. |
+
+### Cursed cards
+
+About 15% of card picks swap one card for a cursed one (25% after an Elite stop, 30% after a Mystery). Cursed cards are purple and red with a striped back, say CURSED, and spell out the downside in red. They are strong, but each costs you something for the rest of the run. You can only hold one of each. The Old Shrine mystery can burn one away, and the Black Cat relic halves every curse downside.
+
+| Curse | Upside | Downside |
+| --- | --- | --- |
+| Blood Pact | +40% heroine damage. | Gate max HP -25%. |
+| Glass Gate | Turret damage x2. Grants Turret LV 1 if you have none. | The gate takes +20% damage. |
+| Greed | Kill cash x1.5. | Zombies have +15% HP. |
+| Haste Hex | Heroines attack 30% faster. | Ability cooldowns +40%. |
+| Powder Keg | Mines deal double and blast an area. Grants Mines LV 1 if you have none. | Gate max HP -15%. |
+| Pyromania | All fire damage +60%. | Heroine range -15%. |
+| Blood Money | +$4 cash per kill. | All gate healing is halved. |
+| Berserker | +25% heroine damage and +15% attack rate. | The Sandbag Wall works at half strength. |
+| Dark Pact | Abilities hit 60% harder and last 25% longer. | Zombies move 10% faster. |
+| Fool's Gold | +$60 after every stage. | Card picks offer one card fewer. |
+
+### The map
+
+After the card (and any relic), a compact map shows the road ahead: 4 rows, 2–3 choices per stage, with lines showing where each stop leads. Every stop is still the next stage number. Tap a node on the map or the bigger card under it. The map is seeded per run, and Endless keeps it going.
+
+- **Fight**: a normal stage.
+- **Elite**: extra elites and +20% health on the wave. Pays 50% more, then a rare+ card and a 40% chance at a relic.
+- **Shop**: a normal wave, but the stock has an extra hire and base offer at 25% off.
+- **Rest**: heal the gate 35% now, a shorter wave, no twist.
+- **Mystery**: an encounter before the stage. The Gambler (double or nothing), Blood Altar (bleed the gate for a rare card), Cursed Idol (a relic and a curse), Abandoned Cache (cash or a medkit), Wandering Merchant (buy a relic), Old Shrine (pray for a card, or pay to cleanse a curse), The Deserter (a free heroine for 10 max gate HP).
+- **Treasure**: only a handful of dead guard a chest. Clear them and pick a relic. No twist.
+- **Boss**: every 10th stage and stage 100 are fixed boss nodes, shown ahead on the map.
+
+### Relics
+
+Relics are rule-benders. Bosses offer a pick of 2, Treasure offers 2, Elite stops sometimes drop 1, and two mysteries trade for them. They show as small lettered badges in the BUILD row; tap one for its details. They reset every run.
+
+| Relic | Badge | Effect |
+| --- | --- | --- |
+| Sapper's Pouch | SP | Mines re-arm: start every stage with 3 armed mines. Grants Mines LV 1. |
+| Golden Trigger | GT | Every heroine crit drops $1. |
+| Iron Ward | IW | The first hit on the gate each stage is negated. |
+| Tally Counter | TC | Every 10th kill fires a free turret volley at up to 6 zombies. |
+| Hourglass | HG | The first ability you fire each stage recharges twice as fast. |
+| War Drum | WD | Heroines attack 12% faster. |
+| Vampire Fang | VF | Every 20 kills heal the gate 8 HP. |
+| Ember Heart | EH | Zombies that die burning set their neighbours alight. |
+| Hex Doll | HD | Elites, bounties and bosses take +25% damage. Elites arrive slowed. |
+| Bone Dice | BD | Two free shop rerolls every stage. |
+| Merchant's Ledger | ML | Shop prices 15% off. |
+| Treasure Chart | TM | Card picks offer one card more. |
+| Gilded Tooth | GD | +$1 cash per kill. |
+| Medic Bag | MB | The gate heals 15% of its max HP after every stage. |
+| Spare Barrel | SB | The turret fires 25% faster. Grants Turret LV 1. |
+| Rally Flag | RF | Heroines holding a flag (dragged into place) deal +18% damage. |
+| Thorn Crown | CR | Biters take 20 + 1 per stage thorn damage on every bite. |
+| Storm Lantern | SL | Fog cannot hide the dead from your squad. |
+| Siege Plating | PL | The gate takes 12% less damage. |
+| Recruit Papers | RP | A free random heroine joins now, and the squad cap is +1. |
+| Black Cat | BC | Curse downsides are halved (Fool's Gold's is lifted). |
+| Last Rites | LR | Once per run, when the gate would fall, it holds at 30% HP and the dead freeze for 3s. |
+
+### Loadouts
+
+LOADOUT on the title screen picks who walks out with you. Locked loadouts are greyed out with their ash cost; unlocking is permanent and saved. In the Marsh or Chapel the veteran still joins on top of the loadout (never twice).
+
+| Loadout | Ash | Start |
+| --- | --- | --- |
+| Default | free | Vera and Roxie. $100. |
+| Firestarters | 30 | Lila and Roxie. Starts with Dragon Shells, a Fire card. |
+| Hex Lab | 40 | Nyx and Vera. Starts with the Hex Doll relic. |
+| Gunline | 40 | Sable and Vera. Starts with Hot Barrels and Spotter Kit, two Gun cards. |
+| Spearwall | 30 | Wren and Roxie. The Sandbag Wall starts at LV 1. |
+| Gambler | 60 | One random heroine and +$200, plus a random cursed card and a random relic. |
 
 ## Tap abilities
 
@@ -137,11 +267,11 @@ About a third of normal stages (from stage 3) get one event, announced by a toas
 
 Drag a heroine (touch or mouse) and drop her anywhere on the field. A flag marks the spot and her range shows while you drag. She walks there at her normal speed and holds it, still shooting anything in range. Double-tap her to release her back to roaming. Tapping a crate always claims the crate first. The field never scrolls.
 
-Perks show up on the between-stage card after stages 3, 6, 9, and so on. The same perk can be taken again later in a long run. A loss or a win shows stage reached, kills, and cash earned.
+A loss or a win shows stage reached, kills, and cash earned.
 
-Health climbs a little faster after stage 25 to keep late stages hard with cards and abilities, and again from stage 20 (about +1.1% per stage on top of that) because levels, traits, bonds, and synergies add power.
+Health climbs a little faster after stage 25 to keep late stages hard with cards and abilities, and again from stage 20 (about +1.1% per stage on top of that) because levels, traits, bonds, and synergies add power. With a card every stage, sets and relics, zombie health also ramps about +3.6% per stage past stage 8 (up to 5x).
 
-Saved locally (localStorage): ash and Lab upgrades, tips already seen, and the card collection: each heroine's lifetime kills, runs, best stage and bond, plus medals and the best Endless stage. Nothing leaves the device.
+Saved locally (localStorage): ash and Lab upgrades, tips already seen, and the card collection: each heroine's lifetime kills, runs, best stage and bond, plus medals, the best Endless stage, and unlocked loadouts. Nothing leaves the device.
 
 ## Heroine cards
 

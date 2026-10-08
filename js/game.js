@@ -8308,7 +8308,7 @@
       }
       if (t.price.textContent !== txt) t.price.textContent = txt;
       t.tile.classList.toggle("sold", !!it.sold);
-      t.tile.classList.toggle("locked", !!it.locked);
+      t.tile.classList.toggle("held", !!it.locked);
       t.tile.classList.toggle("kept", !!it.kept && !it.sold);
       t.lock.hidden = !!it.sold;
       t.lock.setAttribute("aria-pressed", it.locked ? "true" : "false");

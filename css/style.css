@@ -1748,7 +1748,7 @@ button { font: inherit; color: inherit; }
 
 /* Offer tiles share a lock strip along the bottom. */
 .offer { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
-.offer.locked { border-color: #6ac8ff; box-shadow: 0 0 0 1px #6ac8ff inset, 0 0 12px rgba(106, 200, 255, 0.25); }
+.offer.held { border-color: #6ac8ff; box-shadow: 0 0 0 1px #6ac8ff inset, 0 0 12px rgba(106, 200, 255, 0.25); }
 .offer.kept::after {
   content: "KEPT";
   position: absolute;
