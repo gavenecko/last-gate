@@ -341,7 +341,7 @@ DAILY RUN on the title screen starts today's seeded run. Everyone gets the same 
 
 ## Tap abilities
 
-One button per hired heroine in the strip under the field: her face, a cooldown sweep, and a glow when ready. Only usable during a wave, not while the shop or pause is open. All come back ready at the start of each stage.
+One button per hired heroine in the strip under the field: her face, a cooldown sweep, and a glow when ready. Only usable during a wave, not while the shop or pause is open. All come back ready at the start of each stage. Field-wide freezes (Time Freeze, the Hex 5-set freeze) wear thin when chained: each one in quick succession lasts 15% less, down to 30%, recovering one step every 6 seconds and resetting each stage.
 
 | Heroine | Ability | Cooldown | Effect |
 | --- | --- | --- | --- |
