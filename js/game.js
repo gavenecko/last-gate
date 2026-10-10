@@ -900,7 +900,7 @@
       cards: [], cardSet: {}, cardDue: false, cardPicked: true,
       // Tap abilities.
       abil: { vera: 0, roxie: 0, lila: 0, nyx: 0, sable: 0, wren: 0 },
-      fireWall: null, freezeT: 0, rallyT: 0, spreeT: 0, streak: 0, streakT: 0,
+      fireWall: null, freezeT: 0, chill: 0, rallyT: 0, spreeT: 0, streak: 0, streakT: 0,
       mortarCd: 6, windUsed: false,
       // Mid-stage events.
       event: null, eventAt: -1, eventKind: "", lastEvent: "", breachT: 0,
@@ -1226,6 +1226,14 @@
       if (foe.bossKind === "brood") foe.speed *= 0.92;
     }
     if (proto.boss && state.wave === FINALE) foe.r *= 1.1;
+    // Late bite ramp: the dead hit the gate harder as stages climb, so armor and regen alone cannot hold forever.
+    const bm = rogueBite(state.wave);
+    foe.chew = foe.bite;
+    if (bm !== 1) {
+      foe.bite *= bm;
+      foe.spitDmg *= bm;
+      foe.explode *= bm;
+    }
     if (state.freezeT > 0) foe.stunT = state.freezeT * (proto.boss ? 0.5 : 1);
     enemies.push(foe);
     state.spawned++;
@@ -1327,6 +1335,7 @@
     state.freezeT = 0;
     state.rallyT = 0;
     state.spreeT = 0;
+    state.chill = 0;
     state.streak = 0;
     state.combo = 0;
     state.comboT = 0;
@@ -2601,7 +2610,11 @@
     if (best) marks.push({ kind: "mortar", x: best.x, y: best.y, r: 7, life: 0.7, max: 0.7 });
   }
 
+  // Field freezes wear thin: each one in quick succession lasts 15% less (down to 30%).
+  // The chill wears off by one step every 6s and resets every stage.
   function freezeAll(t) {
+    t *= Math.max(0.3, Math.pow(0.85, state.chill || 0));
+    state.chill = (state.chill || 0) + 1;
     state.freezeT = Math.max(state.freezeT, t);
     for (const e of enemies) {
       if (e.dead) continue;
@@ -2611,6 +2624,7 @@
 
   function updateBuffs(dt) {
     state.freezeT = Math.max(0, state.freezeT - dt);
+    if (state.chill > 0) state.chill = Math.max(0, state.chill - dt / 6);
     state.rallyT = Math.max(0, state.rallyT - dt);
     state.spreeT = Math.max(0, state.spreeT - dt);
     state.tranceT = Math.max(0, (state.tranceT || 0) - dt);
@@ -3072,6 +3086,7 @@
     state.freezeT = 0;
     state.rallyT = 0;
     state.spreeT = 0;
+    state.chill = 0;
     state.streak = 0;
     for (const u of units) { u.stormT = 0; u.whirlT = 0; u.dazeT = 0; u.slowT = 0; }
     const cleared = state.wave;
@@ -7433,8 +7448,13 @@
   }
 
   // Cards every stage plus relics stack up, so the dead toughen up past the opening stages.
-  const ROGUE_HP = { start: 8, per: 0.036, cap: 5 };
-  function rogueHp(n) { return Math.min(ROGUE_HP.cap, 1 + ROGUE_HP.per * Math.max(0, Math.min(n, 140) - ROGUE_HP.start)); }
+  const ROGUE_HP = { start: 8, per: 0.036, cap: 5, lateAt: 40, late: 0 };
+  const ROGUE_BITE = { at: 20, per: 0 };
+  function rogueBite(n) { return 1 + ROGUE_BITE.per * Math.max(0, Math.min(n, 140) - ROGUE_BITE.at); }
+  function rogueHp(n) {
+    const m = Math.min(n, 140);
+    return Math.min(ROGUE_HP.cap, 1 + ROGUE_HP.per * Math.max(0, m - ROGUE_HP.start) + ROGUE_HP.late * Math.max(0, m - ROGUE_HP.lateAt));
+  }
 
   function thornDmg() { return B().thorns * (20 + state.wave); }
 
@@ -9234,7 +9254,7 @@
         if (e.biteCd <= 0) {
           e.biteCd = e.biteEvery;
           e.lunge = 1;
-          d.hp -= e.bite * (2.5 + state.wave * 0.04);
+          d.hp -= (e.chew || e.bite) * (2.5 + state.wave * 0.04);
           d.flash = 0.12;
           if (d.hp <= 0) breakBarricade(d);
         }
