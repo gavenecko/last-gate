@@ -8,6 +8,10 @@ python3 -m http.server 8080
 
 Then visit `http://localhost:8080`. Or just open `index.html` in a browser.
 
+### Classic version
+
+The game as it was before the late-game rebalance (v24) is kept, frozen, under `classic/` and is playable at https://gavenecko.github.io/last-gate/classic/. The main title screen has a small **Classic version** link under SOUND; the classic title links back to the current game. It reuses the same `assets/` folder by relative path and saves under its own keys (`last-gate-classic-meta`, `last-gate-classic-tips`), so the two versions never touch each other's ash, Lab, medals or cards. It does not get new features or fixes.
+
 ## How to play
 
 1. Pick a LOADOUT on the title screen (Default is Vera, Roxie and $100), then tap PLAY. Hire the others when they show up in the shop stock. The first of each name is the hero. Further copies are the same kit at a lower rank. They walk and shoot on their own. Squad cap is 10.

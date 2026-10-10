@@ -1,6 +1,6 @@
 @font-face {
   font-family: "Passion One";
-  src: url("../assets/PassionOne-Bold.ttf") format("truetype");
+  src: url("../../assets/PassionOne-Bold.ttf") format("truetype");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
@@ -481,14 +481,14 @@ button { font: inherit; color: inherit; }
   background-position: center;
   border: 1px solid var(--line);
 }
-.up[data-id="wall"] .mark { background-image: url("../assets/upgrade-wall.png"); }
-.up[data-id="aura"] .mark { background-image: url("../assets/upgrade-aura.png"); }
-.up[data-id="turret"] .mark { background-image: url("../assets/upgrade-turret.png"); }
-.up[data-id="spikes"] .mark { background-image: url("../assets/upgrade-spikes.png"); }
-.up[data-id="mend"] .mark { background-image: url("../assets/upgrade-mend.png"); }
-.up[data-id="mines"] .mark { background-image: url("../assets/upgrade-mines.png"); }
-.up[data-id="ammo"] .mark { background-image: url("../assets/upgrade-ammo.png"); }
-.up[data-id="squad"] .mark { background-image: url("../assets/upgrade-squad.png"); }
+.up[data-id="wall"] .mark { background-image: url("../../assets/upgrade-wall.png"); }
+.up[data-id="aura"] .mark { background-image: url("../../assets/upgrade-aura.png"); }
+.up[data-id="turret"] .mark { background-image: url("../../assets/upgrade-turret.png"); }
+.up[data-id="spikes"] .mark { background-image: url("../../assets/upgrade-spikes.png"); }
+.up[data-id="mend"] .mark { background-image: url("../../assets/upgrade-mend.png"); }
+.up[data-id="mines"] .mark { background-image: url("../../assets/upgrade-mines.png"); }
+.up[data-id="ammo"] .mark { background-image: url("../../assets/upgrade-ammo.png"); }
+.up[data-id="squad"] .mark { background-image: url("../../assets/upgrade-squad.png"); }
 .up .meta { align-items: flex-start; }
 .up .meta b { font-size: 13px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .up .lv { font-style: normal; font-size: 12px; font-weight: 800; color: var(--gold); line-height: 1.2; }
@@ -640,7 +640,7 @@ button { font: inherit; color: inherit; }
   overflow: auto;
   background:
     linear-gradient(180deg, rgba(7, 8, 13, 0.08) 0%, rgba(7, 8, 13, 0.02) 18%, rgba(7, 8, 13, 0.28) 46%, rgba(7, 8, 13, 0.78) 72%, rgba(7, 8, 13, 0.92) 100%),
-    url("../assets/title-art.jpg") center top / cover no-repeat;
+    url("../../assets/title-art.jpg") center top / cover no-repeat;
 }
 #titleScreen.hidden { display: none; }
 .titleCard {
@@ -957,10 +957,10 @@ button { font: inherit; color: inherit; }
   flex: 1 0 30vh;
   min-height: 30vh;
 }
-#overlay.splash[data-art="yard"] .panel { --splash: url("../assets/splash-yard.jpg"); }
-#overlay.splash[data-art="marsh"] .panel { --splash: url("../assets/splash-marsh.jpg"); }
-#overlay.splash[data-art="chapel"] .panel { --splash: url("../assets/splash-chapel.jpg"); }
-#overlay.splash[data-art="boss"] .panel { --splash: url("../assets/splash-boss.jpg"); }
+#overlay.splash[data-art="yard"] .panel { --splash: url("../../assets/splash-yard.jpg"); }
+#overlay.splash[data-art="marsh"] .panel { --splash: url("../../assets/splash-marsh.jpg"); }
+#overlay.splash[data-art="chapel"] .panel { --splash: url("../../assets/splash-chapel.jpg"); }
+#overlay.splash[data-art="boss"] .panel { --splash: url("../../assets/splash-boss.jpg"); }
 #overlay.splash #ovActions {
   position: sticky;
   bottom: 0;
@@ -1842,14 +1842,14 @@ button { font: inherit; color: inherit; }
   background-size: 170%;
   background-position: center;
 }
-.ownChip[data-id="wall"] .mark { background-image: url("../assets/upgrade-wall.png"); }
-.ownChip[data-id="aura"] .mark { background-image: url("../assets/upgrade-aura.png"); }
-.ownChip[data-id="turret"] .mark { background-image: url("../assets/upgrade-turret.png"); }
-.ownChip[data-id="spikes"] .mark { background-image: url("../assets/upgrade-spikes.png"); }
-.ownChip[data-id="mend"] .mark { background-image: url("../assets/upgrade-mend.png"); }
-.ownChip[data-id="mines"] .mark { background-image: url("../assets/upgrade-mines.png"); }
-.ownChip[data-id="ammo"] .mark { background-image: url("../assets/upgrade-ammo.png"); }
-.ownChip[data-id="squad"] .mark { background-image: url("../assets/upgrade-squad.png"); }
+.ownChip[data-id="wall"] .mark { background-image: url("../../assets/upgrade-wall.png"); }
+.ownChip[data-id="aura"] .mark { background-image: url("../../assets/upgrade-aura.png"); }
+.ownChip[data-id="turret"] .mark { background-image: url("../../assets/upgrade-turret.png"); }
+.ownChip[data-id="spikes"] .mark { background-image: url("../../assets/upgrade-spikes.png"); }
+.ownChip[data-id="mend"] .mark { background-image: url("../../assets/upgrade-mend.png"); }
+.ownChip[data-id="mines"] .mark { background-image: url("../../assets/upgrade-mines.png"); }
+.ownChip[data-id="ammo"] .mark { background-image: url("../../assets/upgrade-ammo.png"); }
+.ownChip[data-id="squad"] .mark { background-image: url("../../assets/upgrade-squad.png"); }
 .ownChip b { font-size: 11px; }
 .ownChip small { color: var(--gold); font-weight: 800; }
 .ownChip.max small { color: var(--green); }
@@ -2311,7 +2311,7 @@ button.relic:active { transform: rotate(-3deg) scale(0.94); }
   color: var(--text);
   text-align: left;
 }
-.sinkTile .mark { width: 42px; height: 42px; flex: none; border-radius: 9px; background: #1b202c url("../assets/upgrade-wall.png") center / cover no-repeat; box-shadow: inset 0 0 0 2px #a9c2dd; }
+.sinkTile .mark { width: 42px; height: 42px; flex: none; border-radius: 9px; background: #1b202c url("../../assets/upgrade-wall.png") center / cover no-repeat; box-shadow: inset 0 0 0 2px #a9c2dd; }
 .sinkTxt { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .sinkTxt b { font-size: 13px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sinkTxt small { font-size: 10.5px; color: var(--muted); }
@@ -2405,6 +2405,6 @@ button.relic:active { transform: rotate(-3deg) scale(0.94); }
 #callout.obj em { color: #7dffb3; }
 .setChip.cap { border-color: #fff; box-shadow: 0 0 12px color-mix(in srgb, var(--tc) 55%, transparent); }
 
-/* v25: link to the frozen classic build. */
+/* Classic build: link back to the current game. */
 .versionLink { display: block; margin: 12px auto 0; width: max-content; padding: 6px 10px; font-size: 12px; letter-spacing: 0.06em; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; opacity: 0.8; }
 .versionLink:hover, .versionLink:focus-visible { color: #fff; opacity: 1; }
