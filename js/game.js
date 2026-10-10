@@ -3885,7 +3885,8 @@
     drawMines();
     const built = drawSprite("base", BASE.x, BASE.y + BASE.r * 0.15, BASE.r * 2.7, {
       anchor: "center",
-      flash: state.baseFlash > 0 ? Math.min(0.85, state.baseFlash / 0.18) : 0,
+      flash: state.baseFlash > 0 ? Math.min(0.28, state.baseFlash / 0.18 * 0.28) : 0,
+      hit: true,
     });
     if (!built) {
       ctx.beginPath();
