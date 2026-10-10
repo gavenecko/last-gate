@@ -951,8 +951,8 @@
     return d;
   }
 
-  const DMG_SOFT = { k: 2.5, p: 0.5 };
-  const RATE_SOFT = { k: 1.6, p: 0.5 };
+  const DMG_SOFT = { k: 2.5, p: 0.35 };
+  const RATE_SOFT = { k: 1.6, p: 0.35 };
   function softMul(m, c) { return m <= c.k ? m : c.k * Math.pow(m / c.k, c.p); }
   function statsOf(u) {
     const h = HEROES[u.kind];
@@ -7092,7 +7092,7 @@
       const parts = [];
       if (s.dmgRaw > s.dmgMul + 0.01) parts.push("damage x" + s.dmgRaw.toFixed(2) + " → x" + s.dmgMul.toFixed(2));
       if (s.rateRaw > s.rateMul + 0.01) parts.push("attack rate x" + s.rateRaw.toFixed(2) + " → x" + s.rateMul.toFixed(2));
-      body.appendChild(el("p", "hcSoft", "Soft cap: " + parts.join(", ") + ". Past x" + DMG_SOFT.k + " damage and x" + RATE_SOFT.k + " rate, extra bonuses count at their square root."));
+      body.appendChild(el("p", "hcSoft", "Soft cap: " + parts.join(", ") + ". Past x" + DMG_SOFT.k + " damage and x" + RATE_SOFT.k + " rate, extra bonuses count for much less."));
     }
     if (inRun) {
       const xp = el("div", "hcXp");
@@ -7493,7 +7493,7 @@
   }
 
   // Cards every stage plus relics stack up, so the dead toughen up past the opening stages.
-  const ROGUE_HP = { start: 8, per: 0.036, cap: 5, lateAt: 40, late: 0 };
+  const ROGUE_HP = { start: 8, per: 0.036, cap: 30, lateAt: 40, late: 0.3 };
   const ROGUE_BITE = { at: 20, per: 0.03, boss: 0.02 };
   function rogueBite(n) { return 1 + ROGUE_BITE.per * Math.max(0, Math.min(n, 140) - ROGUE_BITE.at); }
   function rogueHp(n) {

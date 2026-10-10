@@ -14,7 +14,7 @@ The game as it was before the late-game rebalance (v24) is kept, frozen, under `
 
 ## How to play
 
-1. Pick a LOADOUT on the title screen (Default is Vera, Roxie and $100), then tap PLAY. Hire the others when they show up in the shop stock. The first of each name is the hero. Further copies are the same kit at a lower rank. They walk and shoot on their own. Squad cap is 10.
+1. Pick a LOADOUT on the title screen (Default is Vera, Roxie and $100), then tap PLAY. Hire the others when they show up in the shop stock. The first of each name is the hero. Further copies are the same kit at a lower rank. They walk and shoot on their own. Squad cap is 8 (12 with both Squad Call levels).
 2. Tap SHOP to hire and upgrade (the run freezes while the menu is open; new hires appear beside the gate). Close it, then press START WAVE in the top bar. Zombies come from all four edges toward the gate. Base HP is on the top of the yard and on the gate itself. If it hits 0, the run ends.
 3. After every stage: pick a card (or skip it for cash), maybe a relic, then choose the next stop on the map. A card then names the next stage, any new enemy, and any twist. Continue, spend cash, then start the wave yourself. It does not auto-start.
 4. During a wave, tap a face in the slim strip under the field to fire that heroine's ability. Hold it to open her card instead. Drag a heroine to move her; double-tap her to let her roam again; quick-tap her to open her card.
@@ -37,7 +37,7 @@ Keyboard, late game: `O` or `0` fires Overdrive when the meter is full. While pl
 | Sable Quinn, pistol gunner | $90 (in the stock from stage 4) | Three-shot volley. Quick pistol bursts at the nearest zombies. Extras are Gunners. |
 | Wren Holt, spear lancer | $75 (in the stock from stage 6) | Close cleave. Short reach, but her spear cuts several zombies at once. Extras are Lancers. |
 
-Hires come from the random shop stock (see below), so not every heroine is offered every stage. The squad cap is 10, +2 per Squad Call level, plus Black Market mercenaries.
+Hires come from the random shop stock (see below), so not every heroine is offered every stage. The squad cap is 8, +2 per Squad Call level (2 levels, so 12), +1 with the Recruit Papers relic. Black Market mercenaries bring their own temporary slot. The shop shows Squad n / cap.
 
 ## Base upgrades
 
@@ -52,7 +52,7 @@ Bought with cash when they show up in the shop stock (one level per offer). Eigh
 | Field Mend | $60 / $90 / $130 / $195 / $260 | The gate heals 1.2 / 2.2 / 3.4 / 4.2 / 4.8 HP per second in waves. |
 | Yard Mines | $90 / $130 / $180 / $270 / $360 | Mines arm around the yard and blast for 24 / 40 / 58 / 68 / 76. |
 | Ammo Stock | $100 / $150 / $210 / $280 | +8% heroine damage per level. |
-| Squad Call | $120 / $180 / $260 | +2 squad slots per level. |
+| Squad Call | $140 / $220 | +2 squad slots per level (cap 8 → 12). |
 
 Shop discounts (Gold 5, Merchant's Ledger, Shop stops) apply to these prices.
 
@@ -67,11 +67,12 @@ There are 100 generated stages. Counts, health, and speed climb as you go. A bos
 | Tank | 5 | High health, slow. |
 | Brute | 7 | Armored. Shots glance off. |
 | Bosses | 10, then every 10th | See Bosses below. |
-| Crawler | 12 | Small, fast, and they swarm. |
-| Elite | 16 | Not a species. A tougher tinted copy mixed into later waves. |
-| Spitter | 18 | Stops short of the gate and fires a slow glob at it. |
-| Shrieker | 26 | A wail that speeds up nearby zombies. |
-| Bloater | 34 | Bursts on death. Hurts the gate if it pops close. |
+| Crawler | 6 | Small, fast, and they swarm. |
+| Spitter | 9 | Stops short of the gate and fires a slow glob at it. From stage 21 about a third of its globs go at a heroine instead: a slimed heroine moves and fires at half speed for 2s. |
+| Elite | 11 | Not a species. A tougher tinted copy mixed into later waves. Bites twice as hard, and walks over to wreck a Spike Trap, Watchtower or Tesla Coil near its path (it is out for 9s). Chews barricades 3x faster. |
+| Shrieker | 13 | A wail that speeds up nearby zombies. From stage 51 it also wails at heroines close by, slowing them for 1.6s. |
+| Bloater | 17 | Bursts on death. Hurts the gate if it pops close. |
+| Ravager | 60 | Red and fast. Charges the nearest heroine, knocks her back and dazes her for 1.6s, then heads for the gate; charges again every 7s. |
 
 ## Bosses
 
@@ -298,11 +299,13 @@ Defenses grow with the stage (more HP and damage), and Field Engineer, Sharpened
 
 ### Promotions
 
-Each hired heroine type can be promoted from her card (PROMOTION) or from PROMOTE in the shop. Every rank gives all copies of her +8% damage and +4% attack rate. Ranks start at $300 and cost 60% more each time. There is no cap: past 5 stars the rank shows as ELITE +1, +2 and so on. Promoted heroines carry a small star over their head on the field.
+Each hired heroine type can be promoted from her card (PROMOTION) or from PROMOTE in the shop. Every rank gives all copies of her +6% damage and +3% attack rate. Ranks start at $300 and cost 60% more each time. There is no cap: past 5 stars the rank shows as ELITE +1, +2 and so on. Promoted heroines carry a small star over their head on the field.
 
 ### Fortify
 
-Once the Sandbag Wall is maxed, FORTIFY opens. Each tier adds +30 max gate HP and cuts the damage the gate takes by another 3%. It starts at $250 and costs 45% more per tier, with no cap.
+Once the Sandbag Wall is maxed, FORTIFY opens. Each tier adds +30 max gate HP and cuts the damage the gate takes by another 3%. It starts at $250 and costs 45% more per tier, with no cap on tiers.
+
+**Gate armor soft cap.** Wall, Fortify, Gate cards and relics all stack into one gate armor number, but past 40% each extra point only counts 40%, and it never goes past 60%. The Fortify tile shows your current gate armor. A maxed wall alone is 48%.
 
 ### Black Market
 
