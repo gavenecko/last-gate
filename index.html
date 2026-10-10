@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#07080d">
   <title>Last Gate</title>
-  <link rel="stylesheet" href="css/style.css?v=23">
+  <link rel="stylesheet" href="css/style.css?v=24">
 </head>
 <body>
   <div id="app">
@@ -43,6 +43,7 @@
               <p id="waveBlurb"></p>
               <p id="mods"></p>
               <p id="twistLine" hidden></p>
+              <p id="objLine" hidden></p>
             </div>
             <h3 class="shopSec stockHead">STOCK <small id="stockInfo"></small><button id="rerollBtn" type="button" aria-label="Reroll the stock"><b>REROLL · $15</b></button></h3>
             <p class="stockNote">New stock every stage. LOCK keeps an offer for the next one.</p>
@@ -51,6 +52,14 @@
             <h4 class="stockSub">BASE <small>Next level</small></h4>
             <div id="baseShop" aria-label="Base upgrades in stock"></div>
             <div id="ownedRow" aria-label="Built so far"></div>
+            <h3 class="shopSec">DEFENSES <small id="defInfo"></small></h3>
+            <div id="defShop" aria-label="Defenses to build on the field"></div>
+            <h3 class="shopSec">PROMOTE <small>Stars for cash  ·  no cap</small></h3>
+            <div id="promoRow" aria-label="Promote heroines"></div>
+            <h3 class="shopSec">FORTIFY <small>Gate tiers past the wall</small></h3>
+            <div id="fortRow"></div>
+            <h3 class="shopSec bmHead">BLACK MARKET <small id="bmInfo"></small></h3>
+            <div id="marketRow" aria-label="Black Market"></div>
             <h3 class="shopSec">BUILD <small>Sets, relics, cards</small></h3>
             <div id="buildRow"></div>
             <h3 class="shopSec">TRAIN</h3>
@@ -69,8 +78,11 @@
       <div id="callout" role="status" aria-live="polite"></div>
     </div>
     <div id="abilBar" hidden>
+      <i id="odLine" aria-hidden="true"></i>
       <div id="abilRow" aria-label="Heroine abilities"></div>
+      <button id="odBtn" type="button" aria-label="Overdrive"><b>0%</b><small>OVERDRIVE</small></button>
       <div id="twistTags"></div>
+      <div id="modeBar" hidden></div>
     </div>
   </div>
 
@@ -84,6 +96,7 @@
       <div id="regionRow" hidden></div>
       <button id="loadoutBtn" type="button" aria-label="Choose a starting loadout"><span class="loFaces" id="loadoutFaces"></span><span class="loLbl"><small>LOADOUT</small><b id="loadoutName">Default</b></span><span class="loGo" aria-hidden="true">&#x203A;</span></button>
       <button id="play" type="button">PLAY</button>
+      <button id="dailyBtn" type="button"><b>DAILY RUN</b><small id="dailyInfo"></small></button>
       <div class="titleRow">
         <button id="titleLab" type="button">LAB</button>
         <button id="titleCards" type="button">CARDS</button>
@@ -144,6 +157,7 @@
               <div class="hcShine" aria-hidden="true"></div>
               <span class="hcRar" id="hcRar">STANDARD</span>
               <span class="hcLv" id="hcLv"><b>1</b><small>LV</small></span>
+              <span class="hcStars" id="hcStars" hidden></span>
               <div class="hcPlate">
                 <h2 id="hcName">Vera Voss</h2>
                 <p id="hcTitle">The Spotter</p>
@@ -191,6 +205,7 @@
       <p id="ovBody"></p>
       <div id="ovDebut" hidden></div>
       <div id="ovTwist" hidden></div>
+      <div id="ovObj" hidden></div>
       <p id="ovPerk" hidden>Pick one. It stays for the run.</p>
       <div id="ovMap" hidden></div>
       <div id="ovChoices"></div>
@@ -203,6 +218,6 @@
       </div>
     </div>
   </div>
-  <script src="js/game.js?v=23"></script>
+  <script src="js/game.js?v=24"></script>
 </body>
 </html>

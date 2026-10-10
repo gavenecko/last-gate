@@ -2181,3 +2181,226 @@ button.relic:active { transform: rotate(-3deg) scale(0.94); }
   letter-spacing: 0.12em;
 }
 .choice .relic { display: inline-grid; margin: 0; color: var(--rc); font-size: 22px; }
+
+/* ---------- v24: late game ---------- */
+/* Overdrive: thin meter along the top of the ability strip, plus a button. */
+#abilBar { position: relative; }
+#odLine {
+  --od: 0;
+  position: absolute;
+  left: 0;
+  top: -1px;
+  height: 2px;
+  width: calc(var(--od) * 100%);
+  background: linear-gradient(90deg, #ff7a3c, #ffd36a);
+  box-shadow: 0 0 6px rgba(255, 160, 60, 0.6);
+  pointer-events: none;
+  transition: width 0.2s linear;
+}
+#odBtn {
+  --od: 0;
+  position: relative;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 38px;
+  padding: 0;
+  border-radius: 10px;
+  border: 2px solid #3a3020;
+  background: linear-gradient(0deg, rgba(255, 140, 50, 0.55) calc(var(--od) * 100%), #12151e 0);
+  color: #ffe2b0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  overflow: hidden;
+}
+#odBtn b { font-family: "Passion One", Impact, sans-serif; font-size: 15px; letter-spacing: 0.03em; }
+#odBtn small { font-size: 6.5px; font-weight: 800; letter-spacing: 0.08em; color: #ffb877; margin-top: 1px; }
+#odBtn.idle { opacity: 0.55; }
+#odBtn.full { border-color: #ffb03a; color: #fff; animation: odGlow 0.9s ease-in-out infinite; }
+#odBtn.on { border-color: #ffd36a; background: linear-gradient(0deg, #ff8a2a calc(var(--od) * 100%), #3a1a08 0); color: #fff; }
+#abilBar.od { background: linear-gradient(180deg, #2a1206, #07080d); }
+@keyframes odGlow {
+  0%, 100% { box-shadow: 0 0 0 0 #ffb03a; }
+  50% { box-shadow: 0 0 12px 2px #ffb03a; }
+}
+@media (max-width: 380px) {
+  #odBtn { width: 40px; height: 36px; }
+  #odBtn small { font-size: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #odBtn.full { animation: none; box-shadow: 0 0 8px #ffb03a; }
+}
+
+/* Placement / selected-defense strip replaces the ability row. */
+#modeBar { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; }
+#modeBar[hidden] { display: none; }
+#abilBar[data-mode] > #abilRow,
+#abilBar[data-mode] > #odBtn,
+#abilBar[data-mode] > #twistTags { display: none; }
+#abilBar[data-mode] { background: #0d1018; }
+.mbTxt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+.mbTxt b { font-size: 13.5px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mbTxt small { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mbOk, .mbSell, .mbX {
+  flex: 0 0 auto;
+  height: 36px;
+  border-radius: 10px;
+  border: 0;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+.mbOk { min-width: 84px; background: linear-gradient(180deg, #7dffb3, #36c47a); color: #062012; }
+.mbOk:disabled { background: #2a3042; color: #6b7286; }
+.mbSell { min-width: 84px; background: linear-gradient(180deg, #ffd36a, #e0a53a); color: #2a1a04; }
+.mbX { width: 36px; background: #1c2130; color: #f4f1ea; font-size: 15px; }
+
+/* Shop: defenses, promotions, fortify, Black Market. */
+#defShop { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.defTile {
+  --dc: #c2a36a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 64px;
+  padding: 5px 7px 5px 4px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--dc) 40%, #2c3348);
+  background: #121620;
+  color: var(--text);
+  text-align: left;
+}
+.defTile .defIco { width: 46px; height: 46px; flex: none; border-radius: 9px; background: radial-gradient(circle at 50% 70%, #2a2f22, #10130e); }
+.defTxt { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.defTxt b { font-size: 12.5px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.defTxt small { font-size: 10px; color: var(--muted); }
+.defTxt em { font-style: normal; font-size: 12.5px; font-weight: 800; color: var(--gold); margin-top: 2px; }
+.defTile.locked { opacity: 0.5; }
+#promoRow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.promo {
+  --ac: #ffc857;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 54px;
+  padding: 4px 6px 4px 4px;
+  border-radius: 12px;
+  border: 1px solid #2c3348;
+  background: #121620;
+  color: var(--text);
+  text-align: left;
+}
+.promo .face { width: 34px; height: 40px; box-shadow: 0 0 0 2px var(--ac); }
+.pTxt { display: flex; flex-direction: column; min-width: 0; line-height: 1.1; }
+.pTxt b { font-size: 12px; color: #fff; }
+.pTxt .stars { font-style: normal; font-size: 10px; color: #ffd36a; letter-spacing: -0.02em; white-space: nowrap; }
+.pTxt .stars.elite { color: #ff7ad0; font-weight: 800; }
+.pTxt em { font-style: normal; font-size: 12px; font-weight: 800; color: var(--gold); }
+.sinkTile, .bmItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 54px;
+  padding: 5px 9px 5px 5px;
+  border-radius: 12px;
+  border: 1px solid #2c3348;
+  background: #121620;
+  color: var(--text);
+  text-align: left;
+}
+.sinkTile .mark { width: 42px; height: 42px; flex: none; border-radius: 9px; background: #1b202c url("../assets/upgrade-wall.png") center / cover no-repeat; box-shadow: inset 0 0 0 2px #a9c2dd; }
+.sinkTxt { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.sinkTxt b { font-size: 13px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sinkTxt small { font-size: 10.5px; color: var(--muted); }
+.sinkPrice { flex: none; font-style: normal; font-weight: 800; font-size: 13px; color: var(--gold); }
+.sinkTile.locked, .bmItem.locked { opacity: 0.5; }
+.broke .sinkPrice, .broke .defTxt em, .broke.promo .pTxt em { color: #ff7a8a; }
+.bmHead { color: #ff9ad0; }
+#marketRow { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 14px; background: repeating-linear-gradient(135deg, #140e18, #140e18 10px, #170f1c 10px, #170f1c 20px); border: 1px solid #3a2448; }
+.bmItem { background: #1a1220; border-color: #3a2448; }
+.bmItem .face { width: 36px; height: 42px; }
+.bmItem .relicBadge { flex: none; }
+.bmGlyph { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 9px; font-size: 20px; font-weight: 800; background: #2a1a34; color: #ff9ad0; }
+.bmGlyph.g-cleanse { color: #ff6a8a; }
+.bmGlyph.g-stim { color: #7dffb3; }
+#marketRow .stockEmpty { border-color: #3a2448; }
+#objLine { color: #ffe9a0; font-size: 12.5px; margin: 4px 0 0; }
+#objLine[hidden] { display: none; }
+
+/* Brief: bonus objective. */
+#ovObj { margin: 10px 0 0; padding: 9px 12px; border-radius: 12px; border: 1px dashed #ffd36a; background: rgba(255, 211, 106, 0.07); text-align: left; }
+#ovObj[hidden] { display: none; }
+#ovObj em { display: block; font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: 0.18em; color: #ffd36a; }
+#ovObj b { display: block; font-size: 15px; color: #fff; margin-top: 2px; }
+#ovObj i { display: block; font-style: normal; font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* Title: Daily Run. */
+#dailyBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid #ffd36a;
+  background: linear-gradient(180deg, #2a2210, #15110a);
+  color: #ffe9a0;
+}
+#dailyBtn b { font-family: "Passion One", Impact, sans-serif; font-size: 21px; letter-spacing: 0.06em; line-height: 1; }
+#dailyBtn small { font-size: 11px; color: #d8c48a; margin-top: 3px; }
+
+/* Card: promotion stars. */
+.hcStars {
+  position: absolute;
+  right: 8px;
+  top: 58px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(8, 9, 14, 0.82);
+  color: #ffd36a;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.hcStars[hidden] { display: none; }
+.hcStars.elite { color: #ff7ad0; }
+.hcPromo { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 8px; }
+.hcPromo .hcStarsTxt { color: #ffd36a; font-size: 15px; }
+.hcPromo .hcStarsTxt.elite { color: #ff7ad0; }
+.hcPromo .right { grid-column: 2; grid-row: 1; }
+.promoBtn {
+  grid-column: 1 / -1;
+  height: 36px;
+  border-radius: 10px;
+  border: 0;
+  background: linear-gradient(180deg, #ffd36a, #e0a53a);
+  color: #2a1a04;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+.promoBtn:disabled { background: #2a3042; color: #6b7286; }
+
+/* Legendary cards: gold foil. */
+.choice.card.r-legendary {
+  border-color: #ffd36a;
+  background: linear-gradient(115deg, #2a210c 0%, #3c2f10 30%, #fff0b0 45%, #3c2f10 55%, #2a210c 100%);
+  background-size: 300% 100%;
+  animation: foil 3.2s linear infinite;
+  box-shadow: 0 0 18px rgba(255, 211, 106, 0.5);
+}
+.choice.card.r-legendary .rar { color: #ffe9a0; }
+.choice.card.r-legendary b { color: #fff6d4; }
+.buildChip.r-legendary, .cardChip.r-legendary { border-color: #ffd36a; background: linear-gradient(90deg, #2a210c, #4a3a14); }
+.cardChip.r-legendary b, .buildChip.r-legendary b { color: #ffe9a0; }
+@keyframes foil { 0% { background-position: 100% 0; } 100% { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .choice.card.r-legendary { animation: none; background-position: 50% 0; } }
+#callout.legend { border-color: #ffd36a; box-shadow: 0 0 26px rgba(255, 211, 106, 0.55); background: linear-gradient(180deg, #2a210c, #0d0b06); }
+#callout.legend em { color: #ffd36a; }
+#callout.obj { border-color: #7dffb3; }
+#callout.obj em { color: #7dffb3; }
+.setChip.cap { border-color: #fff; box-shadow: 0 0 12px color-mix(in srgb, var(--tc) 55%, transparent); }

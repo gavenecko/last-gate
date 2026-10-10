@@ -398,6 +398,7 @@
       ash: 0, power: 0, tempo: 0, gate: 0, veteran: "", regions: { yard: true, marsh: false, chapel: false },
       medals: {}, life: {}, epics: 0, bestEndless: 0, bestCombo: 0,
       loadouts: { default: 1 }, loadout: "default",
+      daily: { best: {}, streak: 0, last: "" }, legends: 0,
     };
   }
 
@@ -434,6 +435,12 @@
         for (const id in data.loadouts) if (data.loadouts[id] && LOADOUT_BY_ID[id]) meta.loadouts[id] = 1;
       }
       if (typeof data.loadout === "string" && LOADOUT_BY_ID[data.loadout] && meta.loadouts[data.loadout]) meta.loadout = data.loadout;
+      if (data.daily && typeof data.daily === "object") {
+        meta.daily.streak = Math.max(0, data.daily.streak | 0);
+        if (typeof data.daily.last === "string") meta.daily.last = data.daily.last;
+        if (data.daily.best && typeof data.daily.best === "object") for (const k in data.daily.best) meta.daily.best[k] = Math.max(0, data.daily.best[k] | 0);
+      }
+      meta.legends = Math.max(0, data.legends | 0);
       return meta;
     } catch (err) {
       return defaultMeta();
@@ -469,17 +476,18 @@
     common: { name: "Common", weight: 65 },
     rare: { name: "Rare", weight: 28 },
     epic: { name: "Epic", weight: 7 },
+    legendary: { name: "Legendary", weight: 0 },
     cursed: { name: "Cursed", weight: 0 },
   };
-  // Card tags. Holding 3 or 5 cards of a tag (copies count) turns on its set bonus.
+  // Card tags. Holding 3, 5 or 7 cards of a tag (copies count) turns on its set bonus.
   const TAGS = {
-    fire: { name: "Fire", color: "#ff8a3c", t3: "Burns spread to nearby zombies.", t5: "Fire deals +40%, and zombies that die burning burst." },
-    hex: { name: "Hex", color: "#c49bff", t3: "Ability cooldowns 15% shorter.", t5: "Abilities hit 25% harder and freeze the field for 1.2s." },
-    gun: { name: "Gun", color: "#7ec8ff", t3: "+10% crit chance.", t5: "+15% attack rate. Crits deal 3x." },
-    blade: { name: "Blade", color: "#9be36a", t3: "+12% heroine damage.", t5: "Hits finish off normal zombies under 15% health. Roxie and Wren +20% damage." },
-    gate: { name: "Gate", color: "#e7c56a", t3: "+40 max gate HP. The gate takes 8% less damage.", t5: "The gate regenerates 2 HP/s in waves, and biters take thorn damage." },
-    gold: { name: "Gold", color: "#ffd94a", t3: "+$1 cash per kill.", t5: "+$2 more per kill. Shop prices 15% off." },
-    mine: { name: "Mine", color: "#ff5d6c", t3: "Mines hit 25% harder. 1 extra mine arms each stage.", t5: "Every mine chains into a second blast. Mines trigger 40% faster." },
+    fire: { name: "Fire", color: "#ff8a3c", t3: "Burns spread to nearby zombies.", t5: "Fire deals +40%, and zombies that die burning burst.", t7: "Inferno: fire deals +50%, and burning zombies take +20% from everything." },
+    hex: { name: "Hex", color: "#c49bff", t3: "Ability cooldowns 15% shorter.", t5: "Abilities hit 25% harder and freeze the field for 1.2s.", t7: "Abilities recharge 30% faster. Overdrive fills 50% faster." },
+    gun: { name: "Gun", color: "#7ec8ff", t3: "+10% crit chance.", t5: "+15% attack rate. Crits deal 3x.", t7: "+15% crit chance and +25% heroine damage." },
+    blade: { name: "Blade", color: "#9be36a", t3: "+12% heroine damage.", t5: "Hits finish off normal zombies under 15% health. Roxie and Wren +20% damage.", t7: "Hits finish off normal zombies under 25% health. Heroines +20% damage." },
+    gate: { name: "Gate", color: "#e7c56a", t3: "+40 max gate HP. The gate takes 8% less damage.", t5: "The gate regenerates 2 HP/s in waves, and biters take thorn damage.", t7: "+150 max gate HP. The gate takes 15% less damage. Thorns hit twice as hard." },
+    gold: { name: "Gold", color: "#ffd94a", t3: "+$1 cash per kill.", t5: "+$2 more per kill. Shop prices 15% off.", t7: "Kills pay +50%. Black Market prices 20% off." },
+    mine: { name: "Mine", color: "#ff5d6c", t3: "Mines hit 25% harder. 1 extra mine arms each stage.", t5: "Every mine chains into a second blast. Mines trigger 40% faster.", t7: "Mines trigger twice as often, hit 30% harder, and every blast leaves fire." },
   };
   const TAG_IDS = Object.keys(TAGS);
   // stack: how many copies a run can hold. instant: one-shot effect (always offerable).
@@ -544,6 +552,18 @@
     { id: "chainmines", name: "Chain Mines", rarity: "rare", kind: "", tags: ["mine"], desc: "Mines blast an area and set off a second mine. Grants Mines LV 1 if you have none." },
     { id: "minelayer", name: "Minelayer", rarity: "rare", kind: "", tags: ["mine"], desc: "Mines trigger 30% faster. Grants Mines LV 1 if you have none." },
     { id: "clusterbomb", name: "Cluster Charge", rarity: "epic", kind: "", tags: ["mine", "fire"], need: "mines", desc: "Every mine blast leaves a fire patch." },
+    // Late game: Overdrive, defenses, objectives.
+    { id: "adrenaline", name: "Adrenaline", rarity: "rare", kind: "", tags: ["hex"], stack: 2, desc: "Overdrive fills 35% faster." },
+    { id: "redline", name: "Redline", rarity: "epic", kind: "", tags: ["gun"], desc: "Overdrive lasts 3s longer, and heroines deal +25% damage during it." },
+    { id: "stakes", name: "Sharpened Stakes", rarity: "common", kind: "", tags: ["gate", "blade"], stack: 3, desc: "Spike Traps cut 40% harder. Barricades get +40% HP." },
+    { id: "engineer", name: "Field Engineer", rarity: "rare", kind: "", tags: ["mine"], desc: "Defenses cost 25% less. Flame Barrels blast 50% wider and harder." },
+    { id: "arcconductor", name: "Arc Conductor", rarity: "rare", kind: "", tags: ["hex"], need: "tesla", desc: "Tesla Coils jump to 2 more zombies and hit 35% harder." },
+    { id: "taskmaster", name: "Taskmaster", rarity: "common", kind: "", tags: ["gold"], desc: "Stage objectives pay double." },
+    // Legendary: stage 50 and up, rare, gold foil.
+    { id: "doomsday", name: "Doomsday Clock", rarity: "legendary", kind: "", tags: ["hex", "mine"], desc: "Every 15s, every zombie on the field loses 10% of its max HP (bosses 2%)." },
+    { id: "phoenix", name: "Phoenix Gate", rarity: "legendary", kind: "", tags: ["gate", "fire"], desc: "Once per stage, when the gate drops below 40%, it heals half its max HP and sets the crowd near it on fire." },
+    { id: "gilded", name: "Gilded Arsenal", rarity: "legendary", kind: "", tags: ["gold", "gun"], desc: "Heroines deal +1% damage for every $250 you hold (up to +80%)." },
+    { id: "warlord", name: "Warlord", rarity: "legendary", kind: "", tags: ["blade", "gun"], desc: "Heroines +30% damage and attack rate. Overdrive fills 25% faster." },
     // Curses: big upside, lasting downside.
     { id: "bloodpact", name: "Blood Pact", rarity: "cursed", curse: true, kind: "", tags: ["blade"], desc: "+40% heroine damage.", down: "Gate max HP -25%." },
     { id: "glassgate", name: "Glass Gate", rarity: "cursed", curse: true, kind: "", tags: ["gun", "gate"], desc: "Turret damage x2. Grants Turret LV 1 if you have none.", down: "The gate takes +20% damage." },
@@ -583,6 +603,8 @@
     { id: "papers", name: "Recruit Papers", mono: "RP", color: "#e7c56a", desc: "A free random heroine joins now, and the squad cap is +1." },
     { id: "blackcat", name: "Black Cat", mono: "BC", color: "#8a5cff", desc: "Curse downsides are halved (Fool's Gold's is lifted)." },
     { id: "ankh", name: "Last Rites", mono: "LR", color: "#ffcf5a", desc: "Once per run, when the gate would fall, it holds at 30% HP and the dead freeze for 3s." },
+    { id: "nitro", name: "Nitro Flask", mono: "NF", color: "#ffb03a", desc: "Overdrive starts every stage at least 40% full. Kills during Overdrive heal the gate 1 HP." },
+    { id: "afterburner", name: "Afterburner", mono: "AB", color: "#ff7a3c", desc: "When Overdrive ends, a shockwave hits every zombie on the field." },
   ];
   const RELIC_BY_ID = {};
   for (const r of RELICS) RELIC_BY_ID[r.id] = r;
@@ -732,6 +754,10 @@
     { id: "syn3", name: "Chemistry", desc: "Have 3 synergies active at once.", ash: 10 },
     { id: "bond3", name: "Kindred", desc: "Reach Bond 3 with any heroine.", ash: 15 },
     { id: "endless", name: "No End", desc: "Clear stage 110 in Endless.", ash: 30 },
+    { id: "legend", name: "Legendary", desc: "Pick a legendary card.", ash: 20 },
+    { id: "fortress", name: "Fortress", desc: "Have 8 defenses on the field at once.", ash: 10 },
+    { id: "od10", name: "Redlined", desc: "Trigger Overdrive 10 times in one run.", ash: 12 },
+    { id: "daily25", name: "Daily Grind", desc: "Clear stage 25 in a Daily Run.", ash: 15 },
   ];
   const MEDAL_BY_ID = {};
   for (const m of MEDALS) MEDAL_BY_ID[m.id] = m;
@@ -815,6 +841,7 @@
   }
 
   const units = [];
+  const defenses = [];
   const enemies = [];
   const bolts = [];
   const lobs = [];
@@ -887,6 +914,12 @@
       stock: null, relics: [], relicSet: {}, node: "start", map: { seed: 1, lane: 1, start: 1 }, post: null,
       tagN: {}, sets: {}, bm: null, gateBase: BASE_HP0, wardUp: false, hourglass: false, ankhUsed: false,
       tally: 0, tranceT: 0, loadout: "default", skips: 0, lastMystery: "",
+      // Late game: cash sinks, Overdrive, objectives, daily seed.
+      promo: kindMap(0), fort: 0, market: { wave: 0, buys: {}, relics: [], relicSold: false, merc: "", mercSold: false },
+      bmPicks: 0, spent: { promo: 0, fort: 0, market: 0, def: 0 },
+      od: 0, odT: 0, odMax: 6, odUses: 0, doomCd: 15, phoenixUsed: false,
+      obj: null, pickBoost: 0, objDone: 0, objFail: 0,
+      daily: null, rngN: {},
     };
   }
   const state = freshState();
@@ -953,6 +986,7 @@
     if (state.rallyT > 0) tempRate *= 1.4;
     if (state.spreeT > 0) tempRate *= 1.35;
     if (state.tranceT > 0) tempRate *= 1.3;
+    if (state.odT > 0) tempRate *= 2;
     if (u.slowT > 0) tempRate *= 0.5;
     const tempMove = u.slowT > 0 ? 0.55 : 1;
     // Level, traits, bond and synergies for her kind.
@@ -961,12 +995,12 @@
     return {
       kind: h.attack,
       accent: h.accent,
-      dmg: h.dmg * low * state.dmgMult * skillDmg * labDmg * ammoDmg * km.dmg * flag,
-      range: range * km.range,
+      dmg: h.dmg * low * state.dmgMult * skillDmg * labDmg * ammoDmg * km.dmg * flag * lateDmg(),
+      range: range * km.range * (u.tower ? 1.25 : 1),
       rate: h.rate * (u.named ? 1 : 0.9) * state.rateMult * skillRate * labRate * tempRate * km.rate,
       move: h.move * (u.named ? 1 : 0.92) * state.moveMult * B().move * tempMove,
       leash: h.leash,
-      seek: seek * km.range,
+      seek: seek * km.range * (u.tower ? 1.25 : 1),
       post: h.post,
       aoe: (h.aoe || 0) * (u.named ? 1 : 0.78) * km.aoe,
       patch: (h.patch || 0) * low * state.dmgMult * skillDmg * labDmg * ammoDmg * km.dmg * km.patchDps,
@@ -1030,7 +1064,7 @@
   }
 
   function squadCap() {
-    return CAP + ((state.ups && state.ups.squad) || 0) * 2 + (B().capAdd | 0);
+    return CAP + ((state.ups && state.ups.squad) || 0) * 2 + (B().capAdd | 0) + mercCount();
   }
 
   function buy(id) {
@@ -1315,6 +1349,7 @@
     bursts.length = 0;
     fxs.length = 0;
     scheduleEvent(spec, lastT);
+    lateStageStart();
     const nodeKind = !spec.boss && NODES[state.node] && state.node !== "fight" && state.node !== "start" ? NODES[state.node].name.toUpperCase() : "";
     const kind = spec.finale ? "FINALE" : state.endless ? (spec.boss ? "ENDLESS BOSS" : "ENDLESS" + (nodeKind ? " " + nodeKind : "")) : spec.boss ? "BOSS" : nodeKind || (spec.challenge ? "CHALLENGE" : "STAGE");
     let twistNames = "";
@@ -1376,6 +1411,7 @@
       else if ((who === "roxie" || who === "wren") && syn.frontline && distBase(e.x, e.y) <= BASE.r + e.r + 3.2) amt *= 1.2;
     }
     if (e.frailT > 0) amt *= 1.15;
+    if (e.burnT > 0 && B().burnVuln) amt *= 1 + B().burnVuln;
     if ((e.elite || e.boss || e.bounty) && B().eliteTaken !== 1) amt *= B().eliteTaken;
     if (src !== 2 && state.tw.ironhide && !pierceArmor) amt = Math.max(amt * 0.2, amt - state.ironArmor);
     let dealt = amt * (1 - (pierceArmor ? 0 : (e.armor || 0)));
@@ -1409,11 +1445,13 @@
       toast("Bounty: " + e.bname + " down  +$" + e.bounty + "  +2 ash", 2200);
       burst(e.x, e.y, "#ffd56a", 18, 9);
       if (state.event && state.event.kind === "bounty") state.event = null;
+      objEvent("bounty");
     }
     state.cash += reward;
     state.earned += reward;
     state.kills++;
     creditKill(e);
+    lateKill(e);
     if (cc("triage")) healGate(0.5 * cc("triage"));
     state.tally = (state.tally | 0) + 1;
     if (hasRelic("tally") && state.tally % 10 === 0) tallyVolley();
@@ -1469,6 +1507,7 @@
     state.baseHp -= dmg;
     state.baseHurt += dmg;
     if (state.baseMax > 0) state.minHpFrac = Math.min(state.minHpFrac, Math.max(0, state.baseHp) / state.baseMax);
+    if (state.minHpFrac < 0.7) objFail("gate70");
     state.shake = Math.min(1.3, state.shake + (reduceMotion ? 0 : 0.45));
     state.baseFlash = 0.16;
     if (floaters.length < 20) {
@@ -1485,6 +1524,7 @@
       rings.push({ x: BASE.x, y: BASE.y, r: BASE.r, max: 40, life: 0.6, color: "#7dffb3" });
       toast("Second Wind", 1600);
     }
+    if (cc("phoenix") && !state.phoenixUsed && state.baseHp > 0 && state.baseHp < state.baseMax * 0.4) phoenixBurst();
     if (state.baseHp <= 0 && hasRelic("ankh") && !state.ankhUsed) {
       state.ankhUsed = true;
       state.baseHp = Math.max(1, Math.round(state.baseMax * 0.3));
@@ -1996,6 +2036,7 @@
           launchSpit(e, dist);
         }
       } else if (dist > stop) {
+        if (defenses.length && barricadeHold(e, dt)) continue;
         const step = e.speed * pace * dt;
         const nx = dx / dist, ny = dy / dist;
         const wobAmp = e.crawler ? 1.35 : 0.45;
@@ -2011,6 +2052,7 @@
           e.reached = true;
           e.bounty = 0;
           toast("Bounty lost: " + e.bname + " reached the gate", 1800);
+          objFail("bounty");
           if (state.event && state.event.kind === "bounty") state.event = null;
         }
         if (e.stunT <= 0) {
@@ -2197,7 +2239,9 @@
           }
           if (next) bolts.push({ x: t.x, y: t.y, ox: t.x, oy: t.y, targetId: next.id, dmg: p.dmg * 0.8, color: p.color, src: p.src, pierce: p.pierce - 1, prev: t.id, by: p.by });
         }
+        if (p.def) curDef = true;
         hurtEnemy(t, p.dmg, p.src || 0, p.by);
+        curDef = false;
         burst(t.x, t.y, p.color, 3, 3);
       } else {
         p.x += (dx / d) * step;
@@ -2332,6 +2376,7 @@
     u.x += nx * dist;
     u.y += ny * dist;
     u.dazeT = Math.max(u.dazeT, daze);
+    objFail("nodaze");
     clampUnit(u);
     burst(u.x, u.y - 4, "#fff4cc", 6, 5);
     if (floaters.length < 24) floaters.push({ x: u.x, y: u.y - 17, text: "DAZED", life: 0.9, color: "#ffdf8a" });
@@ -2351,6 +2396,7 @@
             if (d <= 14) knockUnit(u, dx / d, dy / d, 7, 1.3);
           }
           rings.push({ x: e.x, y: e.y, r: 1, max: 13, life: 0.4, color: "#ff6a4a" });
+          smashBarricades(e.x, e.y, 13);
           burst(e.x, e.y, "#c8a070", 16, 9);
           state.shake = Math.min(1.6, state.shake + 1);
           e.charge = { phase: "rest", t: 0.8 };
@@ -2381,6 +2427,7 @@
         if (o === e || o.dead || o.boss) continue;
         if (Math.abs(o.x - e.x) < e.r + 2 && Math.abs(o.y - e.y) < e.r + 2) knockEnemy(o, e.x - nx * 2, e.y - ny * 2, 3);
       }
+      if (defenses.length) smashBarricades(e.x, e.y, e.r + 3.5);
       if (particles.length < 120 && !reduceMotion) burst(e.x, e.y + 1, "#8a7458", 1, 3);
       if (distBase(e.x, e.y) <= BASE.r + e.r * 0.62) {
         const a = Math.atan2(e.y - BASE.y, e.x - BASE.x);
@@ -2811,6 +2858,7 @@
     state.shake = Math.min(1.6, state.shake + (reduceMotion ? 0 : 0.7));
     abilitySfx(kind);
     toast(HEROES[kind].short + " · " + ABILITIES[kind].name, 1000);
+    objEvent("abil");
     return true;
   }
 
@@ -2924,24 +2972,25 @@
     if (n < 5 || spec.finale || (spec.boss && n < 60)) { state.twistSince++; return []; }
     let chance = n < 30 ? 0.34 : n < 60 ? 0.46 : 0.58;
     if (spec.boss) chance = 0.5;
-    const force = !spec.boss && state.twistSince >= 2;
-    if (!force && Math.random() >= chance) { state.twistSince++; return []; }
+    const rnd = rngFor("twist");
+    const force = !spec.boss && (state.twistSince >= 2 || dmod("twisted"));
+    if (!force && rnd() >= chance) { state.twistSince++; return []; }
     const pool = [];
     for (const id of TWIST_IDS) {
       if (id === state.lastTwist) continue;
       if (spec.boss && !TWISTS[id].boss) continue;
       pool.push(id);
     }
-    const first = pool[(Math.random() * pool.length) | 0];
+    const first = pool[(rnd() * pool.length) | 0];
     const out = [first];
-    if (!spec.boss && n >= 60 && Math.random() < 0.38) {
+    if (!spec.boss && n >= 60 && rnd() < 0.38) {
       const rest = [];
       for (const id of pool) {
         if (id === first) continue;
         if ((first === "giants" && id === "swarm") || (first === "swarm" && id === "giants")) continue;
         rest.push(id);
       }
-      if (rest.length) out.push(rest[(Math.random() * rest.length) | 0]);
+      if (rest.length) out.push(rest[(rnd() * rest.length) | 0]);
     }
     state.lastTwist = first;
     state.twistSince = 0;
@@ -3026,6 +3075,7 @@
     state.streak = 0;
     for (const u of units) { u.stormT = 0; u.whirlT = 0; u.dazeT = 0; u.slowT = 0; }
     const cleared = state.wave;
+    lateClear(cleared);
     const specCleared = stageSpec(cleared);
     const bmC = B();
     const bonus = Math.round((8 + cleared * 3) * bmC.clearMul * (state.node === "elite" && !specCleared.boss ? 1.5 : 1)) + bmC.clearFlat;
@@ -3121,7 +3171,7 @@
 
   function update(dt) {
     if (state.phase === "paused" || state.phase === "title") return;
-    if (shopOpen || cardOpen) { musicTick(dt); return; }
+    if (shopOpen || cardOpen || placing) { musicTick(dt); return; }
     state.time += dt;
     state.shake = Math.max(0, state.shake - dt * 1.8);
     state.baseFlash = Math.max(0, state.baseFlash - dt);
@@ -3137,6 +3187,7 @@
         spawnEnemy(job.type, job.elite, job);
       }
       updateBuffs(dt);
+      updateLate(dt);
       updateEvents(dt);
       updateEnemies(dt);
       if (state.phase === "fight") updateSpits(dt);
@@ -3146,6 +3197,7 @@
       if (state.phase === "fight") updateBursts(dt);
       if (state.phase === "fight") updateFireWall(dt);
       if (state.phase === "fight") updateMortar(dt);
+      if (state.phase === "fight") updateDefenses(dt);
       if (state.phase === "fight") updateUnits(dt);
       if (state.phase === "fight") updateTurret(dt);
       if (state.phase === "fight") updateMines(dt);
@@ -3284,6 +3336,8 @@
       ctx.fill();
       ctx.globalAlpha = 1;
     }
+    const pr = promoRank(u.kind);
+    if (pr > 0 && u.named) drawStarPip(x, y - height - 1.3, pr > 5 ? "#ff7ad0" : "#ffd36a", 0.62);
   }
 
   function enemyHeight(e) {
@@ -5175,6 +5229,7 @@
     drawFireWall();
     for (const d of drops) if (d.fall <= 0) drawDrop(d);
     drawHolds();
+    drawDefenses();
     for (const e of enemies) {
       if (e.dead && e.dying <= 0) continue;
       if (e.egg) drawEgg(e);
@@ -5247,6 +5302,7 @@
     drawSurvivor();
     for (const d of drops) if (d.fall > 0) drawDrop(d);
     drawAbilityFx();
+    drawZaps();
     for (const p of particles) {
       ctx.globalAlpha = Math.max(0, p.life / (p.max || 0.5));
       ctx.fillStyle = p.color;
@@ -5296,6 +5352,9 @@
       ctx.restore();
     }
     if (state.tw.fog && (state.phase === "fight" || state.phase === "paused")) drawFogOverlay(jx, jy);
+    drawOdTint();
+    drawGhost();
+    drawObjective();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     drawThreatBar();
@@ -5407,6 +5466,12 @@
       const txt = names.length ? "TWIST  ·  " + names.join("  ·  ") : "";
       if (tl.textContent !== txt) tl.textContent = txt;
       if (tl.hidden === !!txt) tl.hidden = !txt;
+      const ol = $("objLine");
+      const o = state.obj && state.obj.wave === state.wave ? state.obj : null;
+      const otxt = o ? (o.done > 0 ? "BONUS \u2713  " : o.done < 0 ? "BONUS \u2717  " : "BONUS  ·  ") + objText(o) + (o.done ? "" : "  ·  " + objRewardText(o).replace("Reward: ", "")) : "";
+      if (ol.textContent !== otxt) ol.textContent = otxt;
+      if (ol.hidden === !!otxt) ol.hidden = !otxt;
+      syncSinks();
     }
     syncAbilBar();
   }
@@ -5711,6 +5776,7 @@
       [String(state.kills), "Kills"],
       ["$" + state.earned, "Cash earned"],
     ];
+    if (state.daily) rows.push([String((dailyMeta().best[state.daily.key] | 0) || "-"), "Daily best · " + prettyDate(state.daily.key)]);
     for (const pair of rows) {
       const d = document.createElement("div");
       d.className = "sum";
@@ -5775,6 +5841,9 @@
 
   function showEnd(kind) {
     hideMenus();
+    endOverdrive(true);
+    placing = null;
+    selDef = 0;
     forceCloseShop();
     spits.length = 0;
     bolts.length = 0;
@@ -5844,6 +5913,10 @@
     drops.length = 0;
     fxs.length = 0;
     bursts.length = 0;
+    defenses.length = 0;
+    placing = null;
+    selDef = 0;
+    setMusicOd(false);
     drag = null;
     const next = freshState();
     next.muted = muted;
@@ -5911,14 +5984,15 @@
     $("restartConfirm").classList.add("hidden");
   }
 
-  function startRun(region) {
+  function startRun(region, daily) {
     let safe = "yard";
-    const which = region || pickedRegion || "yard";
+    const which = daily ? "yard" : (region || pickedRegion || "yard");
     if (which === "marsh" && meta.regions.marsh) safe = "marsh";
     if (which === "chapel" && meta.regions.chapel) safe = "chapel";
     pickedRegion = safe;
     if (cardOpen) closeCard();
     resetRun(true);
+    state.daily = daily || null;
     const startN = safe === "chapel" ? 51 : safe === "marsh" ? 21 : 1;
     state.wave = startN;
     setTwists(rollTwists(startN));
@@ -5927,12 +6001,15 @@
     if (startN >= 4) state.toldSable = true;
     if (startN >= 6) state.toldWren = true;
     state.mineCd = 2.6;
-    state.map = { seed: (Math.random() * 1e9) | 0, lane: 1, start: startN };
+    state.map = { seed: daily ? daily.seed : (Math.random() * 1e9) | 0, lane: 1, start: startN };
     state.node = "start";
-    const lo = activeLoadout();
+    const lo = daily ? LOADOUT_BY_ID[daily.loadout] : activeLoadout();
     const kinds = applyLoadout(lo, startN);
-    refreshMods();
+    if (daily && dmod("tithe")) { const r = randomRelic(); if (r) addRelic(r, true); }
+    rebuild();
+    if (daily) state.baseHp = state.baseMax;
     rollStock();
+    ensureObjective();
     hideMenus();
     forceCloseShop();
     $("titleScreen").classList.add("hidden");
@@ -5941,7 +6018,7 @@
     $("pauseScreen").classList.add("hidden");
     if (startN >= 51) announceRegion(startN);
     else if (startN >= 21) announceRegion(startN);
-    else toast(lo.name + ": " + kinds.map((k) => HEROES[k].short).join(" and ") + " hold the yard.", 2000);
+    else if (!daily) toast(lo.name + ": " + kinds.map((k) => HEROES[k].short).join(" and ") + " hold the yard.", 2000);
   }
 
   function showTitle() {
@@ -5958,6 +6035,7 @@
     renderRegions();
     renderEndlessLine();
     renderLoadoutBtn();
+    renderDailyBtn();
   }
 
   function enterPause() {
@@ -5969,6 +6047,13 @@
   }
 
   function togglePause() {
+    if (placing) {
+      const back = placing.fromPause;
+      cancelPlace(false);
+      if (!back) enterPause();
+      else enterPause();
+      return;
+    }
     if (shopOpen) {
       // Pausing from inside the shop: fold the shop away and land on the pause screen.
       const stayPaused = shopFromPause;
@@ -5997,6 +6082,8 @@
   function openShop() {
     if (shopOpen || !state.runLive) return;
     if (!$("restartConfirm").classList.contains("hidden")) return;
+    if (placing) cancelPlace(false);
+    selDef = 0;
     if (state.phase === "paused") {
       // Opened from the pause screen: shop with the run frozen, and go back to paused on close.
       const from = state.pausedFrom || "fight";
@@ -6306,6 +6393,8 @@
       m.patchTime *= bm.kPatchT[k];
       m.crit += bm.crit;
       if (bm.critMul) m.critMul = Math.max(m.critMul || 2, bm.critMul);
+      const pr = promoRank(k);
+      if (pr) { m.dmg *= Math.pow(PROMO_DMG, pr); m.rate *= Math.pow(PROMO_RATE, pr); }
       kindMods[k] = m;
     }
     if (synOn("frontline")) { kindMods.roxie.rate *= 1.12; kindMods.wren.rate *= 1.12; }
@@ -6414,6 +6503,10 @@
     state.comboPop = 0.22;
     if (state.combo > state.comboBest) state.comboBest = state.combo;
     if (state.combo > (meta.bestCombo || 0)) meta.bestCombo = state.combo;
+    odGain(odPerKill(e));
+    if (state.combo % 25 === 0) odGain(6);
+    objProgress("streak", state.combo);
+    if (state.odT > 0 && hasRelic("nitro")) healGate(1);
     if (state.combo === 25) shout("25 STREAK", "#ffd36a", 1);
     else if (state.combo === 50) { shout("50 STREAK", "#ff9a3c", 1); earnMedal("combo50"); }
     else if (state.combo === 100) shout("UNSTOPPABLE", "#ff5d8f", 2);
@@ -6673,6 +6766,29 @@
     return true;
   }
 
+  function syncOdBtn(live) {
+    const ob = $("odBtn");
+    if (!ob) return;
+    const on = state.odT > 0;
+    const pct = on ? Math.max(0, state.odT / (state.odMax || 6)) : state.od / 100;
+    const p = Math.round(pct * 100) / 100;
+    if (ob._p !== p) {
+      ob._p = p;
+      ob.style.setProperty("--od", String(p));
+      $("odLine").style.setProperty("--od", String(p));
+    }
+    const cls = on ? "on" : state.od >= 100 && live ? "full" : !live ? "idle" : "";
+    const lbl = on ? Math.ceil(state.odT) + "s" : state.od >= 100 ? "GO" : Math.floor(state.od) + "%";
+    if (ob._c !== cls) {
+      ob._c = cls;
+      ob.classList.toggle("on", cls === "on");
+      ob.classList.toggle("full", cls === "full");
+      ob.classList.toggle("idle", cls === "idle");
+      $("abilBar").classList.toggle("od", on);
+    }
+    if (ob._l !== lbl) { ob._l = lbl; ob.querySelector("b").textContent = lbl; }
+  }
+
   function syncAbilBar() {
     const bar = $("abilBar");
     const show = state.runLive && state.phase !== "title";
@@ -6682,6 +6798,8 @@
     const key = kinds.join(",");
     if (key !== abilKey) { abilKey = key; buildAbilBar(kinds); }
     const live = state.phase === "fight" && !shopOpen && !cardOpen;
+    syncModeBar(false);
+    syncOdBtn(live);
     for (const k of kinds) {
       const slot = abilButtons[k];
       if (!slot) continue;
@@ -6855,6 +6973,11 @@
     lvEl.querySelector("b").textContent = inRun ? String(lv) : "-";
     lvEl.classList.toggle("due", due >= 0);
     lvEl.setAttribute("aria-label", "Level " + lv);
+    const stEl = $("hcStars");
+    const prk = inRun ? promoRank(kind) : 0;
+    stEl.hidden = !prk;
+    stEl.textContent = prk > 5 ? "\u2605 ELITE +" + (prk - 5) : "\u2605".repeat(prk);
+    stEl.classList.toggle("elite", prk > 5);
 
     // ----- Front body -----
     const body = $("hcBody");
@@ -6925,6 +7048,20 @@
       xp.appendChild(bar);
       xp.appendChild(el("span", "", lv >= LV_MAX ? cur + " XP" : cur + " / " + hi + " XP"));
       body.appendChild(xp);
+      const pr = promoRank(kind);
+      const psec = el("h4", "hcSec", "PROMOTION");
+      psec.appendChild(el("small", "", "+8% damage, +4% rate per rank. No cap."));
+      body.appendChild(psec);
+      const pb = el("div", "hcBox hcPromo" + (pr ? " on" : " off"));
+      pb.appendChild(el("span", "right", pr ? "x" + Math.pow(PROMO_DMG, pr).toFixed(2) + " dmg" : "Rank 0"));
+      pb.appendChild(el("b", "hcStarsTxt" + (pr > 5 ? " elite" : ""), promoLabel(pr)));
+      const cost = promoCost(kind);
+      const btn = el("button", "promoBtn", owned.length ? "PROMOTE  ·  $" + cost : "Hire her to promote");
+      btn.type = "button";
+      btn.disabled = !owned.length || !canShop() || state.cash < cost;
+      btn.addEventListener("click", (ev) => { ev.stopPropagation(); unlock(); buyPromo(kind); });
+      pb.appendChild(btn);
+      body.appendChild(pb);
     }
 
     // Ability
@@ -7164,6 +7301,8 @@
       abilCd: 1, abilPow: 1, abilDur: 1, abilFreeze: 0, trance: false,
       enemyHp: 1, enemySpeed: 1, fire: 1, spread: false, burnBlast: false, pyre: 0, eliteTaken: 1, execute: 0, nearGate: 1,
       emberRounds: false, witchfire: false,
+      odFill: 1, odDur: 0, odDmg: 1, defDisc: 1, barHp: 1, spikeDmg: 1, barrelR: 1, barrelDmg: 1, teslaDmg: 1, teslaChain: 0,
+      objMul: 1, marketDisc: 1, burnVuln: 0, upCost: 1, rerollMul: 1,
     };
   }
 
@@ -7239,7 +7378,7 @@
       if (c) for (const tg of c.tags) t[tg]++;
     }
     const sets = {};
-    for (const id of TAG_IDS) sets[id] = t[id] >= 5 ? 5 : t[id] >= 3 ? 3 : 0;
+    for (const id of TAG_IDS) sets[id] = t[id] >= 7 ? 7 : t[id] >= 5 ? 5 : t[id] >= 3 ? 3 : 0;
     state.tagN = t;
     state.sets = sets;
     if (sets.fire >= 3) b.spread = true;
@@ -7256,6 +7395,26 @@
     if (sets.gold >= 5) { b.killCash += 2; b.disc *= 0.85; }
     if (sets.mine >= 3) { b.mineDmg *= 1.25; b.mineArm += 1; }
     if (sets.mine >= 5) { b.mineChain = true; b.mineRate *= 1.4; }
+    // Tier-3 capstones at 7.
+    if (sets.fire >= 7) { b.fire *= 1.5; b.burnVuln = 0.2; }
+    if (sets.hex >= 7) { b.abilCd *= 0.7; b.odFill *= 1.5; }
+    if (sets.gun >= 7) { b.crit += 0.15; b.dmg *= 1.25; }
+    if (sets.blade >= 7) { b.execute = Math.max(b.execute, 0.25); b.dmg *= 1.2; }
+    if (sets.gate >= 7) { b.gateAdd += 150; b.gateTaken *= 0.85; b.thorns += 2; }
+    if (sets.gold >= 7) { b.cashMul *= 1.5; b.marketDisc *= 0.8; }
+    if (sets.mine >= 7) { b.mineRate *= 2; b.mineDmg *= 1.3; b.clusterFire = true; }
+    // Late-game cards, fortify tiers and the daily rules.
+    b.gateAdd += 30 * (state.fort | 0);
+    b.gateTaken *= Math.pow(0.97, state.fort | 0);
+    b.odFill *= Math.pow(1.35, n("adrenaline"));
+    if (n("redline")) { b.odDur += 3; b.odDmg *= 1.25; }
+    b.spikeDmg *= 1 + 0.4 * n("stakes");
+    b.barHp *= 1 + 0.4 * n("stakes");
+    if (n("engineer")) { b.defDisc *= 0.75; b.barrelR *= 1.5; b.barrelDmg *= 1.5; }
+    if (n("arcconductor")) { b.teslaChain += 2; b.teslaDmg *= 1.35; }
+    if (n("taskmaster")) b.objMul *= 2;
+    if (n("warlord")) { b.dmg *= 1.3; b.rate *= 1.3; b.odFill *= 1.25; }
+    if (state.daily) for (const id of state.daily.mods) { const dm = DAILY_BY_ID[id]; if (dm) dm.fx(b); }
     // Relics
     if (hasRelic("sapper")) b.mineArm += 3;
     if (hasRelic("wardrum")) b.rate *= 1.12;
@@ -7323,7 +7482,7 @@
       for (const tg of TAG_IDS) {
         const lv = state.sets[tg] || 0;
         if (lv > (before[tg] || 0)) {
-          callout("SET BONUS · " + TAGS[tg].name.toUpperCase() + " " + lv, TAGS[tg].name + " " + lv, lv >= 5 ? TAGS[tg].t5 : TAGS[tg].t3, "set");
+          callout("SET BONUS · " + TAGS[tg].name.toUpperCase() + " " + lv, TAGS[tg].name + " " + lv, lv >= 7 ? TAGS[tg].t7 : lv >= 5 ? TAGS[tg].t5 : TAGS[tg].t3, lv >= 7 ? "set legend" : "set");
         }
       }
     }
@@ -7337,6 +7496,8 @@
     if (c.kind && !units.some((u) => u.kind === c.kind)) return false;
     if (c.need === "mines" && !(state.ups.mines | 0)) return false;
     if (c.need === "turret" && !(state.ups.turret | 0)) return false;
+    if (c.need === "tesla" && !defenses.some((d) => d.type === "tesla")) return false;
+    if (c.rarity === "legendary" && state.wave < 50 && !state.endless) return false;
     return true;
   }
 
@@ -7344,23 +7505,30 @@
 
   // mode: "normal" (common 65 / rare 28 / epic 7+) or "rare" (rare and epic only).
   function rollCardOffer(mode, curseChance) {
+    const rnd = rngFor("cards");
     const want = clamp(B().choices, 1, 5);
-    const pools = { common: [], rare: [], epic: [] };
+    const pools = { common: [], rare: [], epic: [], legendary: [] };
+    const lw = state.wave >= 50 || state.endless ? 1 : 0;
+    let legend = false;
     for (const c of CARDS) if (!c.curse && cardOk(c)) pools[c.rarity].push(c);
     const out = [];
     const taken = {};
     for (let i = 0; i < want; i++) {
-      const w = mode === "rare" ? { common: 0, rare: 28, epic: epicWeight() * 1.6 } : { common: 65, rare: 28, epic: epicWeight() };
+      const w = mode === "epic" ? { common: 0, rare: 0, epic: 20, legendary: lw * 9 }
+        : mode === "rare" ? { common: 0, rare: 28, epic: epicWeight() * 1.6, legendary: lw * 3.2 }
+        : { common: 65, rare: 28, epic: epicWeight(), legendary: lw * 1.6 };
+      if (legend) w.legendary = 0;
       let total = 0;
       for (const r in w) {
         if (w[r] > 0 && pools[r].some((c) => !taken[c.id])) total += w[r];
         else w[r] = 0;
       }
+      if (total <= 0 && pools.rare.some((c) => !taken[c.id])) { w.rare = 28; total = 28; }
       if (total <= 0 && pools.common.some((c) => !taken[c.id])) { w.common = 65; total = 65; }
       if (total <= 0) break;
-      let x = Math.random() * total;
+      let x = rnd() * total;
       let rar = "common";
-      for (const r of ["common", "rare", "epic"]) {
+      for (const r of ["common", "rare", "epic", "legendary"]) {
         if (w[r] <= 0) continue;
         rar = r;
         x -= w[r];
@@ -7369,15 +7537,18 @@
       const list = pools[rar].filter((c) => !taken[c.id]);
       let tw = 0;
       for (const c of list) tw += c.instant ? 0.4 : 1;
-      let y = Math.random() * tw;
+      let y = rnd() * tw;
       let got = list[list.length - 1];
       for (const c of list) { y -= c.instant ? 0.4 : 1; if (y <= 0) { got = c; break; } }
       taken[got.id] = 1;
+      if (got.rarity === "legendary") legend = true;
       out.push(got);
     }
-    if (curseChance > 0 && out.length && Math.random() < curseChance) {
+    if (curseChance > 0 && out.length && rnd() < curseChance) {
       const curses = CARDS.filter((c) => c.curse && cardOk(c));
-      if (curses.length) out[(Math.random() * out.length) | 0] = curses[(Math.random() * curses.length) | 0];
+      let slot = (rnd() * out.length) | 0;
+      if (out[slot].rarity === "legendary") slot = (slot + 1) % out.length;
+      if (curses.length && out[slot].rarity !== "legendary") out[slot] = curses[(rnd() * curses.length) | 0];
     }
     return out;
   }
@@ -7394,6 +7565,12 @@
       meta.epics = (meta.epics || 0) + 1;
       saveMeta();
       if (meta.epics >= 5) earnMedal("epic5");
+    }
+    if (c.rarity === "legendary") {
+      meta.legends = (meta.legends || 0) + 1;
+      saveMeta();
+      earnMedal("legend");
+      if (state.runLive) callout("LEGENDARY", c.name, c.desc, "legend");
     }
     if ((id === "chainmines" || id === "minelayer" || id === "sapper" || id === "powderkeg") && !(state.ups.mines | 0)) { state.ups.mines = 1; state.mineCd = MINES[1].every; }
     if ((id === "twinbarrel" || id === "glassgate") && !(state.ups.turret | 0)) state.ups.turret = 1;
@@ -7421,7 +7598,7 @@
 
   function randomCurse() {
     const list = CARDS.filter((c) => c.curse && cardOk(c));
-    return list.length ? list[(Math.random() * list.length) | 0].id : "";
+    return list.length ? list[(rngFor("curse")() * list.length) | 0].id : "";
   }
 
   function cardTagText(c) {
@@ -7447,7 +7624,7 @@
     if (card.stack > 1 && !card.instant) row.appendChild(el("i", "stackPill", have ? "x" + have + " → x" + (have + 1) : "STACKS x" + card.stack));
     for (const tg of card.tags) {
       const now = (state.tagN && state.tagN[tg]) || 0;
-      if (now + 1 === 3 || now + 1 === 5) row.appendChild(el("i", "setPill", TAGS[tg].name.toUpperCase() + " " + (now + 1) + " SET"));
+      if (now + 1 === 3 || now + 1 === 5 || now + 1 === 7) row.appendChild(el("i", "setPill", TAGS[tg].name.toUpperCase() + " " + (now + 1) + " SET"));
     }
     b.appendChild(row);
     b.appendChild(el("b", "", card.name));
@@ -7460,7 +7637,7 @@
   function relicPool() { return RELICS.filter((r) => !hasRelic(r.id)); }
   function randomRelic() {
     const pool = relicPool();
-    return pool.length ? pool[(Math.random() * pool.length) | 0].id : "";
+    return pool.length ? pool[(rngFor("relic")() * pool.length) | 0].id : "";
   }
 
   function addRelic(id, quiet) {
@@ -7623,9 +7800,16 @@
       curse: node === "elite" ? 0.25 : node === "mystery" ? 0.3 : 0.15,
       relicMode: "",
     };
+    if (state.pickBoost > 0) {
+      state.pickBoost--;
+      p.cardMode = p.cardMode === "rare" ? "epic" : "rare";
+      p.boosted = true;
+    }
     p.steps.push("cards");
+    for (let i = 0; i < (state.bmPicks | 0); i++) p.steps.push("cards:rare");
+    state.bmPicks = 0;
     if (boss || node === "treasure") p.relicMode = "pick";
-    else if (node === "elite" && Math.random() < 0.4) p.relicMode = "one";
+    else if (node === "elite" && rngFor("post")() < 0.4) p.relicMode = "one";
     if (p.relicMode && relicPool().length) p.steps.push("relic");
     p.steps.push("map", "intro");
     state.post = p;
@@ -7672,6 +7856,7 @@
 
   function finishPost() {
     clearTimeout(postTimer);
+    const back = !!(state.post && state.post.market);
     state.post = null;
     state.phase = "shop";
     const ov = $("overlay");
@@ -7679,6 +7864,8 @@
     delete ov.dataset.step;
     clearSplashArt();
     ensureStock();
+    ensureObjective();
+    if (back) openShop();
   }
 
   function resetOverlayBits() {
@@ -7686,6 +7873,8 @@
     $("ovDebut").innerHTML = "";
     $("ovTwist").hidden = true;
     $("ovTwist").innerHTML = "";
+    $("ovObj").hidden = true;
+    $("ovObj").innerHTML = "";
     $("ovMap").hidden = true;
     $("ovMap").innerHTML = "";
     $("ovChoices").innerHTML = "";
@@ -7709,6 +7898,7 @@
     else if (step === "relic") renderRelicStep(p);
     else if (step === "map") renderMapStep(p);
     else if (step === "mystery") renderMysteryStep(p);
+    else if (step === "daily") renderDailyStep(p);
     else renderIntroStep(p);
     const panel = ov.querySelector(".panel");
     if (panel) panel.scrollTop = 0;
@@ -7728,11 +7918,13 @@
     const bonus = !!stepArg(p);
     const spec = stageSpec(p.cleared);
     const nodeTag = p.node && NODES[p.node] && p.node !== "fight" && p.node !== "start" ? "  ·  " + NODES[p.node].name.toUpperCase() : "";
-    $("ovKicker").textContent = bonus ? "BONUS PICK" : (state.endless && p.cleared === FINALE ? "ENDLESS" : "STAGE " + p.cleared + " CLEARED" + nodeTag);
-    $("ovTitle").textContent = mode === "rare" ? "Pick a rare card" : "Pick a card";
-    $("ovBody").textContent = mode === "rare"
+    $("ovKicker").textContent = p.market ? "BLACK MARKET" : bonus ? "BONUS PICK" : (state.endless && p.cleared === FINALE ? "ENDLESS" : "STAGE " + p.cleared + " CLEARED" + nodeTag) + (p.boosted ? "  ·  OBJECTIVE BONUS" : "");
+    $("ovTitle").textContent = mode === "epic" ? "Pick an epic card" : mode === "rare" ? "Pick a rare card" : "Pick a card";
+    $("ovBody").textContent = mode === "epic"
+      ? "Epic or better. Your objective paid off."
+      : mode === "rare"
       ? (spec.boss && !bonus ? "Boss down. Rare or better, and it stays for the run." : "Rare or better. It stays for the run.")
-      : "It stays for the run. Same-tag cards build toward set bonuses at 3 and 5.";
+      : "It stays for the run. Same-tag cards build toward set bonuses at 3, 5 and 7.";
     p.offer = rollCardOffer(mode, bonus ? 0 : p.curse);
     state.offer = p.offer;
     const box = $("ovChoices");
@@ -7755,6 +7947,7 @@
     s.className = "choice skip";
     s.dataset.skip = "1";
     s.innerHTML = "<b>SKIP</b><span>Take $" + cash + " instead.</span>";
+    if (p.market) s.hidden = true;
     s.addEventListener("click", () => {
       if (p.picked || stepName(p) !== "cards") return;
       state.cash += cash;
@@ -7773,8 +7966,9 @@
   function renderRelicStep(p) {
     const mode = stepArg(p) || p.relicMode || "pick";
     const pool = relicPool();
+    const rnd = rngFor("relicstep");
     for (let i = pool.length - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0;
+      const j = (rnd() * (i + 1)) | 0;
       const t = pool[i]; pool[i] = pool[j]; pool[j] = t;
     }
     p.relicOffer = pool.slice(0, mode === "one" ? 1 : 2).map((r) => r.id);
@@ -7968,7 +8162,7 @@
   function renderMysteryStep(p) {
     if (!p.mystery) {
       const pool = MYSTERIES.filter((m) => m.id !== state.lastMystery);
-      p.mystery = pool[(Math.random() * pool.length) | 0].id;
+      p.mystery = pool[(rngFor("mystery")() * pool.length) | 0].id;
       state.lastMystery = p.mystery;
     }
     const m = MYSTERY_BY_ID[p.mystery];
@@ -8019,6 +8213,8 @@
     $("ovHint").hidden = false;
     $("ovHint").textContent = "Continue, gear up, then start the wave. It will not start on its own.";
     ensureStock();
+    ensureObjective();
+    fillObjective();
   }
 
   // ---------- Shop stock ----------
@@ -8033,14 +8229,14 @@
   }
   function hireKinds() { return ORDER.filter((k) => state.wave >= (HEROES[k].unlock || 1)); }
   function upOpen(id) { return (state.ups[id] | 0) < BASE_UPS[id].max; }
-  function pickWeighted(list, wf) {
+  function pickWeighted(list, wf, rnd) {
     let total = 0;
     for (const x of list) total += wf(x);
-    let r = Math.random() * total;
+    let r = (rnd || Math.random)() * total;
     for (const x of list) { r -= wf(x); if (r <= 0) return x; }
     return list[list.length - 1];
   }
-  function fillStock(items, slots, avoid) {
+  function fillStock(items, slots, avoid, rnd) {
     avoid = avoid || {};
     const has = (kind, id) => items.some((it) => it.kind === kind && it.id === id);
     let nh = 0, nb = 0;
@@ -8052,7 +8248,7 @@
       let pool = hireKinds().filter((k) => !has("hire", k));
       if (pool.some((k) => !avoid["hire:" + k])) pool = pool.filter((k) => !avoid["hire:" + k]);
       if (!pool.length) break;
-      const k = pickWeighted(pool, (x) => (units.some((u) => u.kind === x) ? 1 : 2.2));
+      const k = pickWeighted(pool, (x) => (units.some((u) => u.kind === x) ? 1 : 2.2), rnd);
       items.push({ kind: "hire", id: k, locked: false, sold: false });
       nh++;
     }
@@ -8060,7 +8256,7 @@
       let pool = UP_IDS.filter((id) => upOpen(id) && !has("up", id));
       if (pool.some((id) => !avoid["up:" + id])) pool = pool.filter((id) => !avoid["up:" + id]);
       if (!pool.length) break;
-      const id = pickWeighted(pool, (x) => (x === "squad" ? (units.length >= squadCap() - 1 ? 2.5 : 0.6) : 1));
+      const id = pickWeighted(pool, (x) => (x === "squad" ? (units.length >= squadCap() - 1 ? 2.5 : 0.6) : 1), rnd);
       items.push({ kind: "up", id: id, locked: false, sold: false });
       nb++;
     }
@@ -8078,7 +8274,7 @@
         items.push({ kind: it.kind, id: it.id, locked: false, sold: false, kept: true });
       }
     }
-    fillStock(items, stockSlots());
+    fillStock(items, stockSlots(), null, rngFor("stock"));
     state.stock = { wave: state.wave, items: items, rerolls: 0, paid: 0, free: B().freeRerolls, disc: state.node === "shop" ? 0.75 : 1 };
     return state.stock;
   }
@@ -8090,7 +8286,7 @@
 
   function rerollCost() {
     const s = ensureStock();
-    return s.free > 0 ? 0 : 15 + 10 * s.paid;
+    return s.free > 0 ? 0 : Math.round((15 + 10 * s.paid) * B().rerollMul);
   }
 
   function reroll() {
@@ -8108,7 +8304,7 @@
       if (it.locked && !it.sold) items.push(it);
       else avoid[it.kind + ":" + it.id] = 1;
     }
-    s.items = fillStock(items, stockSlots(), avoid);
+    s.items = fillStock(items, stockSlots(), avoid, rngFor("reroll"));
     renderStock();
     toast(cost ? "Rerolled  -$" + cost : "Free reroll", 1000);
     blip(360, 0.06, "square", 0.025);
@@ -8131,7 +8327,7 @@
     if (it.kind === "hire") return Math.max(1, Math.round(priceOf(it.id) * d));
     const lv = state.ups[it.id] | 0;
     const up = BASE_UPS[it.id];
-    return lv >= up.max ? 0 : Math.max(1, Math.round(up.costs[lv] * d));
+    return lv >= up.max ? 0 : Math.max(1, Math.round(up.costs[lv] * d * B().upCost));
   }
 
   function buyOffer(slot) {
@@ -8254,6 +8450,7 @@
     if (!base.children.length) base.appendChild(el("p", "stockEmpty", UP_IDS.some(upOpen) ? "No upgrades in stock. Reroll for more." : "Every base upgrade is maxed."));
     renderOwned();
     syncStock();
+    renderSinks();
   }
 
   function renderOwned() {
@@ -8351,23 +8548,23 @@
     if (!row) return;
     row.innerHTML = "";
     // Tag sets.
-    row.appendChild(el("p", "buildLbl", "SETS  ·  3 and 5 of a tag"));
+    row.appendChild(el("p", "buildLbl", "SETS  ·  3, 5 and 7 of a tag"));
     const sets = el("div", "setRow");
     for (const tg of TAG_IDS) {
       const t = TAGS[tg];
       const n = (state.tagN && state.tagN[tg]) || 0;
-      const lv = n >= 5 ? 5 : n >= 3 ? 3 : 0;
+      const lv = n >= 7 ? 7 : n >= 5 ? 5 : n >= 3 ? 3 : 0;
       const chip = document.createElement("button");
       chip.type = "button";
-      chip.className = "setChip" + (lv ? " on" : "") + (n ? "" : " none") + (lv >= 5 ? " max" : "");
+      chip.className = "setChip" + (lv ? " on" : "") + (n ? "" : " none") + (lv >= 5 ? " max" : "") + (lv >= 7 ? " cap" : "");
       chip.dataset.tag = tg;
       chip.style.setProperty("--tc", t.color);
       const pips = el("span", "pips");
-      for (let i = 1; i <= 5; i++) pips.appendChild(el("i", (i <= n ? "f" : "") + (i === 3 || i === 5 ? " mk" : "")));
+      for (let i = 1; i <= 7; i++) pips.appendChild(el("i", (i <= n ? "f" : "") + (i === 3 || i === 5 || i === 7 ? " mk" : "")));
       chip.appendChild(el("b", "", t.name));
       chip.appendChild(el("em", "", String(n)));
       chip.appendChild(pips);
-      chip.addEventListener("click", () => buildDetail(t.name + "  ·  " + n + (n === 1 ? " card" : " cards"), "3: " + t.t3 + (lv >= 3 ? " (ON)" : "") + "   5: " + t.t5 + (lv >= 5 ? " (ON)" : ""), t.color));
+      chip.addEventListener("click", () => buildDetail(t.name + "  ·  " + n + (n === 1 ? " card" : " cards"), "3: " + t.t3 + (lv >= 3 ? " (ON)" : "") + "   5: " + t.t5 + (lv >= 5 ? " (ON)" : "") + "   7: " + t.t7 + (lv >= 7 ? " (ON)" : ""), t.color));
       sets.appendChild(chip);
     }
     row.appendChild(sets);
@@ -8443,7 +8640,7 @@
 
   function applyLoadout(lo, startN) {
     let kinds = lo.units.slice();
-    if (lo.gamble) kinds = [ORDER[(Math.random() * ORDER.length) | 0]];
+    if (lo.gamble) kinds = [ORDER[(rngFor("loadout")() * ORDER.length) | 0]];
     for (const k of kinds) addUnit(k);
     const vet = meta.veteran;
     if ((startN === 21 || startN === 51) && vet && HEROES[vet] && kinds.indexOf(vet) < 0) addUnit(vet);
@@ -8573,6 +8770,1344 @@
   }
 
 
+  // =====================================================================
+  // Late game: cash sinks (Black Market, promotions, fortify), field defenses,
+  // Overdrive, stage objectives and the Daily Run.
+  // =====================================================================
+
+  // Daily runs draw every meta roll (map, stock, cards, twists, relics, objectives)
+  // from the date seed so everyone gets the same run. Combat stays truly random.
+  function rngFor(tag) {
+    if (!state.daily) return Math.random;
+    if (!state.rngN) state.rngN = {};
+    const key = tag + "@" + state.wave;
+    const n = state.rngN[key] = (state.rngN[key] | 0) + 1;
+    return seeded(hashStr("daily:" + state.daily.seed + ":" + key + ":" + n));
+  }
+  function dmod(id) { return !!(state.daily && state.daily.mods.indexOf(id) >= 0); }
+
+  function afterSink() {
+    if (shopOpen) { renderSinks(); syncHud(); }
+    if (cardOpen) renderCard();
+  }
+
+  // ---------- Promotions ----------
+  const PROMO_BASE = 300, PROMO_GROW = 1.6, PROMO_DMG = 1.08, PROMO_RATE = 1.04;
+  function promoRank(kind) { return (state.promo && state.promo[kind]) | 0; }
+  function promoCost(kind) { return Math.round(PROMO_BASE * Math.pow(PROMO_GROW, promoRank(kind))); }
+  function promoLabel(r) {
+    if (r <= 0) return "No stars yet";
+    if (r <= 5) return "\u2605".repeat(r) + "\u2606".repeat(5 - r);
+    return "\u2605\u2605\u2605\u2605\u2605  ELITE +" + (r - 5);
+  }
+  function buyPromo(kind) {
+    if (!canShop() || !HEROES[kind]) return false;
+    if (!units.some((u) => u.kind === kind)) { toast("Hire " + HEROES[kind].short + " first"); return false; }
+    const cost = promoCost(kind);
+    if (state.cash < cost) { toast("Need $" + cost); return false; }
+    state.cash -= cost;
+    state.spent.promo += cost;
+    state.promo[kind] = promoRank(kind) + 1;
+    const r = state.promo[kind];
+    refreshMods();
+    if (r === 5) callout("PROMOTION · " + HEROES[kind].short.toUpperCase(), "Five stars", "Every rank past this is Elite. No cap.", "lv");
+    else toast(HEROES[kind].short + "  ·  " + (r > 5 ? "Elite +" + (r - 5) : r + "\u2605") + "  -$" + cost, 1200);
+    blip(700 + Math.min(r, 12) * 25, 0.08, "triangle", 0.035);
+    afterSink();
+    return true;
+  }
+
+  // ---------- Fortify (gate tiers past a maxed wall) ----------
+  const FORT_BASE = 250, FORT_GROW = 1.45;
+  function fortOpen() { return (state.ups.wall | 0) >= BASE_UPS.wall.max; }
+  function fortCost() { return Math.round(FORT_BASE * Math.pow(FORT_GROW, state.fort | 0)); }
+  function buyFort() {
+    if (!canShop()) return false;
+    if (!fortOpen()) { toast("Max the Sandbag Wall first"); return false; }
+    const cost = fortCost();
+    if (state.cash < cost) { toast("Need $" + cost); return false; }
+    state.cash -= cost;
+    state.spent.fort += cost;
+    state.fort = (state.fort | 0) + 1;
+    rebuild();
+    healGate(30);
+    toast("Fortify " + state.fort + "  ·  +30 max HP, 3% less damage  -$" + cost, 1400);
+    blip(260, 0.1, "square", 0.035);
+    afterSink();
+    return true;
+  }
+
+  // ---------- Black Market ----------
+  const MARKET_AT = 15;
+  const MARKET = {
+    pick: { name: "Contraband Pick", desc: "Pick 1 of 3 rare-or-better cards.", base: 220, per: 10, grow: 1.3 },
+    relic: { name: "Fenced Relic", desc: "", base: 380, per: 16, grow: 1.35 },
+    cleanse: { name: "Cleanse", desc: "", base: 160, per: 5, grow: 1.25 },
+    refill: { name: "Stim Pack", desc: "Every ability ready right now.", base: 90, per: 4, grow: 1.2 },
+    merc: { name: "Mercenary", desc: "", base: 260, per: 12, grow: 1.3 },
+  };
+  function marketOpen() { return state.wave >= MARKET_AT || state.endless; }
+  function marketPrice(id) {
+    const m = MARKET[id];
+    const n = (state.market.buys[id] | 0);
+    return Math.round((m.base + m.per * state.wave) * Math.pow(m.grow, n) * B().marketDisc);
+  }
+  function ensureMarket() {
+    const mk = state.market;
+    if (mk.wave === state.wave) return mk;
+    mk.wave = state.wave;
+    const rnd = rngFor("market");
+    const pool = relicPool().map((r) => r.id);
+    mk.relics = [];
+    while (mk.relics.length < 2 && pool.length) mk.relics.push(pool.splice((rnd() * pool.length) | 0, 1)[0]);
+    mk.relicSold = false;
+    const kinds = hireKinds();
+    mk.merc = kinds[(rnd() * kinds.length) | 0] || "vera";
+    mk.mercSold = false;
+    return mk;
+  }
+  function payMarket(id) {
+    const cost = marketPrice(id);
+    if (state.cash < cost) { toast("Need $" + cost); return 0; }
+    state.cash -= cost;
+    state.spent.market += cost;
+    state.market.buys[id] = (state.market.buys[id] | 0) + 1;
+    return cost;
+  }
+  function mercCount() { let n = 0; for (const u of units) if (u.merc > 0) n++; return n; }
+  function buyMarket(id, arg) {
+    if (!canShop()) return false;
+    if (!marketOpen()) { toast("The Black Market opens at stage " + MARKET_AT); return false; }
+    const mk = ensureMarket();
+    if (id === "pick") {
+      if (!payMarket("pick")) return false;
+      if (state.phase === "shop") { openMarketPick(); return true; }
+      state.bmPicks = (state.bmPicks | 0) + 1;
+      toast("Contraband pick: yours when this stage is clear", 1600);
+    } else if (id === "relic") {
+      if (mk.relicSold || mk.relics.indexOf(arg) < 0 || hasRelic(arg)) return false;
+      if (!payMarket("relic")) return false;
+      mk.relicSold = true;
+      addRelic(arg);
+    } else if (id === "cleanse") {
+      const c = ownedCurse();
+      if (!c) { toast("No cursed card to cleanse"); return false; }
+      if (!payMarket("cleanse")) return false;
+      removeCard(c);
+      toast(CARD_BY_ID[c].name + " burns away", 1400);
+    } else if (id === "refill") {
+      if (state.phase !== "fight") { toast("Stim Packs only work during a wave"); return false; }
+      if (!hiredKinds().some((k) => state.abil[k] > 0)) { toast("Every ability is already ready"); return false; }
+      if (!payMarket("refill")) return false;
+      for (const k of ORDER) state.abil[k] = 0;
+      toast("Stim Pack  ·  every ability ready", 1200);
+    } else if (id === "merc") {
+      if (mk.mercSold) return false;
+      if (mercCount() >= 2) { toast("Two contracts at a time"); return false; }
+      if (!payMarket("merc")) return false;
+      mk.mercSold = true;
+      const u = addUnit(mk.merc);
+      if (u) u.merc = 3;
+      layoutHomes();
+      checkSynergies();
+      refreshMods();
+      toast(HEROES[mk.merc].short + " signs on for 3 stages", 1600);
+    } else return false;
+    blip(330, 0.09, "sawtooth", 0.03);
+    afterSink();
+    return true;
+  }
+  // Contracts tick down on every clear.
+  function tickMercs() {
+    let gone = false;
+    for (let i = units.length - 1; i >= 0; i--) {
+      const u = units[i];
+      if (!(u.merc > 0)) continue;
+      u.merc--;
+      if (u.merc > 0) continue;
+      units.splice(i, 1);
+      gone = true;
+      if (u.named) { const next = units.find((x) => x.kind === u.kind); if (next) next.named = true; }
+      toast("Contract up: " + HEROES[u.kind].short + " moves on", 1600);
+    }
+    if (gone) layoutHomes();
+  }
+  function openMarketPick() {
+    forceCloseShop();
+    state.post = { cleared: state.wave, node: state.node, steps: ["cards:rare"], i: -1, picked: false, offer: [], relicOffer: [], mystery: "", cardMode: "rare", curse: 0, relicMode: "", market: true };
+    state.phase = "brief";
+    const ov = $("overlay");
+    ov.dataset.art = state.wave >= 51 ? "chapel" : state.wave >= 21 ? "marsh" : "yard";
+    setRandomSplash(ov);
+    ov.classList.add("splash");
+    ov.classList.remove("hidden");
+    nextPostStep();
+  }
+
+  // ---------- Shop UI for the sinks ----------
+  function renderSinks() {
+    renderDefShop();
+    renderPromoRow();
+    renderFort();
+    renderMarket();
+    syncSinks();
+  }
+  function syncSinks() {
+    const nodes = document.querySelectorAll("#shopPanel [data-price]");
+    for (const n of nodes) {
+      const broke = state.cash < +n.dataset.price;
+      if (n.classList.contains("broke") !== broke) n.classList.toggle("broke", broke);
+    }
+  }
+  function renderPromoRow() {
+    const box = $("promoRow");
+    if (!box) return;
+    box.innerHTML = "";
+    const kinds = hiredKinds().filter((k) => units.some((u) => u.kind === k));
+    for (const k of kinds) {
+      const r = promoRank(k);
+      const cost = promoCost(k);
+      const b = el("button", "promo");
+      b.type = "button";
+      b.dataset.kind = k;
+      b.dataset.price = cost;
+      b.style.setProperty("--ac", HEROES[k].accent);
+      const img = el("img", "face");
+      img.src = "assets/" + k + ".png";
+      img.alt = "";
+      img.draggable = false;
+      b.appendChild(img);
+      const t = el("span", "pTxt");
+      t.appendChild(el("b", "", HEROES[k].short));
+      t.appendChild(el("i", "stars" + (r > 5 ? " elite" : ""), r > 5 ? "ELITE +" + (r - 5) : "\u2605".repeat(r) + "\u2606".repeat(5 - r)));
+      t.appendChild(el("em", "", "$" + cost));
+      b.appendChild(t);
+      b.addEventListener("click", () => { unlock(); buyPromo(k); });
+      box.appendChild(b);
+    }
+    if (!kinds.length) box.appendChild(el("p", "stockEmpty", "Hire someone to promote her."));
+  }
+  function renderFort() {
+    const box = $("fortRow");
+    if (!box) return;
+    box.innerHTML = "";
+    const open = fortOpen();
+    const b = el("button", "sinkTile fortTile");
+    b.type = "button";
+    b.dataset.price = open ? fortCost() : 1e12;
+    b.appendChild(el("span", "mark"));
+    const t = el("span", "sinkTxt");
+    t.appendChild(el("b", "", "Fortify" + (state.fort ? "  ·  Tier " + state.fort : "")));
+    t.appendChild(el("small", "", open ? "+30 max gate HP and 3% less damage per tier. No cap." : "Opens when the Sandbag Wall is maxed."));
+    b.appendChild(t);
+    b.appendChild(el("em", "sinkPrice", open ? "$" + fortCost() : "LOCKED"));
+    if (!open) b.classList.add("locked");
+    b.addEventListener("click", () => { unlock(); buyFort(); });
+    box.appendChild(b);
+  }
+  function renderMarket() {
+    const box = $("marketRow"), info = $("bmInfo");
+    if (!box) return;
+    box.innerHTML = "";
+    if (!marketOpen()) {
+      info.textContent = "Opens at stage " + MARKET_AT;
+      box.appendChild(el("p", "stockEmpty", "Expensive and always in stock. Prices climb every time you buy."));
+      return;
+    }
+    info.textContent = "Always open  ·  prices climb";
+    const mk = ensureMarket();
+    const item = (id, title, sub, price, onClick, dis, lead) => {
+      const b = el("button", "bmItem");
+      b.type = "button";
+      b.dataset.bm = id;
+      b.dataset.price = dis ? 1e12 : price;
+      if (lead) b.appendChild(lead);
+      const t = el("span", "sinkTxt");
+      t.appendChild(el("b", "", title));
+      t.appendChild(el("small", "", sub));
+      b.appendChild(t);
+      b.appendChild(el("em", "sinkPrice", dis || "$" + price));
+      if (dis) b.classList.add("locked");
+      b.addEventListener("click", () => { unlock(); onClick(); });
+      box.appendChild(b);
+      return b;
+    };
+    item("pick", MARKET.pick.name, state.phase === "fight" ? "Rare or better. Yours when this stage is clear." : "Rare or better, picked right now.", marketPrice("pick"), () => buyMarket("pick"), "", el("span", "bmGlyph g-card", "\u2660"));
+    for (const id of mk.relics) {
+      const r = RELIC_BY_ID[id];
+      const b = item("relic", "Relic: " + r.name, r.desc, marketPrice("relic"), () => buyMarket("relic", id), mk.relicSold ? "SOLD" : hasRelic(id) ? "OWNED" : "", relicBadge(r));
+      b.dataset.relic = id;
+    }
+    const cu = ownedCurse();
+    item("cleanse", "Cleanse" + (cu ? ": " + CARD_BY_ID[cu].name : ""), cu ? "Burn away your newest cursed card." : "No cursed card to burn.", marketPrice("cleanse"), () => buyMarket("cleanse"), cu ? "" : "NONE", el("span", "bmGlyph g-cleanse", "\u2716"));
+    const coolNow = state.phase === "fight" && hiredKinds().some((k) => state.abil[k] > 0);
+    item("refill", MARKET.refill.name, state.phase === "fight" ? MARKET.refill.desc : "Waves only. Every ability ready.", marketPrice("refill"), () => buyMarket("refill"), state.phase !== "fight" ? "WAVES" : coolNow ? "" : "READY", el("span", "bmGlyph g-stim", "+"));
+    const face = el("img", "face");
+    face.src = "assets/" + mk.merc + ".png";
+    face.alt = "";
+    face.draggable = false;
+    item("merc", "Mercenary: " + HEROES[mk.merc].name, "Fights 3 stages in her own extra slot, then leaves.", marketPrice("merc"), () => buyMarket("merc"), mk.mercSold ? "SIGNED" : mercCount() >= 2 ? "2 MAX" : "", face);
+  }
+
+  // ---------- Field defenses ----------
+  const DEF_CAP = 8;
+  const DEFS = {
+    barricade: { name: "Barricade", cost: 110, unlock: 1, r: 7.4, short: "Blocks the way. The dead stop and chew.", desc: "Blocks the way in. The dead stop and chew through it. Rebuilt every stage.", color: "#c2a36a" },
+    spikes: { name: "Spike Trap", cost: 95, unlock: 1, r: 5, short: "Cuts and slows what walks over it.", desc: "Cuts and slows every zombie that walks over it.", color: "#b8c0cc" },
+    barrel: { name: "Flame Barrel", cost: 70, unlock: 1, r: 3.4, short: "Blows up and burns the crowd.", desc: "Blows up when the dead get close and sets the crowd on fire. Refills every stage.", color: "#ff6a3c" },
+    tower: { name: "Watchtower", cost: 170, unlock: 1, r: 5, short: "Crossbow. +25% range for a heroine at it.", desc: "Fires a crossbow on its own. A heroine standing at it gets +25% range.", color: "#e7c56a" },
+    tesla: { name: "Tesla Coil", cost: 240, unlock: 25, r: 3.8, short: "Chain lightning that stuns.", desc: "Lightning that jumps between zombies and stuns them.", color: "#8fd8ff" },
+  };
+  const DEF_IDS = Object.keys(DEFS);
+  // Drawings are authored small and scaled up so they read next to the heroines.
+  const DEF_DRAW = { barricade: 1.35, spikes: 1.3, barrel: 1.5, tower: 1.45, tesla: 1.5 };
+  const BAR_HALF = 7.6;
+  let defId = 0;
+  let placing = null;
+  let selDef = 0;
+  let curDef = false;
+  let modeKey = "";
+
+  function defsOf(type) { let n = 0; for (const d of defenses) if (d.type === type) n++; return n; }
+  function defCost(type) { return Math.round(DEFS[type].cost * (1 + state.wave * 0.03) * Math.pow(1.4, defsOf(type)) * B().defDisc); }
+  function defOpen(type) { return state.wave >= DEFS[type].unlock || state.endless; }
+  function barMax() { return Math.round((220 + 26 * state.wave) * B().barHp); }
+  function spikeDps() { return (10 + 2.2 * state.wave) * B().spikeDmg; }
+  function barrelDmg() { return (50 + 13 * state.wave) * B().barrelDmg; }
+  function towerDmg() { return 12 + 1.8 * state.wave; }
+  function teslaDmg() { return (22 + 3 * state.wave) * B().teslaDmg; }
+  function defValid(type, x, y, skipId) {
+    const r = DEFS[type].r;
+    if (x < r + 1.5 || x > WORLD_W - r - 1.5 || y < r + 6 || y > WORLD_H - r - 3) return false;
+    if (distBase(x, y) < BASE.r + 7 + r) return false;
+    for (const d of defenses) if (d.id !== skipId && Math.hypot(d.x - x, d.y - y) < r + DEFS[d.type].r + 0.6) return false;
+    return true;
+  }
+  function makeDef(type, x, y) {
+    const d = { id: ++defId, type: type, x: x, y: y, ang: Math.atan2(y - BASE.y, x - BASE.x), hp: 0, max: 0, paid: 0, cd: 0.6, spent: false, fuse: 0, flash: 0, down: false, zap: null, aim: -Math.PI / 2 };
+    if (type === "barricade") d.hp = d.max = barMax();
+    return d;
+  }
+  function placeDefense(type, x, y, free) {
+    if (!DEFS[type] || defenses.length >= DEF_CAP) return null;
+    if (!defValid(type, x, y)) return null;
+    const cost = free ? 0 : defCost(type);
+    if (state.cash < cost) return null;
+    state.cash -= cost;
+    state.spent.def += cost;
+    const d = makeDef(type, x, y);
+    d.paid = cost;
+    defenses.push(d);
+    burst(x, y, "#c8b090", 8, 4);
+    return d;
+  }
+  function sellDef(id) {
+    const i = defenses.findIndex((d) => d.id === id);
+    if (i < 0) return false;
+    const d = defenses[i];
+    const back = Math.round(d.paid * 0.5);
+    state.cash += back;
+    defenses.splice(i, 1);
+    if (selDef === id) selDef = 0;
+    burst(d.x, d.y, "#a08060", 10, 5);
+    toast(DEFS[d.type].name + " sold  +$" + back, 1200);
+    blip(300, 0.06, "square", 0.03);
+    syncModeBar(true);
+    return true;
+  }
+  function defAt(wx, wy) {
+    let best = null, bd = 1e9;
+    for (const d of defenses) {
+      const tall = d.type === "tower" || d.type === "tesla";
+      const dd = Math.hypot(d.x - wx, d.y - (tall && wy < d.y ? Math.min(d.y, wy + 8) : wy));
+      if (dd < DEFS[d.type].r + 2.2 && dd < bd) { bd = dd; best = d; }
+    }
+    return best;
+  }
+  function findSpot(type) {
+    for (let ring = 0; ring < 6; ring++) {
+      for (let k = 0; k < 16; k++) {
+        const a = Math.PI / 2 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 8);
+        const r = BASE.r + 13 + ring * 6 + DEFS[type].r;
+        const x = BASE.x + Math.cos(a) * r, y = BASE.y + Math.sin(a) * r;
+        if (defValid(type, x, y)) return { x: x, y: y };
+      }
+    }
+    return null;
+  }
+  function startPlacing(type) {
+    if (!canShop() || !DEFS[type]) return false;
+    if (!defOpen(type)) { toast(DEFS[type].name + " opens at stage " + DEFS[type].unlock); return false; }
+    if (defenses.length >= DEF_CAP) { toast("Defense cap is " + DEF_CAP + ". Tap one on the field to sell it."); return false; }
+    const cost = defCost(type);
+    if (state.cash < cost) { toast("Need $" + cost); return false; }
+    const spot = findSpot(type);
+    if (!spot) { toast("No room left on the field"); return false; }
+    placing = { type: type, x: spot.x, y: spot.y, fromPause: shopFromPause, drag: false, pid: -1, def: makeDef(type, spot.x, spot.y) };
+    defId--;
+    forceCloseShop();
+    selDef = 0;
+    drag = null;
+    syncModeBar(true);
+    return true;
+  }
+  function movePlace(w) {
+    if (!placing) return;
+    placing.x = clamp(w.x, 1, WORLD_W - 1);
+    placing.y = clamp(w.y, 1, WORLD_H - 1);
+  }
+  function confirmPlace() {
+    if (!placing) return false;
+    const p = placing;
+    if (!defValid(p.type, p.x, p.y)) { toast("Can't build there"); return false; }
+    const d = placeDefense(p.type, p.x, p.y);
+    if (!d) { toast("Need $" + defCost(p.type)); return false; }
+    if (defenses.length >= DEF_CAP) earnMedal("fortress");
+    placing = null;
+    syncModeBar(true);
+    toast(DEFS[d.type].name + " built  -$" + d.paid, 1200);
+    blip(240, 0.09, "square", 0.04);
+    if (p.fromPause) enterPause();
+    return true;
+  }
+  function cancelPlace(reopen) {
+    if (!placing) return;
+    const p = placing;
+    placing = null;
+    syncModeBar(true);
+    if (reopen === false) return;
+    if (p.fromPause) enterPause();
+    openShop();
+  }
+  function resetDefenses() {
+    for (const d of defenses) {
+      d.flash = 0;
+      d.zap = null;
+      d.cd = 0.6;
+      if (d.type === "barricade") { d.max = barMax(); d.hp = d.max; d.down = false; }
+      if (d.type === "barrel") { d.spent = false; d.fuse = 0; }
+    }
+  }
+  function breakBarricade(d) {
+    d.down = true;
+    d.hp = 0;
+    burst(d.x, d.y, "#a77d4a", 14, 7);
+    state.shake = Math.min(1.2, state.shake + (reduceMotion ? 0 : 0.3));
+    if (floaters.length < 24) floaters.push({ x: d.x, y: d.y - 3, text: "BROKEN", life: 0.9, color: "#e0c08a" });
+    blip(110, 0.1, "sawtooth", 0.03);
+  }
+  function smashBarricades(x, y, r) {
+    for (const d of defenses) {
+      if (d.type !== "barricade" || d.down) continue;
+      if (Math.hypot(d.x - x, d.y - y) <= r + 4) breakBarricade(d);
+    }
+  }
+  // A zombie touching a standing barricade on its outer face stops and chews.
+  function barricadeHold(e, dt) {
+    for (const d of defenses) {
+      if (d.type !== "barricade" || d.down) continue;
+      const dx = e.x - d.x, dy = e.y - d.y;
+      if (dx * dx + dy * dy > 110) continue;
+      const nx = Math.cos(d.ang), ny = Math.sin(d.ang);
+      const lx = -dx * ny + dy * nx;
+      const ly = dx * nx + dy * ny;
+      const halfL = BAR_HALF, halfT = 1.8 + e.r * 0.55;
+      if (Math.abs(lx) > halfL + e.r * 0.4 || ly < -halfT * 0.6 || ly > halfT) continue;
+      if (e.boss) {
+        d.hp -= 600 * dt;
+        d.flash = 0.1;
+        if (d.hp <= 0) breakBarricade(d);
+        return false;
+      }
+      if (Math.abs(lx) > halfL - 0.6) {
+        const s = lx > 0 ? 1 : -1;
+        const step = e.speed * dt * 0.8;
+        e.x += -ny * s * step;
+        e.y += nx * s * step;
+        return false;
+      }
+      e.x = d.x + nx * halfT - ny * lx;
+      e.y = d.y + ny * halfT + nx * lx;
+      e.walk += dt * 2;
+      if (e.stunT <= 0) {
+        e.biteCd -= dt;
+        if (e.biteCd <= 0) {
+          e.biteCd = e.biteEvery;
+          e.lunge = 1;
+          d.hp -= e.bite * (2.5 + state.wave * 0.04);
+          d.flash = 0.12;
+          if (d.hp <= 0) breakBarricade(d);
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+  function nearestFoe(x, y, r) {
+    let best = null, bd = r * r;
+    for (const e of enemies) {
+      if (e.dead || !e.lit) continue;
+      const dx = e.x - x, dy = e.y - y;
+      const dd = dx * dx + dy * dy;
+      if (dd < bd) { bd = dd; best = e; }
+    }
+    return best;
+  }
+  function blowBarrel(d) {
+    d.spent = true;
+    d.fuse = 0;
+    const R = 9 * B().barrelR;
+    const dmg = barrelDmg();
+    for (const e of enemies) {
+      if (e.dead) continue;
+      if (Math.hypot(e.x - d.x, e.y - d.y) > R + e.r * 0.5) continue;
+      hurtEnemy(e, e.boss ? dmg * 0.5 : dmg, 0);
+      if (!e.dead) igniteEnemy(e, (6 + state.wave * 0.8) * B().fire, 2.5, "");
+    }
+    if (patches.length < 40) patches.push({ x: d.x, y: d.y, r: R * 0.55, life: 3, max: 3, dps: (5 + state.wave * 0.5) * B().fire, by: "" });
+    rings.push({ x: d.x, y: d.y, r: 0.5, max: R, life: 0.4, color: "#ff9a3c" });
+    burst(d.x, d.y, "#ff7a3c", 18, 9);
+    state.shake = Math.min(1.4, state.shake + (reduceMotion ? 0 : 0.5));
+    playShot("blast");
+  }
+  function teslaZap(d, first) {
+    const chain = 3 + B().teslaChain;
+    const dmg = teslaDmg();
+    const pts = [{ x: d.x, y: d.y - 6.8 * DEF_DRAW.tesla }];
+    const hit = {};
+    let cur = first;
+    for (let i = 0; cur && i <= chain; i++) {
+      hit[cur.id] = 1;
+      pts.push({ x: cur.x, y: cur.y - 2 });
+      hurtEnemy(cur, dmg * (i ? 0.8 : 1), 0);
+      if (!cur.dead && !cur.boss) cur.stunT = Math.max(cur.stunT, 0.15);
+      let next = null, bd = 100;
+      for (const e of enemies) {
+        if (e.dead || hit[e.id] || !e.lit) continue;
+        const dx = e.x - cur.x, dy = e.y - cur.y;
+        const dd = dx * dx + dy * dy;
+        if (dd < bd) { bd = dd; next = e; }
+      }
+      cur = next;
+    }
+    d.zap = { pts: pts, t: 0.2 };
+    blip(1400 + Math.random() * 300, 0.04, "square", 0.012);
+  }
+  function updateDefenses(dt) {
+    for (const u of units) u.tower = false;
+    if (!defenses.length) return;
+    for (const d of defenses) {
+      if (d.type !== "tower") continue;
+      for (const u of units) if (Math.abs(u.x - d.x) < 6 && Math.abs(u.y - d.y) < 6) u.tower = true;
+    }
+    curDef = true;
+    for (const d of defenses) {
+      d.flash = Math.max(0, d.flash - dt);
+      if (d.zap) { d.zap.t -= dt; if (d.zap.t <= 0) d.zap = null; }
+      if (d.type === "spikes") {
+        const dps = spikeDps();
+        for (const e of enemies) {
+          if (e.dead || e.egg || e.boss) continue;
+          if (Math.abs(e.x - d.x) < 4.8 && Math.abs(e.y - d.y) < 4.8) {
+            hurtEnemy(e, dps * dt, 2);
+            if (!e.dead) applySlow(e, 0.6, 0.3);
+            d.flash = 0.1;
+          }
+        }
+      } else if (d.type === "barrel") {
+        if (d.spent) continue;
+        if (d.fuse > 0) { d.fuse -= dt; if (d.fuse <= 0) blowBarrel(d); continue; }
+        for (const e of enemies) {
+          if (!e.dead && !e.egg && Math.abs(e.x - d.x) < 5.5 && Math.abs(e.y - d.y) < 5.5) { d.fuse = 0.35; break; }
+        }
+      } else if (d.type === "tower") {
+        d.cd -= dt;
+        if (d.cd > 0) continue;
+        const t = nearestFoe(d.x, d.y, 30);
+        if (!t) { d.cd = 0.2; continue; }
+        d.cd = 1.1;
+        const top = d.y - 8 * DEF_DRAW.tower;
+        d.aim = Math.atan2(t.y - top, t.x - d.x);
+        bolts.push({ x: d.x, y: top, ox: d.x, oy: top, targetId: t.id, dmg: towerDmg(), color: "#e7c56a", src: 0, pierce: 0, prev: 0, def: true });
+      } else if (d.type === "tesla") {
+        d.cd -= dt;
+        if (d.cd > 0) continue;
+        const t = nearestFoe(d.x, d.y, 22);
+        if (!t) { d.cd = 0.2; continue; }
+        d.cd = 1.5;
+        teslaZap(d, t);
+      }
+      if (state.phase !== "fight") break;
+    }
+    curDef = false;
+  }
+
+  // ---------- Drawing defenses ----------
+  function drawDefense(g, d, alpha, icon) {
+    g.save();
+    g.globalAlpha = alpha == null ? 1 : alpha;
+    g.translate(d.x, d.y);
+    const sk = DEF_DRAW[d.type] || 1;
+    g.scale(sk, sk);
+    const t = state.time;
+    if (d.type === "barricade") {
+      g.rotate(d.ang + Math.PI / 2);
+      if (d.down) {
+        g.fillStyle = "#4a3a26";
+        for (let i = 0; i < 5; i++) {
+          g.save();
+          g.translate(-4.5 + i * 2.2, (i % 2) * 0.9 - 0.4);
+          g.rotate(((i * 1.7) % 1) - 0.5);
+          g.fillRect(-0.9, -0.25, 1.8, 0.5);
+          g.restore();
+        }
+      } else {
+        g.fillStyle = "rgba(0,0,0,0.35)";
+        g.beginPath();
+        g.ellipse(0, 1.1, 6.4, 1.2, 0, 0, TAU);
+        g.fill();
+        g.fillStyle = "#5a4128";
+        g.fillRect(-5.3, -2.4, 0.9, 3.5);
+        g.fillRect(4.4, -2.4, 0.9, 3.5);
+        const cols = ["#a77d4a", "#8f6a3d", "#b48a55"];
+        g.strokeStyle = "rgba(40,28,16,0.75)";
+        g.lineWidth = 0.14;
+        for (let i = 0; i < 3; i++) {
+          g.fillStyle = cols[i];
+          g.fillRect(-5.7, -2.0 + i * 0.95, 11.4, 0.78);
+          g.strokeRect(-5.7, -2.0 + i * 0.95, 11.4, 0.78);
+        }
+        g.strokeStyle = "#6b4c2c";
+        g.lineWidth = 0.42;
+        g.beginPath();
+        g.moveTo(-4.2, -1.9);
+        g.lineTo(4.2, 0.7);
+        g.moveTo(-4.2, 0.7);
+        g.lineTo(4.2, -1.9);
+        g.stroke();
+        g.fillStyle = "#cfd3d8";
+        for (const nx of [-4.85, 4.85]) for (const ny of [-1.6, 0.3]) g.fillRect(nx - 0.12, ny - 0.12, 0.24, 0.24);
+        if (d.flash > 0) { g.fillStyle = "rgba(255,240,220," + (d.flash * 3).toFixed(2) + ")"; g.fillRect(-5.7, -2.0, 11.4, 2.7); }
+      }
+    } else if (d.type === "spikes") {
+      g.fillStyle = "rgba(0,0,0,0.3)";
+      g.fillRect(-3.7, -3.1, 7.4, 7.4);
+      g.fillStyle = "#3e3226";
+      g.fillRect(-3.5, -3.5, 7, 7);
+      g.strokeStyle = "rgba(20,14,8,0.8)";
+      g.lineWidth = 0.15;
+      for (let i = -1; i <= 1; i++) { g.beginPath(); g.moveTo(-3.5, i * 2.3); g.lineTo(3.5, i * 2.3); g.stroke(); }
+      for (let i = -2; i <= 2; i++) {
+        for (let j = -2; j <= 2; j++) {
+          if ((i + j) % 2) continue;
+          const sx = i * 1.4, sy = j * 1.4 + 0.3;
+          g.fillStyle = d.flash > 0 ? "#e8a0a0" : "#c9ced6";
+          g.beginPath();
+          g.moveTo(sx - 0.5, sy + 0.35);
+          g.lineTo(sx, sy - 0.9);
+          g.lineTo(sx + 0.5, sy + 0.35);
+          g.closePath();
+          g.fill();
+        }
+      }
+    } else if (d.type === "barrel") {
+      g.fillStyle = "rgba(0,0,0,0.35)";
+      g.beginPath();
+      g.ellipse(0, 0.2, 1.9, 0.6, 0, 0, TAU);
+      g.fill();
+      if (d.spent) {
+        g.fillStyle = "rgba(24,16,10,0.75)";
+        g.beginPath();
+        g.ellipse(0, 0, 2.8, 1.3, 0, 0, TAU);
+        g.fill();
+        g.fillStyle = "#3a2a20";
+        g.fillRect(-1.1, -0.9, 2.2, 0.9);
+      } else {
+        g.fillStyle = "#b8321f";
+        g.fillRect(-1.3, -3.6, 2.6, 3.6);
+        g.fillStyle = "#5a1a10";
+        g.fillRect(-1.3, -3.05, 2.6, 0.35);
+        g.fillRect(-1.3, -1.0, 2.6, 0.35);
+        g.fillStyle = "#d9472c";
+        g.beginPath();
+        g.ellipse(0, -3.6, 1.3, 0.45, 0, 0, TAU);
+        g.fill();
+        g.fillStyle = "#ffd34a";
+        g.beginPath();
+        g.moveTo(0, -2.55);
+        g.lineTo(0.55, -1.45);
+        g.lineTo(-0.55, -1.45);
+        g.closePath();
+        g.fill();
+        if (d.fuse > 0 || d.flash > 0) {
+          g.fillStyle = "rgba(255,255,255," + (0.4 + 0.4 * Math.sin(t * 40)).toFixed(2) + ")";
+          g.fillRect(-1.3, -3.6, 2.6, 3.6);
+        }
+      }
+    } else if (d.type === "tower") {
+      g.fillStyle = "rgba(0,0,0,0.35)";
+      g.beginPath();
+      g.ellipse(0, 0.3, 3.8, 1.1, 0, 0, TAU);
+      g.fill();
+      g.strokeStyle = "#6b4c2c";
+      g.lineWidth = 0.5;
+      g.beginPath();
+      g.moveTo(-2.7, 0); g.lineTo(-2.1, -6.6);
+      g.moveTo(2.7, 0); g.lineTo(2.1, -6.6);
+      g.moveTo(-2.5, -1.5); g.lineTo(2.3, -5);
+      g.moveTo(2.5, -1.5); g.lineTo(-2.3, -5);
+      g.stroke();
+      g.fillStyle = "#8f6a3d";
+      g.fillRect(-3.1, -7.4, 6.2, 1);
+      g.strokeStyle = "#5a4128";
+      g.lineWidth = 0.25;
+      g.strokeRect(-3.1, -8.7, 6.2, 1.3);
+      g.beginPath();
+      g.moveTo(-2.9, -7.4); g.lineTo(-2.9, -9.4);
+      g.moveTo(2.9, -7.4); g.lineTo(2.9, -9.4);
+      g.stroke();
+      g.fillStyle = "#5a3a22";
+      g.beginPath();
+      g.moveTo(-3.6, -9.3); g.lineTo(3.6, -9.3); g.lineTo(0, -11.4);
+      g.closePath();
+      g.fill();
+      g.strokeStyle = "#e7c56a";
+      g.lineWidth = 0.35;
+      g.beginPath();
+      g.moveTo(0, -8);
+      g.lineTo(Math.cos(d.aim) * 2.4, -8 + Math.sin(d.aim) * 2.4);
+      g.stroke();
+    } else if (d.type === "tesla") {
+      g.fillStyle = "rgba(0,0,0,0.35)";
+      g.beginPath();
+      g.ellipse(0, 0.2, 2.4, 0.8, 0, 0, TAU);
+      g.fill();
+      g.fillStyle = "#2a2f3a";
+      g.beginPath();
+      g.ellipse(0, -0.2, 2.1, 0.75, 0, 0, TAU);
+      g.fill();
+      g.fillStyle = "#59606e";
+      g.fillRect(-0.35, -6.4, 0.7, 6.2);
+      g.strokeStyle = "#c98a3a";
+      g.lineWidth = 0.32;
+      for (let k = 0; k < 4; k++) { g.beginPath(); g.ellipse(0, -1.5 - k * 1.15, 1.25 - k * 0.12, 0.35, 0, 0, TAU); g.stroke(); }
+      const pulse = 0.55 + 0.35 * Math.sin(t * 6 + d.id);
+      if (glowSprite) { g.globalAlpha *= pulse; g.drawImage(glowSprite, -2.6, -9.4, 5.2, 5.2); g.globalAlpha = alpha == null ? 1 : alpha; }
+      g.fillStyle = "#bfeaff";
+      g.beginPath();
+      g.arc(0, -6.8, 0.95, 0, TAU);
+      g.fill();
+    }
+    g.restore();
+    if (!icon && d.type === "barricade" && !d.down && d.hp < d.max) {
+      const w = 6, f = Math.max(0, d.hp / d.max);
+      g.fillStyle = "rgba(0,0,0,0.6)";
+      g.fillRect(d.x - w / 2, d.y - 4.2 * DEF_DRAW.barricade, w, 0.55);
+      g.fillStyle = f > 0.4 ? "#d9b46a" : "#ff6a5a";
+      g.fillRect(d.x - w / 2, d.y - 4.2 * DEF_DRAW.barricade, w * f, 0.55);
+    }
+  }
+  function defRange(type) {
+    return type === "tower" ? 30 : type === "tesla" ? 22 : type === "barrel" ? 9 * B().barrelR : 0;
+  }
+  function drawDefenses() {
+    if (!defenses.length) return;
+    // Flat ones first so the tall ones draw over them.
+    for (const d of defenses) if (d.type === "spikes" || (d.type === "barrel" && d.spent) || (d.type === "barricade" && d.down)) drawDefense(ctx, d, 1);
+    const tall = defenses.filter((d) => !(d.type === "spikes" || (d.type === "barrel" && d.spent) || (d.type === "barricade" && d.down)));
+    tall.sort((a, b) => a.y - b.y);
+    for (const d of tall) drawDefense(ctx, d, 1);
+    const s = selDef ? defenses.find((d) => d.id === selDef) : null;
+    if (s) {
+      ctx.save();
+      ctx.setLineDash([0.8, 0.6]);
+      ctx.strokeStyle = "#ffe9a0";
+      ctx.lineWidth = 0.3;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, DEFS[s.type].r + 1, 0, TAU);
+      ctx.stroke();
+      const rr = defRange(s.type);
+      if (rr) {
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, rr, 0, TAU);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+  function drawZaps() {
+    for (const d of defenses) {
+      if (!d.zap) continue;
+      const pts = d.zap.pts;
+      const a = Math.min(1, d.zap.t / 0.12);
+      for (const pass of [["#8fd8ff", 0.55, 0.6], ["#ffffff", 0.18, 1]]) {
+        ctx.globalAlpha = a * pass[2];
+        ctx.strokeStyle = pass[0];
+        ctx.lineWidth = pass[1];
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) {
+          const p0 = pts[i - 1], p1 = pts[i];
+          const mx = (p0.x + p1.x) / 2 + (Math.random() - 0.5) * 1.6;
+          const my = (p0.y + p1.y) / 2 + (Math.random() - 0.5) * 1.6;
+          ctx.lineTo(mx, my);
+          ctx.lineTo(p1.x, p1.y);
+        }
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+  function drawGhost() {
+    if (!placing) return;
+    const p = placing;
+    const ok = defValid(p.type, p.x, p.y) && state.cash >= defCost(p.type);
+    const g = p.def;
+    g.x = p.x;
+    g.y = p.y;
+    g.ang = Math.atan2(p.y - BASE.y, p.x - BASE.x);
+    ctx.save();
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = ok ? "#5dff9a" : "#ff5d6c";
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, DEFS[p.type].r + 0.6, 0, TAU);
+    ctx.fill();
+    const rr = defRange(p.type);
+    if (rr) {
+      ctx.globalAlpha = 0.55;
+      ctx.setLineDash([1, 0.8]);
+      ctx.strokeStyle = ok ? "#c8ffda" : "#ffb0b8";
+      ctx.lineWidth = 0.28;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, rr, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.restore();
+    // Keep-out ring around the gate.
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.setLineDash([0.6, 0.9]);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 0.2;
+    ctx.beginPath();
+    ctx.arc(BASE.x, BASE.y, BASE.r + 7, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+    drawDefense(ctx, g, ok ? 0.75 : 0.5, true);
+  }
+  function defIcon(type) {
+    ensureFxSprites();
+    const c = document.createElement("canvas");
+    c.width = c.height = 72;
+    c.className = "defIco";
+    const g = c.getContext("2d");
+    const sk = DEF_DRAW[type] || 1;
+    const span = type === "barricade" ? 22 : type === "tower" ? 13 * sk : type === "tesla" ? 11 * sk : type === "barrel" ? 6.5 * sk : 9 * sk;
+    g.scale(72 / span, 72 / span);
+    const tall = type === "tower" || type === "tesla" || type === "barrel";
+    const d = makeDef(type, span / 2, tall ? span * 0.92 : span / 2 + (type === "barricade" ? 1 : 0));
+    defId--;
+    d.ang = -Math.PI / 2;
+    drawDefense(g, d, 1, true);
+    return c;
+  }
+  function renderDefShop() {
+    const box = $("defShop");
+    if (!box) return;
+    box.innerHTML = "";
+    $("defInfo").textContent = defenses.length + " / " + DEF_CAP + " built  ·  tap one on the field to sell";
+    const full = defenses.length >= DEF_CAP;
+    for (const id of DEF_IDS) {
+      const D = DEFS[id];
+      const open = defOpen(id);
+      const cost = defCost(id);
+      const b = el("button", "defTile");
+      b.type = "button";
+      b.dataset.def = id;
+      b.dataset.price = open && !full ? cost : 1e12;
+      b.style.setProperty("--dc", D.color);
+      b.appendChild(defIcon(id));
+      const t = el("span", "defTxt");
+      t.appendChild(el("b", "", D.name + (defsOf(id) ? "  \u00d7" + defsOf(id) : "")));
+      t.appendChild(el("small", "", D.short));
+      t.appendChild(el("em", "", !open ? "STAGE " + D.unlock : full ? "FULL" : "$" + cost));
+      b.appendChild(t);
+      if (!open || full) b.classList.add("locked");
+      b.addEventListener("click", () => { unlock(); startPlacing(id); });
+      box.appendChild(b);
+    }
+  }
+  function defInfoText(d) {
+    if (d.type === "barricade") return d.down ? "Broken. Rebuilt next stage." : "HP " + Math.ceil(d.hp) + " / " + d.max;
+    if (d.type === "spikes") return "Cuts " + Math.round(spikeDps()) + "/s and slows";
+    if (d.type === "barrel") return d.spent ? "Spent. Refills next stage." : "Armed  ·  blast " + Math.round(barrelDmg());
+    if (d.type === "tower") return "Crossbow " + Math.round(towerDmg()) + "  ·  +25% range at it";
+    return "Zaps " + Math.round(teslaDmg()) + " across " + (4 + B().teslaChain);
+  }
+  function barMode() {
+    if (placing) return "place";
+    if (selDef && defenses.some((d) => d.id === selDef)) return "sel";
+    return "";
+  }
+  function syncModeBar(force) {
+    const bar = $("abilBar"), mb = $("modeBar");
+    if (!bar || !mb) return;
+    if (selDef && (!fieldInputOk() || !defenses.some((d) => d.id === selDef))) selDef = 0;
+    const mode = barMode();
+    const key = mode + ":" + (placing ? placing.type : selDef);
+    if (key !== modeKey || force) {
+      modeKey = key;
+      if (mode) bar.dataset.mode = mode; else delete bar.dataset.mode;
+      mb.innerHTML = "";
+      mb.hidden = !mode;
+      if (mode === "place") {
+        const txt = el("span", "mbTxt");
+        txt.appendChild(el("b", "", DEFS[placing.type].name + "  ·  $" + defCost(placing.type)));
+        const sub = el("small", "", "Tap or drag on the field to move it");
+        sub.id = "mbSub";
+        txt.appendChild(sub);
+        const ok = el("button", "mbOk", "PLACE");
+        ok.type = "button";
+        ok.id = "mbOk";
+        ok.addEventListener("click", () => { unlock(); confirmPlace(); });
+        const x = el("button", "mbX", "\u2715");
+        x.type = "button";
+        x.setAttribute("aria-label", "Cancel");
+        x.addEventListener("click", () => cancelPlace());
+        mb.append(txt, ok, x);
+      } else if (mode === "sel") {
+        const d = defenses.find((q) => q.id === selDef);
+        const txt = el("span", "mbTxt");
+        txt.appendChild(el("b", "", DEFS[d.type].name));
+        const sub = el("small", "", defInfoText(d));
+        sub.id = "mbSub";
+        txt.appendChild(sub);
+        const sell = el("button", "mbSell", "SELL  $" + Math.round(d.paid * 0.5));
+        sell.type = "button";
+        sell.addEventListener("click", () => { unlock(); sellDef(d.id); });
+        const x = el("button", "mbX", "\u2715");
+        x.type = "button";
+        x.setAttribute("aria-label", "Close");
+        x.addEventListener("click", () => { selDef = 0; syncModeBar(true); });
+        mb.append(txt, sell, x);
+      }
+    }
+    const sub = $("mbSub");
+    if (mode === "place" && sub) {
+      const v = defValid(placing.type, placing.x, placing.y);
+      const rich = state.cash >= defCost(placing.type);
+      const okb = $("mbOk");
+      if (okb && okb.disabled === (v && rich)) okb.disabled = !(v && rich);
+      const s = !v ? "Too close to the gate or another defense" : !rich ? "Not enough cash" : "Tap or drag on the field to move it";
+      if (sub.textContent !== s) sub.textContent = s;
+    } else if (mode === "sel" && sub) {
+      const d = defenses.find((q) => q.id === selDef);
+      const s = d ? defInfoText(d) : "";
+      if (sub.textContent !== s) sub.textContent = s;
+    }
+  }
+
+  // ---------- Overdrive ----------
+  function odGain(amt) {
+    if (state.odT > 0 || state.phase !== "fight") return;
+    const before = state.od;
+    state.od = Math.min(100, state.od + amt * B().odFill);
+    if (before < 100 && state.od >= 100) {
+      shout("OVERDRIVE READY", "#ffb03a", 1);
+      blip(990, 0.1, "triangle", 0.03);
+    }
+  }
+  function odPerKill(e) {
+    const base = 100 / (36 + state.wave * 0.8);
+    return base * (e.boss ? 15 : (e.elite || e.bounty) ? 4 : e.giant ? 2 : e.egg ? 0.3 : 1);
+  }
+  function odDur() { return 6 + B().odDur; }
+  function triggerOverdrive() {
+    if (state.phase !== "fight" || shopOpen || cardOpen || placing) return false;
+    if (state.od < 100 || state.odT > 0) return false;
+    state.od = 0;
+    state.odT = state.odMax = odDur();
+    for (const k of ORDER) state.abil[k] = 0;
+    state.odUses = (state.odUses | 0) + 1;
+    if (state.odUses >= 10) earnMedal("od10");
+    objEvent("od");
+    shout("OVERDRIVE", "#ffb03a", 5);
+    state.shake = Math.min(1.6, state.shake + (reduceMotion ? 0 : 0.8));
+    rings.push({ x: BASE.x, y: BASE.y, r: 2, max: 60, life: 0.6, color: "#ffb03a" });
+    odSting();
+    setMusicOd(true);
+    return true;
+  }
+  function endOverdrive(quiet, natural) {
+    const was = natural || state.odT > 0;
+    state.odT = 0;
+    setMusicOd(false);
+    if (!was || quiet) return;
+    if (hasRelic("afterburner") && state.phase === "fight") {
+      const dmg = 60 + state.wave * 10;
+      for (const e of enemies) if (!e.dead) hurtEnemy(e, e.boss ? dmg * 0.25 : dmg, 0);
+      rings.push({ x: BASE.x, y: BASE.y, r: 2, max: 70, life: 0.6, color: "#ff7a3c" });
+      shout("AFTERBURNER", "#ff7a3c", 3);
+      playShot("blast");
+    }
+  }
+  function setMusicOd(on) {
+    if (!music) return;
+    try {
+      music.preservesPitch = !on;
+      music.mozPreservesPitch = !on;
+      music.webkitPreservesPitch = !on;
+      music.playbackRate = on ? 1.12 : 1;
+    } catch (err) { /* fine */ }
+  }
+  function odSting() {
+    if (!audioCtx || state.muted) return;
+    try {
+      const now = audioCtx.currentTime;
+      sfxOsc(now, 110, 0.55, 0.11, "sawtooth", 440);
+      sfxNoise(now, 0.45, 0.16, "bandpass", 500, 1.2, 3600);
+      playTone(659.25, now + 0.06, 0.5, 0.05);
+      playTone(987.77, now + 0.14, 0.6, 0.045);
+    } catch (err) { /* fine */ }
+  }
+  function drawOdTint() {
+    if (!(state.odT > 0)) return;
+    const k = Math.min(1, state.odT / 0.4) * (reduceMotion ? 0.8 : 0.75 + Math.sin(state.time * 9) * 0.25);
+    const cw = canvas.width, ch = canvas.height;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const gr = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.25, cw / 2, ch / 2, Math.max(cw, ch) * 0.72);
+    gr.addColorStop(0, "rgba(255,150,40,0)");
+    gr.addColorStop(1, "rgba(255,110,20," + (0.4 * k).toFixed(3) + ")");
+    ctx.fillStyle = gr;
+    ctx.fillRect(0, 0, cw, ch);
+    ctx.fillStyle = "rgba(255,170,60," + (0.06 * k).toFixed(3) + ")";
+    ctx.fillRect(0, 0, cw, ch);
+    ctx.restore();
+  }
+
+  // Doomsday Clock and the Fast objective tick here.
+  function updateLate(dt) {
+    if (state.odT > 0) {
+      state.odT -= dt;
+      if (state.odT <= 0) endOverdrive(false, true);
+    }
+    if (cc("doomsday")) {
+      state.doomCd -= dt;
+      if (state.doomCd <= 0) {
+        state.doomCd = 15;
+        for (const e of enemies) {
+          if (e.dead) continue;
+          e.hp -= e.max * (e.boss ? 0.02 : 0.1);
+          e.flash = 0.2;
+          if (e.hp <= 0) killEnemy(e);
+        }
+        rings.push({ x: BASE.x, y: BASE.y, r: 2, max: 80, life: 0.7, color: "#ffd36a" });
+        shout("DOOMSDAY", "#ffd36a", 2);
+      }
+    }
+    const o = state.obj;
+    if (o && !o.done && o.id === "fast" && o.wave === state.wave && state.fightT > o.n) objFail("fast");
+  }
+  function gildedMul() { return 1 + Math.min(0.8, Math.max(0, state.cash) / 250 * 0.01); }
+  function lateDmg() {
+    let m = 1;
+    if (state.odT > 0) m *= B().odDmg;
+    if (cc("gilded")) m *= gildedMul();
+    return m;
+  }
+  function phoenixBurst() {
+    state.phoenixUsed = true;
+    healGate(state.baseMax * 0.5);
+    for (const e of enemies) {
+      if (e.dead || distBase(e.x, e.y) > 30) continue;
+      hurtEnemy(e, 40 + state.wave * 6, 0);
+      if (!e.dead) igniteEnemy(e, (10 + state.wave * 1.5) * B().fire, 4, "");
+    }
+    rings.push({ x: BASE.x, y: BASE.y, r: BASE.r, max: 30, life: 0.7, color: "#ff8a3c" });
+    burst(BASE.x, BASE.y, "#ffb03a", 26, 12);
+    callout("LEGENDARY · PHOENIX GATE", "The gate rises", "Healed half its max HP and set the crowd alight.", "legend");
+  }
+
+  // ---------- Stage objectives ----------
+  const OBJ = {
+    gate70: { hold: true, text: () => "Keep the gate above 70%" },
+    fire: { text: (o) => "Kill " + o.n + " burning zombies" },
+    fast: { hold: true, text: (o) => "Clear it in under " + o.n + "s" },
+    nodaze: { hold: true, text: () => "Nobody gets dazed" },
+    bounty: { text: () => "Kill the bounty elite" },
+    abil: { text: (o) => "Use " + o.n + " abilities" },
+    streak: { text: (o) => "Reach a " + o.n + "-kill streak" },
+    od: { text: () => "Trigger Overdrive" },
+    defense: { text: (o) => "Defenses kill " + o.n },
+  };
+  function fastTarget(spec) {
+    let last = 0;
+    for (const g of spec.groups) last = Math.max(last, (g.delay || 0) + (g.n - 1) * g.every);
+    return Math.round(last + 20 + state.wave * 0.12);
+  }
+  function ensureObjective() {
+    if (state.obj && state.obj.wave === state.wave) return state.obj;
+    const n = state.wave, spec = stageSpec(n), node = state.node;
+    const small = !spec.boss && (node === "treasure" || node === "rest");
+    const pool = [];
+    if (state.baseHp >= state.baseMax * 0.8) pool.push("gate70");
+    if ((units.some((u) => u.kind === "lila") || (state.tagN && (state.tagN.fire | 0) >= 2)) && !small) pool.push("fire");
+    if (!spec.boss) pool.push("fast");
+    const bk = spec.boss ? bossKindFor(n) : "";
+    if (bk === "juggernaut" || bk === "lastking") pool.push("nodaze", "nodaze");
+    if (!spec.boss && n >= 8 && !small) pool.push("bounty");
+    if (hiredKinds().length >= 2) pool.push("abil");
+    if (!small && n >= 4) pool.push("streak");
+    if (n >= 6 && !small && state.od >= 35) pool.push("od");
+    if (defenses.length >= 2 && !small) pool.push("defense");
+    if (!pool.length) pool.push("gate70");
+    const rnd = rngFor("obj");
+    const id = pool[(rnd() * pool.length) | 0];
+    const o = { id: id, wave: n, n: 0, prog: 0, done: 0, rw: "cash", amt: 0 };
+    if (id === "fire") o.n = Math.round(Math.min(40, 8 + n * 0.3));
+    if (id === "fast") o.n = fastTarget(spec);
+    if (id === "abil") o.n = n >= 40 ? 4 : 3;
+    if (id === "streak") o.n = Math.round(Math.min(70, 15 + n * 0.45));
+    if (id === "defense") o.n = Math.round(Math.min(30, 5 + n * 0.15));
+    const r = rnd();
+    o.rw = r < 0.5 ? "cash" : r < 0.75 ? "ash" : "card";
+    o.amt = o.rw === "cash" ? Math.round((40 + n * 10) * B().objMul) : o.rw === "ash" ? Math.round((2 + Math.floor(n / 25)) * B().objMul) : 1;
+    state.obj = o;
+    return o;
+  }
+  function objRewardText(o) {
+    if (o.rw === "cash") return "Reward: +$" + o.amt;
+    if (o.rw === "ash") return "Reward: +" + o.amt + " ash";
+    return "Reward: next card pick is one rarity better";
+  }
+  function objLive(o) { return o && !o.done && o.wave === state.wave && state.phase === "fight"; }
+  function objEvent(kind) {
+    const o = state.obj;
+    if (!objLive(o) || o.id !== kind) return;
+    o.prog++;
+    if (o.prog >= o.n) objResolve(true);
+  }
+  function objProgress(kind, v) {
+    const o = state.obj;
+    if (!objLive(o) || o.id !== kind) return;
+    if (v > o.prog) o.prog = v;
+    if (o.prog >= o.n) objResolve(true);
+  }
+  function objFail(kind) {
+    const o = state.obj;
+    if (!objLive(o) || o.id !== kind) return;
+    objResolve(false);
+  }
+  function objResolve(ok) {
+    const o = state.obj;
+    if (!o || o.done) return;
+    o.done = ok ? 1 : -1;
+    if (ok) {
+      if (o.rw === "cash") { state.cash += o.amt; state.earned += o.amt; }
+      else if (o.rw === "ash") { meta.ash = (meta.ash || 0) + o.amt; saveMeta(); }
+      else state.pickBoost = (state.pickBoost | 0) + 1;
+      state.objDone = (state.objDone | 0) + 1;
+      callout("OBJECTIVE \u2713", OBJ[o.id].text(o), objRewardText(o).replace("Reward: ", ""), "obj");
+      blip(880, 0.1, "triangle", 0.035);
+    } else {
+      state.objFail = (state.objFail | 0) + 1;
+      toast("Objective failed  ·  " + OBJ[o.id].text(o), 1800);
+      blip(180, 0.08, "square", 0.025);
+    }
+  }
+  function objAtClear() {
+    const o = state.obj;
+    if (!o || o.done || o.wave !== state.wave) return;
+    if (OBJ[o.id].hold) objResolve(true);
+    else objResolve(false);
+  }
+  function objText(o) {
+    let txt = OBJ[o.id].text(o);
+    if (!o.done && !OBJ[o.id].hold && o.n > 1) txt += "  " + Math.min(o.prog, o.n) + "/" + o.n;
+    if (o.id === "fast" && !o.done && state.phase !== "shop") txt += "  " + Math.max(0, Math.ceil(o.n - state.fightT)) + "s";
+    return txt;
+  }
+  function drawObjective() {
+    const o = state.obj;
+    if (!o || o.wave !== state.wave || !state.runLive) return;
+    if (state.phase !== "fight" && state.phase !== "paused" && state.phase !== "shop") return;
+    const s = (o.done > 0 ? "\u2713 " : o.done < 0 ? "\u2717 " : "\u2605 ") + objText(o);
+    ctx.save();
+    ctx.font = "700 2px sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    const w = ctx.measureText(s).width;
+    const x = 1.6, y = WORLD_H - 2.6;
+    ctx.globalAlpha = 0.75;
+    ctx.fillStyle = "rgba(6,8,12,0.85)";
+    ctx.fillRect(x - 0.7, y - 1.5, w + 1.4, 3);
+    ctx.globalAlpha = o.done < 0 ? 0.7 : 1;
+    ctx.fillStyle = o.done > 0 ? "#7dffb3" : o.done < 0 ? "#ff8d98" : "#ffe9a0";
+    ctx.fillText(s, x, y + 0.05);
+    ctx.restore();
+  }
+  function fillObjective() {
+    const box = $("ovObj");
+    if (!box) return;
+    box.innerHTML = "";
+    const o = state.obj;
+    if (!o || o.wave !== state.wave) { box.hidden = true; return; }
+    box.hidden = false;
+    box.appendChild(el("em", "", "BONUS OBJECTIVE"));
+    box.appendChild(el("b", "", OBJ[o.id].text(o)));
+    box.appendChild(el("i", "", objRewardText(o)));
+  }
+  function lateKill(e) {
+    if (e.burnT > 0 && !e.egg) objEvent("fire");
+    if (curDef) objEvent("defense");
+  }
+  function lateStageStart() {
+    resetDefenses();
+    state.odT = 0;
+    setMusicOd(false);
+    if (hasRelic("nitro")) state.od = Math.max(state.od, 40);
+    state.doomCd = 15;
+    state.phoenixUsed = false;
+    const o = ensureObjective();
+    if (o.id === "bounty" && !o.done) {
+      state.eventKind = "bounty";
+      state.eventAt = state.eventAt >= 0 ? Math.min(state.eventAt, rand(5, 9)) : rand(5, 9);
+    }
+  }
+  function lateClear(cleared) {
+    objAtClear();
+    endOverdrive(true);
+    tickMercs();
+    if (state.daily) recordDaily(cleared);
+  }
+
+  // ---------- Daily Run ----------
+  const DAILY_MODS = [
+    { id: "glass", name: "Glass Cannon", color: "#ff6a8a", desc: "Heroines +25% damage. Gate max HP -20%.", fx: (b) => { b.dmg *= 1.25; b.gateMul *= 0.8; } },
+    { id: "fever", name: "Gold Fever", color: "#ffd36a", desc: "Kills pay +40%. Zombies +12% HP.", fx: (b) => { b.cashMul *= 1.4; b.enemyHp *= 1.12; } },
+    { id: "haste", name: "Rush Hour", color: "#ff9a3c", desc: "Zombies 8% faster. Heroines attack 10% faster.", fx: (b) => { b.enemySpeed *= 1.08; b.rate *= 1.1; } },
+    { id: "hexstorm", name: "Hex Storm", color: "#c49bff", desc: "Abilities recharge 25% faster. Overdrive fills 20% slower.", fx: (b) => { b.abilCd *= 0.75; b.odFill *= 0.8; } },
+    { id: "engineers", name: "Engineers", color: "#c2a36a", desc: "Defenses cost 30% less. Base upgrades cost 20% more.", fx: (b) => { b.defDisc *= 0.7; b.upCost *= 1.2; } },
+    { id: "tithe", name: "Blood Tithe", color: "#d0405a", desc: "Start with a random relic. Gate max HP -15%.", fx: (b) => { b.gateMul *= 0.85; } },
+    { id: "twisted", name: "Twisted", color: "#7ad8ff", desc: "Every stage from 5 has a twist. Stage clears pay +25%.", fx: (b) => { b.clearMul *= 1.25; } },
+    { id: "fortune", name: "Fortune", color: "#7dffb3", desc: "Card picks offer one more card. Rerolls cost double.", fx: (b) => { b.choices += 1; b.rerollMul *= 2; } },
+    { id: "overclock", name: "Overclock", color: "#ffb03a", desc: "Overdrive fills 40% faster. Zombies +8% HP.", fx: (b) => { b.odFill *= 1.4; b.enemyHp *= 1.08; } },
+    { id: "bulwark", name: "Iron Walls", color: "#a9c2dd", desc: "The gate takes 15% less damage. Kills pay 15% less.", fx: (b) => { b.gateTaken *= 0.85; b.cashMul *= 0.85; } },
+  ];
+  const DAILY_BY_ID = {};
+  for (const m of DAILY_MODS) DAILY_BY_ID[m.id] = m;
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function dateKey(d) {
+    d = d || new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function dayNum(k) { const p = String(k).split("-").map(Number); return Math.round(Date.UTC(p[0], (p[1] || 1) - 1, p[2] || 1) / 864e5); }
+  function prettyDate(k) { const p = String(k).split("-").map(Number); return MONTHS[(p[1] || 1) - 1] + " " + (p[2] || 1); }
+  function dailyPlan(key) {
+    key = key || dateKey();
+    const seed = hashStr("last-gate-daily:" + key);
+    const rnd = seeded(seed);
+    const lo = LOADOUTS[(rnd() * LOADOUTS.length) | 0];
+    const pool = DAILY_MODS.map((m) => m.id);
+    const mods = [];
+    while (mods.length < 2) mods.push(pool.splice((rnd() * pool.length) | 0, 1)[0]);
+    return { key: key, seed: seed, loadout: lo.id, mods: mods };
+  }
+  function dailyMeta() {
+    if (!meta.daily || typeof meta.daily !== "object") meta.daily = { best: {}, streak: 0, last: "" };
+    if (!meta.daily.best || typeof meta.daily.best !== "object") meta.daily.best = {};
+    return meta.daily;
+  }
+  function dailyStreak() {
+    const dm = dailyMeta();
+    if (!dm.last) return 0;
+    return dayNum(dateKey()) - dayNum(dm.last) <= 1 ? dm.streak | 0 : 0;
+  }
+  function startDaily(key) {
+    const plan = dailyPlan(key);
+    const dm = dailyMeta();
+    if (dm.last !== plan.key) {
+      dm.streak = dm.last && dayNum(plan.key) - dayNum(dm.last) === 1 ? (dm.streak | 0) + 1 : 1;
+      dm.last = plan.key;
+    }
+    saveMeta();
+    startRun("yard", plan);
+    showDailyBrief();
+    return plan;
+  }
+  function recordDaily(stage) {
+    const d = state.daily;
+    if (!d) return;
+    const dm = dailyMeta();
+    if (stage > (dm.best[d.key] | 0)) dm.best[d.key] = stage;
+    const keys = Object.keys(dm.best).sort();
+    while (keys.length > 21) delete dm.best[keys.shift()];
+    if (stage >= 25) earnMedal("daily25");
+    saveMeta();
+  }
+  function showDailyBrief() {
+    state.post = { cleared: 0, node: "start", steps: ["daily"], i: -1, picked: false, offer: [], relicOffer: [], mystery: "", cardMode: "normal", curse: 0, relicMode: "" };
+    state.phase = "brief";
+    const ov = $("overlay");
+    ov.dataset.art = "yard";
+    setRandomSplash(ov);
+    ov.classList.add("splash");
+    ov.classList.remove("hidden");
+    nextPostStep();
+  }
+  function renderDailyStep() {
+    const d = state.daily;
+    const lo = LOADOUT_BY_ID[d.loadout];
+    const dm = dailyMeta();
+    $("ovKicker").textContent = "DAILY RUN  ·  " + prettyDate(d.key).toUpperCase();
+    $("ovTitle").textContent = "Today's Gate";
+    $("ovBody").textContent = "Same map, shop, cards and twists for everyone today. One loadout, two rules. Best today: " + ((dm.best[d.key] | 0) || "none yet") + ". Streak: " + (dm.streak | 0) + ((dm.streak | 0) === 1 ? " day." : " days.");
+    const box = $("ovTwist");
+    box.innerHTML = "";
+    box.hidden = false;
+    const row = (kicker, name, desc, color) => {
+      const r = document.createElement("div");
+      r.className = "twist";
+      r.style.setProperty("--tw", color);
+      r.appendChild(el("em", "", kicker));
+      r.appendChild(el("b", "", name));
+      r.appendChild(el("span", "", desc));
+      box.appendChild(r);
+    };
+    row("LOADOUT", lo.name, lo.desc, "#ffd36a");
+    for (const id of d.mods) row("RULE", DAILY_BY_ID[id].name, DAILY_BY_ID[id].desc, DAILY_BY_ID[id].color);
+    fillObjective();
+    $("ovHint").hidden = false;
+    $("ovHint").textContent = "Continue, gear up, then start the wave.";
+  }
+  function renderDailyBtn() {
+    const info = $("dailyInfo");
+    if (!info) return;
+    const plan = dailyPlan();
+    const dm = dailyMeta();
+    const best = dm.best[plan.key] | 0;
+    info.textContent = prettyDate(plan.key) + "  ·  " + LOADOUT_BY_ID[plan.loadout].name + "  ·  Best " + (best || "-") + "  ·  Streak " + dailyStreak();
+  }
+
+  function drawStarPip(x, y, color, r) {
+    ctx.fillStyle = color;
+    ctx.strokeStyle = "rgba(0,0,0,0.6)";
+    ctx.lineWidth = 0.12;
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + i * Math.PI / 5;
+      const rr = i % 2 ? r * 0.45 : r;
+      if (i) ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+      else ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+
   // ---------- Drag to move ----------
   function worldFromEvent(ev) {
     const rect = canvas.getBoundingClientRect();
@@ -8618,11 +10153,24 @@
     if (ev.button != null && ev.button > 0) return;
     ev.preventDefault();
     unlock();
+    if (placing) {
+      movePlace(worldFromEvent(ev));
+      placing.drag = true;
+      placing.pid = ev.pointerId;
+      try { canvas.setPointerCapture(ev.pointerId); } catch (err) { /* fine */ }
+      return;
+    }
     if (!fieldInputOk()) return;
     const w = worldFromEvent(ev);
     if (state.phase === "fight" && tapPickup(w.x, w.y)) return;
     const u = unitAt(w.x, w.y);
-    if (!u) return;
+    if (!u) {
+      const d = defAt(w.x, w.y);
+      selDef = d ? d.id : 0;
+      if (d) blip(500, 0.04, "triangle", 0.02);
+      return;
+    }
+    selDef = 0;
     const now = performance.now();
     if (lastTap.id === u.id && now - lastTap.t < 360) {
       lastTap = { id: 0, t: 0 };
@@ -8642,6 +10190,7 @@
   }, { passive: false });
 
   canvas.addEventListener("pointermove", (ev) => {
+    if (placing && placing.drag && ev.pointerId === placing.pid) { ev.preventDefault(); movePlace(worldFromEvent(ev)); return; }
     if (!drag || ev.pointerId !== drag.pid) return;
     ev.preventDefault();
     if (!fieldInputOk()) { drag = null; return; }
@@ -8653,6 +10202,7 @@
   }, { passive: false });
 
   function endDrag(ev, commit) {
+    if (placing && placing.pid === ev.pointerId) { placing.drag = false; placing.pid = -1; return; }
     if (!drag || ev.pointerId !== drag.pid) return;
     ev.preventDefault();
     const d = drag;
@@ -8693,6 +10243,19 @@
     startMusic();
   });
   $("titleMute").addEventListener("click", () => { unlock(); onMute(); });
+  $("dailyBtn").addEventListener("click", () => {
+    unlock();
+    startDaily();
+    if (audioCtx && audioCtx.state === "suspended") {
+      const pending = audioCtx.resume();
+      if (pending && typeof pending.catch === "function") pending.catch(() => {});
+    }
+    startMusic();
+  });
+  $("odBtn").addEventListener("click", () => {
+    unlock();
+    if (!triggerOverdrive() && state.phase === "fight") toast(state.odT > 0 ? "Overdrive is on" : "Overdrive " + Math.floor(state.od) + "%  ·  kills fill it", 900);
+  });
   $("next").addEventListener("click", () => {
     unlock();
     if (shopOpen) closeShop();
@@ -8747,6 +10310,11 @@
   }, { passive: true });
   window.addEventListener("keydown", (ev) => {
     if (ev.repeat) return;
+    if (placing) {
+      if (ev.key === "Escape") cancelPlace();
+      else if (ev.key === "Enter") confirmPlace();
+      return;
+    }
     if (cardOpen) {
       if (ev.key === "Escape") closeCard();
       else if (ev.key === "f" || ev.key === "F") setFlip(!cardFlipped);
@@ -8759,6 +10327,7 @@
       if (!$("restartConfirm").classList.contains("hidden")) { cancelRestart(); return; }
       if (!$("labScreen").classList.contains("hidden") || !$("skillScreen").classList.contains("hidden") || !$("medalScreen").classList.contains("hidden") || !$("loadoutScreen").classList.contains("hidden")) { hideMenus(); return; }
       if (shopOpen) { closeShop(); return; }
+      if (selDef) { selDef = 0; return; }
       togglePause();
       return;
     }
@@ -8771,6 +10340,7 @@
       }
       startWave();
     }
+    else if (state.phase === "fight" && !shopOpen && (ev.key === "o" || ev.key === "O" || ev.key === "0")) triggerOverdrive();
     else if (state.phase === "fight" && !shopOpen && ev.key >= "1" && ev.key <= "6") fireAbilityButton(ORDER[+ev.key - 1]);
     else if (ev.key >= "1" && ev.key <= "9" && canShop() && state.stock) { buyOffer(+ev.key - 1); if (shopOpen) renderStock(); }
     else if ((ev.key === "x" || ev.key === "X") && canShop()) reroll();
@@ -8786,6 +10356,7 @@
   renderRegions();
   renderLoadoutBtn();
   renderEndlessLine();
+  renderDailyBtn();
   syncSoundLabels();
 
   let last = 0;
@@ -8793,7 +10364,7 @@
     let dt = last ? (ts - last) / 1000 : 0.016;
     last = ts;
     dt = Math.min(0.034, Math.max(0, dt));
-    if (state.slowmo > 0 && !shopOpen && !cardOpen && state.phase !== "paused") {
+    if (state.slowmo > 0 && !shopOpen && !cardOpen && !placing && state.phase !== "paused") {
       // Boss down: the world drops to quarter speed for a beat.
       state.slowmo -= dt;
       dt *= 0.25;
