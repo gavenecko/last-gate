@@ -7493,7 +7493,7 @@
   }
 
   // Cards every stage plus relics stack up, so the dead toughen up past the opening stages.
-  const ROGUE_HP = { start: 8, per: 0.036, cap: 30, lateAt: 40, late: 0.3 };
+  const ROGUE_HP = { start: 8, per: 0.036, cap: 30, lateAt: 40, late: 0.35 };
   const ROGUE_BITE = { at: 20, per: 0.03, boss: 0.02 };
   function rogueBite(n) { return 1 + ROGUE_BITE.per * Math.max(0, Math.min(n, 140) - ROGUE_BITE.at); }
   function rogueHp(n) {

@@ -377,7 +377,7 @@ Drag a heroine (touch or mouse) and drop her anywhere on the field. A flag marks
 
 A loss or a win shows stage reached, kills, and cash earned.
 
-Health climbs a little faster after stage 25 to keep late stages hard with cards and abilities, and again from stage 20 (about +1.1% per stage on top of that) because levels, traits, bonds, and synergies add power. With a card every stage, sets and relics, zombie health also ramps about +3.6% per stage past stage 8, plus a second ramp of +30% of base per stage from stage 40 (about 9x at stage 60, 22x at stage 100, capped at 30x).
+Health climbs a little faster after stage 25 to keep late stages hard with cards and abilities, and again from stage 20 (about +1.1% per stage on top of that) because levels, traits, bonds, and synergies add power. With a card every stage, sets and relics, zombie health also ramps about +3.6% per stage past stage 8, plus a second ramp of +35% of base per stage from stage 40 (about 10x at stage 60, 25x at stage 100, capped at 30x).
 
 Saved locally (localStorage): ash and Lab upgrades, Daily Run best and streak, tips already seen, and the card collection: each heroine's lifetime kills, runs, best stage and bond, plus medals, the best Endless stage, and unlocked loadouts. Nothing leaves the device.
 
