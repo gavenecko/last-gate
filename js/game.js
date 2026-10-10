@@ -951,6 +951,9 @@
     return d;
   }
 
+  const DMG_SOFT = { k: 2.5, p: 0.5 };
+  const RATE_SOFT = { k: 1.6, p: 0.5 };
+  function softMul(m, c) { return m <= c.k ? m : c.k * Math.pow(m / c.k, c.p); }
   function statsOf(u) {
     const h = HEROES[u.kind];
     const low = u.named ? 1 : 0.74;
@@ -995,18 +998,24 @@
     // Level, traits, bond and synergies for her kind.
     const km = kindMods[u.kind] || NEUTRAL_MODS;
     const flag = u.hold && hasRelic("rallyflag") ? 1.18 : 1;
+    // Stacked build multipliers soft-cap: past the knee, extra power counts at its square root.
+    const dmgRaw = state.dmgMult * skillDmg * labDmg * ammoDmg * km.dmg * flag * lateDmg();
+    const dmgMul = softMul(dmgRaw, DMG_SOFT);
+    const rateRaw = state.rateMult * skillRate * labRate * km.rate;
+    const rateMul = softMul(rateRaw, RATE_SOFT);
     return {
+      dmgRaw: dmgRaw, dmgMul: dmgMul, rateRaw: rateRaw, rateMul: rateMul,
       kind: h.attack,
       accent: h.accent,
-      dmg: h.dmg * low * state.dmgMult * skillDmg * labDmg * ammoDmg * km.dmg * flag * lateDmg(),
+      dmg: h.dmg * low * dmgMul,
       range: range * km.range * (u.tower ? 1.25 : 1),
-      rate: h.rate * (u.named ? 1 : 0.9) * state.rateMult * skillRate * labRate * tempRate * km.rate,
+      rate: h.rate * (u.named ? 1 : 0.9) * rateMul * tempRate,
       move: h.move * (u.named ? 1 : 0.92) * state.moveMult * B().move * tempMove,
       leash: h.leash,
       seek: seek * km.range * (u.tower ? 1.25 : 1),
       post: h.post,
       aoe: (h.aoe || 0) * (u.named ? 1 : 0.78) * km.aoe,
-      patch: (h.patch || 0) * low * state.dmgMult * skillDmg * labDmg * ammoDmg * km.dmg * km.patchDps,
+      patch: (h.patch || 0) * low * dmgMul / (flag * lateDmg()) * km.patchDps,
       patchTime: patchTime * km.patchTime,
       slow: Math.max(0.12, slow * km.slow),
       slowTime: slowTime,
@@ -7079,6 +7088,12 @@
       stats.appendChild(d);
     }
     body.appendChild(stats);
+    if (s.dmgRaw > s.dmgMul + 0.01 || s.rateRaw > s.rateMul + 0.01) {
+      const parts = [];
+      if (s.dmgRaw > s.dmgMul + 0.01) parts.push("damage x" + s.dmgRaw.toFixed(2) + " → x" + s.dmgMul.toFixed(2));
+      if (s.rateRaw > s.rateMul + 0.01) parts.push("attack rate x" + s.rateRaw.toFixed(2) + " → x" + s.rateMul.toFixed(2));
+      body.appendChild(el("p", "hcSoft", "Soft cap: " + parts.join(", ") + ". Past x" + DMG_SOFT.k + " damage and x" + RATE_SOFT.k + " rate, extra bonuses count at their square root."));
+    }
     if (inRun) {
       const xp = el("div", "hcXp");
       const cur = Math.floor(state.xp[kind] || 0);
