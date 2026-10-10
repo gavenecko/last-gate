@@ -18,7 +18,9 @@ Then visit `http://localhost:8080`. Or just open `index.html` in a browser.
 
 Keyboard: during a wave `1`–`6` fire abilities (Vera, Roxie, Lila, Nyx, Sable, Wren). Outside a wave `1`–`9` buy the matching offer in the shop stock and `X` rerolls. `B` or `U` opens or closes the shop, Space starts the wave, `P` pauses, `Esc` closes the top menu or card (or pauses), `F` flips an open card and the arrow keys browse cards, `R` restarts, `M` mutes. With a mouse, drag and double-click work like touch.
 
-Sound is a drone made in the browser with the Web Audio API. It starts on PLAY, and on the first tap if the title is skipped, unless sound is off. No music files.
+Music is six looping tracks in `assets/music/` (mp3, played with an HTML audio element; a new track is picked when one ends, never the same one twice in a row). Sound effects (shots, blasts, stings) are made in the browser with the Web Audio API. Both start on PLAY, and on the first tap if the title is skipped. Mute in the top bar (or `M`) silences both and is saved. During Overdrive the music runs a little faster.
+
+Keyboard, late game: `O` or `0` fires Overdrive when the meter is full. While placing a defense, `Enter` confirms and `Esc` cancels.
 
 ## Roster
 
@@ -28,16 +30,27 @@ Sound is a drone made in the browser with the Web Audio API. It starts on PLAY, 
 | Roxie Kane, shotgun brawler | $80 | Buckshot. A short, fast blast hits several zombies in the spread (5 for Roxie, 3 for a Brawler). |
 | Lila Marsh, firebug | $140 | Burn patch. She lobs fire that stays on the ground and cooks whoever stands in it. Extras are Torches (smaller, shorter patch). |
 | Nyx Calder, hex warden | $120 | Hex pulse. Slows a pack. Nyx herself also stuns; a Hexer copy's stun is shorter. |
+| Sable Quinn, pistol gunner | $90 (in the stock from stage 4) | Three-shot volley. Quick pistol bursts at the nearest zombies. Extras are Gunners. |
+| Wren Holt, spear lancer | $75 (in the stock from stage 6) | Close cleave. Short reach, but her spear cuts several zombies at once. Extras are Lancers. |
+
+Hires come from the random shop stock (see below), so not every heroine is offered every stage. The squad cap is 10, +2 per Squad Call level, plus Black Market mercenaries.
 
 ## Base upgrades
 
-Bought with cash, in the shop or during a wave. Each has 3 levels.
+Bought with cash when they show up in the shop stock (one level per offer). Eight upgrades; most have 5 levels.
 
 | Upgrade | Costs | Effect |
 | --- | --- | --- |
-| Sandbag Wall | $65 / $95 / $140 | Base takes 18% / 32% / 46% less damage. |
-| Dread Aura | $75 / $110 / $155 | Zombies near the gate move at 80% / 66% / 52% speed. |
-| Sentry Turret | $85 / $125 / $175 | The compound shoots the nearest zombie for 11 / 18 / 28 damage. |
+| Sandbag Wall | $65 / $95 / $140 / $210 / $280 | The gate takes 18% / 32% / 46% / 54% / 60% less damage. Maxing it opens Fortify. |
+| Dread Aura | $75 / $110 / $155 / $233 / $310 | Zombies near the gate move at 80% / 66% / 52% / 44% / 39% speed. |
+| Sentry Turret | $85 / $125 / $175 / $263 / $350 | The compound shoots the nearest zombie for 11 / 18 / 28 / 34 / 38 damage. |
+| Bite Spikes | $70 / $100 / $145 / $218 / $290 | Zombies biting the gate take 8 / 14 / 22 / 27 / 31 damage. |
+| Field Mend | $60 / $90 / $130 / $195 / $260 | The gate heals 1.2 / 2.2 / 3.4 / 4.2 / 4.8 HP per second in waves. |
+| Yard Mines | $90 / $130 / $180 / $270 / $360 | Mines arm around the yard and blast for 24 / 40 / 58 / 68 / 76. |
+| Ammo Stock | $100 / $150 / $210 / $280 | +8% heroine damage per level. |
+| Squad Call | $120 / $180 / $260 | +2 squad slots per level. |
+
+Shop discounts (Gold 5, Merchant's Ledger, Shop stops) apply to these prices.
 
 ## Stages and enemies
 
@@ -101,17 +114,19 @@ The shop no longer lists everything. Each stage it rolls fresh **stock**: about 
 
 Clear a stage and pick 1 of 3 cards (4 with the Treasure Chart relic), or **SKIP** for a little cash ($10 + 0.8 x stage). Rarity weights are common 65 / rare 28 / epic 7, and epics get more common as the stages climb. Bosses and Elite stops offer rare-or-better. Cards for a heroine only show up once she is hired, and cards that need mines or a turret wait until you own one. Many cards stack: the same card can come back, and the pick shows the stack (x1 → x2). The old every-3-stages perks are gone; their effects are in the pool now (Hot Barrels, Hair Trigger, Quick Step, Field Medic, Surplus, Spotter Kit, Reinforced Gate, Scavenge).
 
-Every card carries 0–2 **tags**. Holding 3 or 5 cards of a tag (copies count) turns on its set bonus with a callout. Tags show as colored pills on each card, and the pick tells you when a card would complete a set. The BUILD row in the shop shows each tag's progress.
+Every card carries 0–2 **tags**. Holding 3, 5 or 7 cards of a tag (copies count) turns on its set bonus with a callout. Tags show as colored pills on each card, and the pick tells you when a card would complete a set. The BUILD row in the shop shows each tag's progress.
 
-| Tag | 3 cards | 5 cards |
-| --- | --- | --- |
-| Fire | Burns spread to nearby zombies. | Fire deals +40%, and zombies that die burning burst. |
-| Hex | Ability cooldowns 15% shorter. | Abilities hit 25% harder and freeze the field for 1.2s. |
-| Gun | +10% crit chance. | +15% attack rate. Crits deal 3x. |
-| Blade | +12% heroine damage. | Hits finish off normal zombies under 15% health. Roxie and Wren +20% damage. |
-| Gate | +40 max gate HP. The gate takes 8% less damage. | The gate regenerates 2 HP/s in waves, and biters take thorn damage. |
-| Gold | +$1 cash per kill. | +$2 more per kill. Shop prices 15% off. |
-| Mine | Mines hit 25% harder. 1 extra mine arms each stage. | Every mine chains into a second blast. Mines trigger 40% faster. |
+| Tag | 3 cards | 5 cards | 7 cards (capstone) |
+| --- | --- | --- | --- |
+| Fire | Burns spread to nearby zombies. | Fire deals +40%, and zombies that die burning burst. | Inferno: fire deals +50%, and burning zombies take +20% from everything. |
+| Hex | Ability cooldowns 15% shorter. | Abilities hit 25% harder and freeze the field for 1.2s. | Abilities recharge 30% faster. Overdrive fills 50% faster. |
+| Gun | +10% crit chance. | +15% attack rate. Crits deal 3x. | +15% crit chance and +25% heroine damage. |
+| Blade | +12% heroine damage. | Hits finish off normal zombies under 15% health. Roxie and Wren +20% damage. | Finishers reach 25% health. Heroines +20% damage. |
+| Gate | +40 max gate HP. The gate takes 8% less damage. | The gate regenerates 2 HP/s in waves, and biters take thorn damage. | +150 max gate HP. The gate takes 15% less damage. Thorns hit twice as hard. |
+| Gold | +$1 cash per kill. | +$2 more per kill. Shop prices 15% off. | Kills pay +50%. Black Market prices 20% off. |
+| Mine | Mines hit 25% harder. 1 extra mine arms each stage. | Every mine chains into a second blast. Mines trigger 40% faster. | Mines trigger twice as often, hit 30% harder, and every blast leaves fire. |
+
+A 7-set gets a gold callout, and its chip in the BUILD row turns gold. The BUILD row shows 7 pips per tag.
 
 | Card | Rarity | Tags | Stacks | Effect |
 | --- | --- | --- | --- | --- |
@@ -168,6 +183,23 @@ Every card carries 0–2 **tags**. Holding 3 or 5 cards of a tag (copies count) 
 | Chain Mines | Rare | Mine | - | Mines blast an area and set off a second mine. Grants Mines LV 1 if you have none. |
 | Minelayer | Rare | Mine | - | Mines trigger 30% faster. Grants Mines LV 1 if you have none. |
 | Cluster Charge | Epic | Mine, Fire | - | Every mine blast leaves a fire patch. |
+| Adrenaline | Rare | Hex | x2 | Overdrive fills 35% faster. |
+| Redline | Epic | Gun | - | Overdrive lasts 3s longer, and heroines deal +25% damage during it. |
+| Sharpened Stakes | Common | Gate, Blade | x3 | Spike Traps cut 40% harder. Barricades get +40% HP. |
+| Field Engineer | Rare | Mine | - | Defenses cost 25% less. Flame Barrels blast 50% wider and harder. |
+| Arc Conductor | Rare | Hex | - | Tesla Coils jump to 2 more zombies and hit 35% harder. Needs a Tesla Coil. |
+| Taskmaster | Common | Gold | - | Stage objectives pay double. |
+
+### Legendary cards
+
+Gold-foil cards that only show up from stage 50 (or in Endless), at most one per pick. Normal picks offer one now and then; Elite and boss picks more often, and an epic-grade pick (an objective bonus or Black Market pick) most of all. Each is once per run.
+
+| Card | Tags | Effect |
+| --- | --- | --- |
+| Doomsday Clock | Hex, Mine | Every 15s, every zombie on the field loses 10% of its max HP (bosses 2%). |
+| Phoenix Gate | Gate, Fire | Once per stage, when the gate drops below 40%, it heals half its max HP and sets the crowd near it on fire. |
+| Gilded Arsenal | Gold, Gun | Heroines deal +1% damage for every $250 you hold (up to +80%). |
+| Warlord | Blade, Gun | Heroines +30% damage and attack rate. Overdrive fills 25% faster. |
 
 ### Cursed cards
 
@@ -226,6 +258,8 @@ Relics are rule-benders. Bosses offer a pick of 2, Treasure offers 2, Elite stop
 | Recruit Papers | RP | A free random heroine joins now, and the squad cap is +1. |
 | Black Cat | BC | Curse downsides are halved (Fool's Gold's is lifted). |
 | Last Rites | LR | Once per run, when the gate would fall, it holds at 30% HP and the dead freeze for 3s. |
+| Nitro Flask | NF | Overdrive starts every stage at least 40% full. Kills during Overdrive heal the gate 1 HP. |
+| Afterburner | AB | When Overdrive ends, a shockwave hits every zombie on the field. |
 
 ### Loadouts
 
@@ -239,6 +273,71 @@ LOADOUT on the title screen picks who walks out with you. Locked loadouts are gr
 | Gunline | 40 | Sable and Vera. Starts with Hot Barrels and Spotter Kit, two Gun cards. |
 | Spearwall | 30 | Wren and Roxie. The Sandbag Wall starts at LV 1. |
 | Gambler | 60 | One random heroine and +$200, plus a random cursed card and a random relic. |
+
+## Late game: where the cash goes
+
+Late runs used to pile up cash with nothing to buy. Four sinks now sit in the SHOP under the stock, all bought with cash, and prices grey out when you cannot afford them.
+
+### Field defenses
+
+DEFENSES lists five buildings. Tap one, then drag the ghost on the field (green fits, red does not) and tap PLACE in the bar under the field, or tap ✕ to cancel and go back to the shop. The game stays paused while you place. Up to 8 defenses stand at once and they stay for the rest of the run. Tap a placed defense on the field to select it; the bar then offers SELL for half its price back. Defenses scale with the stage number and every copy of a type costs 40% more than the last.
+
+| Defense | Base price | From | What it does |
+| --- | --- | --- | --- |
+| Barricade | $110 | stage 1 | A wall segment. Zombies that walk into it stop and chew it down; the ones at the ends slip around. Bosses smash through fast, and the Juggernaut's charge and slam wreck it. Rebuilt at full HP every stage. |
+| Spike Trap | $95 | stage 1 | A patch of spikes that cuts and slows whatever walks over it. |
+| Flame Barrel | $70 | stage 1 | Blows up when a zombie gets close: a blast, burning, and a fire patch left behind. Once per stage; it re-arms for the next one. |
+| Watchtower | $170 | stage 1 | Fires crossbow bolts at the nearest zombie in range. A heroine standing next to it gets +25% range. |
+| Tesla Coil | $240 | stage 25 | Zaps a chain of 3 zombies and stuns them for a moment. |
+
+Defenses grow with the stage (more HP and damage), and Field Engineer, Sharpened Stakes and Arc Conductor boost them. Defense kills count for kill cash and for the defense objective.
+
+### Promotions
+
+Each hired heroine type can be promoted from her card (PROMOTION) or from PROMOTE in the shop. Every rank gives all copies of her +8% damage and +4% attack rate. Ranks start at $300 and cost 60% more each time. There is no cap: past 5 stars the rank shows as ELITE +1, +2 and so on. Promoted heroines carry a small star over their head on the field.
+
+### Fortify
+
+Once the Sandbag Wall is maxed, FORTIFY opens. Each tier adds +30 max gate HP and cuts the damage the gate takes by another 3%. It starts at $250 and costs 45% more per tier, with no cap.
+
+### Black Market
+
+From stage 15 the BLACK MARKET row opens. Prices climb with the stage and with each purchase of the same item.
+
+| Item | What you get |
+| --- | --- |
+| Contraband | A rare-or-better card pick right now (no skip), then the shop reopens. |
+| Relic | Pick one of two relics on offer this stage (one purchase per stage). |
+| Cleanse | Burn your newest cursed card. |
+| Ability Refill | All abilities ready now (only during a wave). |
+| Mercenary | A named heroine joins in her own extra squad slot, fights for 3 stages, then leaves (up to 2 at once). |
+
+## Overdrive
+
+Kills fill the OVERDRIVE meter (the thin orange line over the ability strip; bosses, elites and bounties fill it much more, and long kill streaks add a burst). When it is full, the OVERDRIVE button lights up: tap it (or press `O` / `0`) and for 6 seconds every ability comes back ready, heroines fire twice as fast, the field gets an orange edge and the music speeds up. The meter only fills during a fight and not while Overdrive runs. Adrenaline, Redline, Warlord, the Hex 7-set, Nitro Flask and Afterburner build on it.
+
+## Stage objectives
+
+Every stage carries one optional objective. It shows on the stage brief, as a small tag in the bottom-left of the field, and in the shop. Clear it for a reward: cash, ash, or an upgraded next card pick (normal → rare-or-better → epic-or-better, marked OBJECTIVE BONUS). Failing it costs nothing.
+
+Objectives: keep the gate above 70%, kill N burning zombies, clear the stage in under N seconds, nobody gets dazed, kill the bounty elite (the bounty is forced on), use N abilities, reach an N-kill streak, trigger Overdrive, defenses kill N. Only objectives your build can do are offered (fire needs fire, defense kills need defenses, and so on).
+
+## Daily Run
+
+DAILY RUN on the title screen starts today's seeded run. Everyone gets the same date seed: the same loadout, the same two daily modifiers, the same map, card offers, relics, curses, twists and shop rolls (the objective can still vary with how your gate and squad are doing). The button on the title shows today's date, loadout, your best stage today and your daily streak (days in a row with a Daily Run); the brief before stage 1 spells out the two modifiers. The end screen adds a DAILY row. Daily Runs are saved separately and do not touch the normal run.
+
+| Modifier | Effect |
+| --- | --- |
+| Glass Cannon | Heroines +25% damage. Gate max HP -20%. |
+| Gold Fever | Kills pay +40%. Zombies +12% HP. |
+| Rush Hour | Zombies 8% faster. Heroines attack 10% faster. |
+| Hex Storm | Abilities recharge 25% faster. Overdrive fills 20% slower. |
+| Engineers | Defenses cost 30% less. Base upgrades cost 20% more. |
+| Blood Tithe | Start with a random relic. Gate max HP -15%. |
+| Twisted | Every stage from 5 has a twist. Stage clears pay +25%. |
+| Fortune | Card picks offer one more card. Rerolls cost double. |
+| Overclock | Overdrive fills 40% faster. Zombies +8% HP. |
+| Iron Walls | The gate takes 15% less damage. Kills pay 15% less. |
 
 ## Tap abilities
 
@@ -271,7 +370,7 @@ A loss or a win shows stage reached, kills, and cash earned.
 
 Health climbs a little faster after stage 25 to keep late stages hard with cards and abilities, and again from stage 20 (about +1.1% per stage on top of that) because levels, traits, bonds, and synergies add power. With a card every stage, sets and relics, zombie health also ramps about +3.6% per stage past stage 8 (up to 5x).
 
-Saved locally (localStorage): ash and Lab upgrades, tips already seen, and the card collection: each heroine's lifetime kills, runs, best stage and bond, plus medals, the best Endless stage, and unlocked loadouts. Nothing leaves the device.
+Saved locally (localStorage): ash and Lab upgrades, Daily Run best and streak, tips already seen, and the card collection: each heroine's lifetime kills, runs, best stage and bond, plus medals, the best Endless stage, and unlocked loadouts. Nothing leaves the device.
 
 ## Heroine cards
 
@@ -329,9 +428,9 @@ Hire both heroines of a pair and a synergy turns on. A callout announces it, bot
 
 ## Medals
 
-17 medals, saved. Each pays ash once and pops a callout. See them from MEDALS on the title screen or in the shop.
+21 medals, saved. Each pays ash once and pops a callout. See them from MEDALS on the title screen or in the shop.
 
-Holdout (clear 25), Deep Water (50), The Last Gate (100), Kingslayer, Egg Breaker, Immovable, and Acid Test (beat each boss), Thousand Cuts (1,000 kills in a run), Double Trouble (clear a stage with two twists), Iron Gate (clear a boss stage above 50% gate), Fully Trained (a heroine at LV 10), Collector (5 epic cards across runs), Massacre (50-kill streak), Full House (all six hired), Chemistry (3 synergies at once), Kindred (Bond 3), No End (clear Endless stage 110).
+Holdout (clear 25), Deep Water (50), The Last Gate (100), Kingslayer, Egg Breaker, Immovable, and Acid Test (beat each boss), Thousand Cuts (1,000 kills in a run), Double Trouble (clear a stage with two twists), Iron Gate (clear a boss stage above 50% gate), Fully Trained (a heroine at LV 10), Collector (5 epic cards across runs), Massacre (50-kill streak), Full House (all six hired), Chemistry (3 synergies at once), Kindred (Bond 3), No End (clear Endless stage 110), Legendary (pick a legendary card), Fortress (8 defenses on the field at once), Redlined (10 Overdrives in one run), Daily Grind (clear stage 25 in a Daily Run).
 
 ## Endless
 
@@ -347,4 +446,4 @@ Clearing stage 100 wins the run and offers ENDLESS. Stage 101 and on keep going:
 
 ## Art
 
-Heroines and zombies are the pngs in `assets/`, drawn as circles so the dark photo background is not a rectangle. New enemy types reuse those sprites and are tinted in play. Do not replace those files from the game. Display type is Passion One (`assets/OFL-PassionOne.txt`). The center building is `assets/base.png`; owned Wall, Aura, and Turret show `upgrade-wall.png`, `upgrade-aura.png`, and `upgrade-turret.png` on the yard. The ground for each region (Yard, Marsh, Chapel) is drawn in code on a seeded offscreen canvas, with only ripples, fog, and candle flames animated live.
+Heroines and zombies are the pngs in `assets/`, drawn as whole cutout sprites (no circular clip) with a stride-based walk cycle. Heroine faces in the ability strip, shop and cards use the same art. New enemy types reuse those sprites and are tinted in play. Do not replace those files from the game. Display type is Passion One (`assets/OFL-PassionOne.txt`). The center building is `assets/base.png`; owned Wall, Aura, and Turret show `upgrade-wall.png`, `upgrade-aura.png`, and `upgrade-turret.png` on the yard. The ground for each region (Yard, Marsh, Chapel) is drawn in code on a seeded offscreen canvas, with only ripples, fog, and candle flames animated live.
