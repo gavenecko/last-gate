@@ -58,6 +58,8 @@ Shop discounts (Gold 5, Merchant's Ledger, Shop stops) apply to these prices.
 
 ## Stages and enemies
 
+**Late-game pressure (v25 rebalance).** Bites, spit and bursts hit the gate harder as stages climb: +3% per stage from stage 20 (x2.2 at 60, x3.4 at 100). Elites bite twice as hard, and boss bites ramp another +2% per stage on top (a stage-80 boss bites for about 110). Heroine damage and attack-rate bonuses from cards, levels, Lab, Ammo, promotions and legendaries stack, but past x2.5 damage and x1.6 attack rate the extra counts for much less (her card shows when the soft cap is on). Field freezes wear thin when chained (see Tap abilities). Heroines still never die; the dead daze, slow and shove them.
+
 There are 100 generated stages. Counts, health, and speed climb as you go. A boss or challenge lands every 10th stage (10, 20, … 100). Stage 100 is the finale. Beating it wins the run. From stage 16, a few elites (gold tint, much more health) are mixed into each wave.
 
 | Enemy | First appears | Behavior |
@@ -76,7 +78,7 @@ There are 100 generated stages. Counts, health, and speed climb as you go. A bos
 
 ## Bosses
 
-Every boss has a name, a slim HP bar at the top of the field, and telegraphs on the ground before each attack. Heroines have no HP: boss attacks daze (stars over her head, no moving or shooting), slow, or knock them aside. Move them out of the marked areas.
+Every boss has a name, a slim HP bar at the top of the field, and telegraphs on the ground before each attack. From stage 50 every boss also roars every 11 seconds: heroines within reach are shoved back and dazed for a second. Heroines have no HP: boss attacks daze (stars over her head, no moving or shooting), slow, or knock them aside. Move them out of the marked areas.
 
 | Stage | Boss | Pattern |
 | --- | --- | --- |
@@ -375,7 +377,7 @@ Drag a heroine (touch or mouse) and drop her anywhere on the field. A flag marks
 
 A loss or a win shows stage reached, kills, and cash earned.
 
-Health climbs a little faster after stage 25 to keep late stages hard with cards and abilities, and again from stage 20 (about +1.1% per stage on top of that) because levels, traits, bonds, and synergies add power. With a card every stage, sets and relics, zombie health also ramps about +3.6% per stage past stage 8 (up to 5x).
+Health climbs a little faster after stage 25 to keep late stages hard with cards and abilities, and again from stage 20 (about +1.1% per stage on top of that) because levels, traits, bonds, and synergies add power. With a card every stage, sets and relics, zombie health also ramps about +3.6% per stage past stage 8, plus a second ramp of +30% of base per stage from stage 40 (about 9x at stage 60, 22x at stage 100, capped at 30x).
 
 Saved locally (localStorage): ash and Lab upgrades, Daily Run best and streak, tips already seen, and the card collection: each heroine's lifetime kills, runs, best stage and bond, plus medals, the best Endless stage, and unlocked loadouts. Nothing leaves the device.
 
