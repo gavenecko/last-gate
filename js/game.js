@@ -7,7 +7,7 @@
   const BASE = { x: WORLD_W / 2, y: WORLD_H / 2, r: 8.4 };
   const BASE_HP0 = 200;
   const START_CASH = 100;
-  const CAP = 10;
+  const CAP = 8;
   const FINALE = 100;
   const SPLASH_COUNT = 24;
   const ORDER = ["vera", "roxie", "lila", "nyx", "sable", "wren"];
@@ -69,6 +69,7 @@
     spitter: { sprite: "spitter", hp: 54, speed: 6.1, r: 2.7, reward: 11, bite: 3, biteEvery: 1.1, armor: 0, slowRes: 0.1, spitter: true, spit: 7, spitEvery: 2.45, spitRange: 28, spitSpeed: 8.2 },
     shrieker: { sprite: "shrieker", hp: 76, speed: 6.5, r: 2.85, reward: 15, bite: 4, biteEvery: 1, armor: 0, slowRes: 0.16, shrieker: true, shriek: 1.42, shriekR: 12 },
     egg: { sprite: "", hp: 70, speed: 0, r: 2.4, reward: 5, bite: 0, biteEvery: 9, armor: 0, slowRes: 1, egg: true },
+    ravager: { sprite: "runner", hp: 150, speed: 8.6, r: 2.7, reward: 24, bite: 7, biteEvery: 0.8, armor: 0.12, slowRes: 0.35, ravager: true },
     bloater: { sprite: "bloater", hp: 124, speed: 4.25, r: 3.75, reward: 18, bite: 6, biteEvery: 1.05, armor: 0.06, slowRes: 0.22, bloater: true, explode: 16, explodeR: 13 },
   };
 
@@ -91,6 +92,7 @@
     { stage: 11, type: "elite", name: "Elite", line: "Elites. Tinted gold, with a lot more health." },
     { stage: 13, type: "shrieker", name: "Shrieker", line: "Shriekers. The wail makes nearby dead hurry." },
     { stage: 17, type: "bloater", name: "Bloater", line: "Bloaters. They burst on death, and the gate takes it if they pop close." },
+    { stage: 60, type: "ravager", name: "Ravager", line: "Ravagers. Red and fast. They charge your heroines, knock them flat and daze them, then go for the gate." },
   ];
 
   const EARLY_META = {
@@ -286,6 +288,7 @@
       if (n >= 51) add("brute", 2, 1.5, 1.2);
       else add("bloater", 2, 2, 1.4);
     }
+    if (n >= 60) add("ravager", n === 60 ? 3 : 1 + (n - 60) / 14, 2.6, 2.2);
     // Extra pack from 22. Stacks with the crawler pack that already starts after 25.
     if (n >= 22) {
       if (n % 2 === 0) add("runner", 4, 0.42, 0.35);
@@ -337,7 +340,7 @@
     mend: { name: "Field Mend", mark: "M", blurb: "The gate slowly heals.", costs: [60, 90, 130, 195, 260], max: 5 },
     mines: { name: "Yard Mines", mark: "N", blurb: "A mine pops the nearest zombie.", costs: [90, 130, 180, 270, 360], max: 5 },
     ammo: { name: "Ammo Stock", mark: "B", blurb: "Every heroine hits a little harder.", costs: [100, 150, 210, 280], max: 4 },
-    squad: { name: "Squad Call", mark: "C", blurb: "Room for two more heroines.", costs: [120, 180, 260], max: 3 },
+    squad: { name: "Squad Call", mark: "C", blurb: "Room for two more heroines.", costs: [140, 220], max: 2 },
   };
   const WALL_CUT = [0, 0.18, 0.32, 0.46, 0.54, 0.60];
   const AURA = [null, { r: 13.5, slow: 0.8 }, { r: 16.5, slow: 0.66 }, { r: 20, slow: 0.52 }, { r: 22, slow: 0.44 }, { r: 23.5, slow: 0.39 }];
@@ -1146,6 +1149,7 @@
       spitter: !!proto.spitter,
       shrieker: !!proto.shrieker,
       bloater: !!proto.bloater,
+      ravager: !!proto.ravager, ravCd: 1.5, wailCd: 2 + Math.random() * 2, roarCd: 8,
       egg: !!proto.egg,
       elite: false,
       x: p.x, y: p.y, r: proto.r,
@@ -1205,7 +1209,7 @@
       foe.reward = Math.max(1, Math.round(foe.reward * 1.85));
       foe.speed *= 1.06;
       foe.armor = Math.min(0.58, (foe.armor || 0) + 0.1);
-      foe.bite = Math.max(1, Math.round(foe.bite * 1.25));
+      foe.bite = Math.max(1, Math.round(foe.bite * 2));
       foe.r *= 1.06;
       if (hasRelic("hexdoll")) { foe.slowT = 3; foe.slowFactor = 0.6; }
     }
@@ -1227,7 +1231,7 @@
     }
     if (proto.boss && state.wave === FINALE) foe.r *= 1.1;
     // Late bite ramp: the dead hit the gate harder as stages climb, so armor and regen alone cannot hold forever.
-    const bm = rogueBite(state.wave);
+    const bm = rogueBite(state.wave) * (proto.boss ? 1 + ROGUE_BITE.boss * Math.max(0, Math.min(state.wave, 140) - 20) : 1);
     foe.chew = foe.bite;
     if (bm !== 1) {
       foe.bite *= bm;
@@ -1503,6 +1507,17 @@
     }
   }
 
+  // Gate armor: Wall, Fortify, cards and relics stack, but past 40% each extra point counts 40%, and it never passes 60%.
+  const GATE_ARMOR = { knee: 0.4, slope: 0.4, cap: 0.6 };
+  function rawArmor() {
+    const bmG = B();
+    return 1 - (1 - WALL_CUT[state.ups.wall] * bmG.wallMul) * bmG.gateTaken;
+  }
+  function gateArmor() {
+    let c = rawArmor();
+    if (c > GATE_ARMOR.knee) c = GATE_ARMOR.knee + (c - GATE_ARMOR.knee) * GATE_ARMOR.slope;
+    return Math.max(-1, Math.min(GATE_ARMOR.cap, c));
+  }
   function hurtBase(raw) {
     if (state.phase !== "fight") return;
     if (state.wardUp) {
@@ -1512,7 +1527,7 @@
       return;
     }
     const bmG = B();
-    const dmg = raw * (1 - WALL_CUT[state.ups.wall] * bmG.wallMul) * bmG.gateTaken;
+    const dmg = raw * (1 - gateArmor());
     state.baseHp -= dmg;
     state.baseHurt += dmg;
     if (state.baseMax > 0) state.minHpFrac = Math.min(state.minHpFrac, Math.max(0, state.baseHp) / state.baseMax);
@@ -2032,6 +2047,7 @@
           continue;
         }
       }
+      if (lateThreat(e, dt, pace)) continue;
       const dx = BASE.x - e.x;
       const dy = BASE.y - e.y;
       const dist = Math.hypot(dx, dy) || 0.0001;
@@ -2042,7 +2058,7 @@
         e.walk += dt * 1.15;
         if (e.stunT <= 0 && e.spitCd <= 0) {
           e.spitCd = e.spitEvery;
-          launchSpit(e, dist);
+          if (!spitAtHeroine(e)) launchSpit(e, dist);
         }
       } else if (dist > stop) {
         if (defenses.length && barricadeHold(e, dt)) continue;
@@ -2108,6 +2124,19 @@
       p.life -= dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
+      if (p.unit) {
+        let hitU = null;
+        for (const u of units) if (Math.hypot(u.x - p.x, u.y - p.y) <= 2.6) { hitU = u; break; }
+        if (hitU || p.life <= 0) {
+          if (hitU) {
+            hitU.slowT = Math.max(hitU.slowT || 0, 2.2);
+            burst(p.x, p.y, "#d6ff6a", 5, 3);
+            if (floaters.length < 24) floaters.push({ x: hitU.x, y: hitU.y - 15, text: "SLIMED", life: 0.9, color: "#d6ff6a" });
+          }
+          spits.splice(i, 1);
+        }
+        continue;
+      }
       const hit = Math.hypot(p.x - BASE.x, p.y - BASE.y) <= BASE.r + 0.7;
       if (p.life <= 0 || hit) {
         if (hit) {
@@ -3288,13 +3317,14 @@
     if (e.boss) return (BOSS_KINDS[e.bossKind] || BOSS_KINDS.graveking).filter;
     let f = "";
     if (e.type === "tank") f = "brightness(0.78)";
+    if (e.ravager) f = "sepia(0.9) saturate(4) hue-rotate(-40deg) brightness(0.95)";
     if (e.elite) f = (f ? f + " " : "") + "sepia(0.55) saturate(1.7) brightness(1.12)";
     return f || "none";
   }
 
   const RING = {
     walker: "#6e3038", runner: "#e6dc78", tank: "#8aa0b8", brute: "#c8b498", boss: "#c49bff",
-    crawler: "#9be36a", spitter: "#d2f25a", shrieker: "#d7b3ff", bloater: "#e0a15c",
+    crawler: "#9be36a", spitter: "#d2f25a", shrieker: "#d7b3ff", bloater: "#e0a15c", ravager: "#ff4a3a",
   };
 
   function heroHeight(u) {
@@ -5393,7 +5423,7 @@
 
   function upEffect(id, lv) {
     if (!lv) return "Not built";
-    if (id === "wall") return "Hits on the base are " + Math.round((WALL_CUT[lv] || 0) * 100) + "% softer";
+    if (id === "wall") return "Hits on the base are " + Math.round((WALL_CUT[lv] || 0) * 100) + "% softer (gate armor soft-caps at 60%)";
     if (id === "aura") return AURA[lv] ? "Nearby dead move at " + Math.round(AURA[lv].slow * 100) + "% speed" : "Not built";
     if (id === "turret") return TURRET[lv] ? "Sentry hits for " + TURRET[lv].dmg : "Not built";
     if (id === "spikes") return "Biters take " + SPIKE_DMG[lv] + " when they hit";
@@ -7449,7 +7479,7 @@
 
   // Cards every stage plus relics stack up, so the dead toughen up past the opening stages.
   const ROGUE_HP = { start: 8, per: 0.036, cap: 5, lateAt: 40, late: 0 };
-  const ROGUE_BITE = { at: 20, per: 0 };
+  const ROGUE_BITE = { at: 20, per: 0.03, boss: 0.02 };
   function rogueBite(n) { return 1 + ROGUE_BITE.per * Math.max(0, Math.min(n, 140) - ROGUE_BITE.at); }
   function rogueHp(n) {
     const m = Math.min(n, 140);
@@ -8812,7 +8842,7 @@
   }
 
   // ---------- Promotions ----------
-  const PROMO_BASE = 300, PROMO_GROW = 1.6, PROMO_DMG = 1.08, PROMO_RATE = 1.04;
+  const PROMO_BASE = 300, PROMO_GROW = 1.6, PROMO_DMG = 1.06, PROMO_RATE = 1.03;
   function promoRank(kind) { return (state.promo && state.promo[kind]) | 0; }
   function promoCost(kind) { return Math.round(PROMO_BASE * Math.pow(PROMO_GROW, promoRank(kind))); }
   function promoLabel(r) {
@@ -9018,7 +9048,7 @@
     b.appendChild(el("span", "mark"));
     const t = el("span", "sinkTxt");
     t.appendChild(el("b", "", "Fortify" + (state.fort ? "  ·  Tier " + state.fort : "")));
-    t.appendChild(el("small", "", open ? "+30 max gate HP and 3% less damage per tier. No cap." : "Opens when the Sandbag Wall is maxed."));
+    t.appendChild(el("small", "", open ? "+30 max gate HP and 3% less damage per tier. Gate armor now " + Math.round(gateArmor() * 100) + "% (soft cap 60%)." : "Opens when the Sandbag Wall is maxed."));
     b.appendChild(t);
     b.appendChild(el("em", "sinkPrice", open ? "$" + fortCost() : "LOCKED"));
     if (!open) b.classList.add("locked");
@@ -9202,6 +9232,7 @@
   function resetDefenses() {
     for (const d of defenses) {
       d.flash = 0;
+      d.off = 0;
       d.zap = null;
       d.cd = 0.6;
       if (d.type === "barricade") { d.max = barMax(); d.hp = d.max; d.down = false; }
@@ -9254,7 +9285,7 @@
         if (e.biteCd <= 0) {
           e.biteCd = e.biteEvery;
           e.lunge = 1;
-          d.hp -= (e.chew || e.bite) * (2.5 + state.wave * 0.04);
+          d.hp -= (e.chew || e.bite) * (2.5 + state.wave * 0.04) * (e.elite || e.giant || e.ravager ? 3 : 1);
           d.flash = 0.12;
           if (d.hp <= 0) breakBarricade(d);
         }
@@ -9313,6 +9344,120 @@
     d.zap = { pts: pts, t: 0.2 };
     blip(1400 + Math.random() * 300, 0.04, "square", 0.012);
   }
+  // ---- Late threats: elites wreck defenses, Ravagers charge heroines, spitters slime them,
+  // shriekers wail at them, and late bosses roar them back. Heroines are dazed or slowed, never killed.
+  const WRECKABLE = { spikes: 1, tower: 1, tesla: 1 };
+  const WRECK_T = 9;
+  function nearestUnitTo(x, y, range) {
+    let best = null, bd = range * range;
+    for (const u of units) {
+      const d = (u.x - x) * (u.x - x) + (u.y - y) * (u.y - y);
+      if (d < bd) { bd = d; best = u; }
+    }
+    return best;
+  }
+  function chaseTo(e, tx, ty, spd, dt) {
+    const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy) || 0.0001;
+    const step = Math.min(d, spd * dt);
+    e.x += (dx / d) * step;
+    e.y += (dy / d) * step;
+    e.walk += Math.max(step, dt);
+    return d;
+  }
+  function wreckDefense(d, e) {
+    d.off = WRECK_T;
+    d.flash = 0.3;
+    burst(d.x, d.y - 2, "#ffb36a", 8, 6);
+    if (floaters.length < 24) floaters.push({ x: d.x, y: d.y - 8, text: "WRECKED", life: 1.1, color: "#ff9a6a" });
+    if (!state.wreckToast) { state.wreckToast = true; toast((e.boss ? "The boss" : "An elite") + " wrecked your " + DEFS[d.type].name + ". It comes back in " + WRECK_T + "s.", 2200); }
+  }
+  function lateThreat(e, dt, pace) {
+    if (e.stunT > 0 || e.egg) return false;
+    // Elites and bosses go for defenses near their path and wreck them for a while.
+    if ((e.elite || e.boss) && defenses.length) {
+      let tgt = null, bd = 18 * 18;
+      for (const d of defenses) {
+        if (!WRECKABLE[d.type] || d.off > 0) continue;
+        const dd = (d.x - e.x) * (d.x - e.x) + (d.y - e.y) * (d.y - e.y);
+        if (dd < bd) { bd = dd; tgt = d; }
+      }
+      if (tgt) {
+        const reach = (DEFS[tgt.type].r || 4) + e.r * 0.6 + 0.6;
+        if (Math.sqrt(bd) <= reach) { wreckDefense(tgt, e); e.lunge = 1; return true; }
+        chaseTo(e, tgt.x, tgt.y, e.speed * pace, dt);
+        return true;
+      }
+    }
+    // Ravager: charge the nearest heroine, knock her flat, then head for the gate until the next charge.
+    if (e.ravager) {
+      e.ravCd -= dt;
+      if (e.ravCd <= 0) {
+        const u = nearestUnitTo(e.x, e.y, 46);
+        if (u) {
+          const d = chaseTo(e, u.x, u.y, e.speed * 1.35 * pace, dt);
+          if (d <= e.r + 2.2) {
+            const nx = (u.x - e.x) / (d || 1), ny = (u.y - e.y) / (d || 1);
+            knockUnit(u, nx, ny, 6, 1.6);
+            e.ravCd = 7;
+            e.lunge = 1;
+            rings.push({ x: u.x, y: u.y, r: 1, max: 6, life: 0.35, color: "#ff4a3a" });
+          }
+          return true;
+        }
+      }
+    }
+    // Chapel shriekers wail at heroines nearby and slow them.
+    if (e.shrieker && state.wave >= 51) {
+      e.wailCd -= dt;
+      if (e.wailCd <= 0) {
+        e.wailCd = 4.5;
+        const R = (e.shriekR || 12) + 3;
+        let any = false;
+        for (const u of units) if (Math.hypot(u.x - e.x, u.y - e.y) <= R) { u.slowT = Math.max(u.slowT || 0, 1.6); any = true; }
+        if (any) rings.push({ x: e.x, y: e.y, r: 2, max: R, life: 0.5, color: "#d7b3ff" });
+      }
+    }
+    // Late bosses roar: heroines close by are shoved back and dazed.
+    if (e.boss && state.wave >= 50) {
+      e.roarCd -= dt;
+      if (e.roarCd <= 0) {
+        e.roarCd = 11;
+        rings.push({ x: e.x, y: e.y, r: 3, max: 24, life: 0.6, color: "#ff6a8a" });
+        for (const u of units) {
+          const dx = u.x - e.x, dy = u.y - e.y, d = Math.hypot(dx, dy);
+          if (d <= 24) knockUnit(u, dx / (d || 1), dy / (d || 1), 4, 1);
+        }
+      }
+    }
+    return false;
+  }
+  // From the Marsh on, a spitter sometimes lobs at a heroine instead of the gate. Slimed heroines move and fire at half speed.
+  function spitAtHeroine(e) {
+    if (state.wave < 21 || Math.random() > 0.35) return false;
+    const u = nearestUnitTo(e.x, e.y, e.spitRange || 28);
+    if (!u) return false;
+    const dx = u.x - e.x, dy = u.y - e.y, d = Math.hypot(dx, dy) || 1;
+    spits.push({ x: e.x + (dx / d) * (e.r + 0.35), y: e.y + (dy / d) * (e.r + 0.35), vx: (dx / d) * e.spitSpeed * 1.4, vy: (dy / d) * e.spitSpeed * 1.4, dmg: 0, life: d / (e.spitSpeed * 1.4) + 0.4, unit: true });
+    e.lunge = 0.65;
+    return true;
+  }
+  function drawWrecked(d) {
+    const k = 0.5 + 0.5 * Math.sin(performance.now() / 120 + d.x);
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    ctx.strokeStyle = "#ff9a6a";
+    ctx.lineWidth = 0.35;
+    ctx.beginPath();
+    ctx.moveTo(d.x - 2, d.y - 4); ctx.lineTo(d.x + 2, d.y);
+    ctx.moveTo(d.x + 2, d.y - 4); ctx.lineTo(d.x - 2, d.y);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,170,90," + (0.35 + 0.4 * k) + ")";
+    ctx.beginPath();
+    ctx.arc(d.x + 1.5, d.y - 5, 0.5 + k * 0.4, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
   function updateDefenses(dt) {
     for (const u of units) u.tower = false;
     if (!defenses.length) return;
@@ -9323,6 +9468,7 @@
     curDef = true;
     for (const d of defenses) {
       d.flash = Math.max(0, d.flash - dt);
+      if (d.off > 0) { d.off -= dt; continue; }
       if (d.zap) { d.zap.t -= dt; if (d.zap.t <= 0) d.zap = null; }
       if (d.type === "spikes") {
         const dps = spikeDps();
@@ -9533,10 +9679,11 @@
   function drawDefenses() {
     if (!defenses.length) return;
     // Flat ones first so the tall ones draw over them.
-    for (const d of defenses) if (d.type === "spikes" || (d.type === "barrel" && d.spent) || (d.type === "barricade" && d.down)) drawDefense(ctx, d, 1);
+    for (const d of defenses) if (d.type === "spikes" || (d.type === "barrel" && d.spent) || (d.type === "barricade" && d.down)) drawDefense(ctx, d, d.off > 0 ? 0.42 : 1);
     const tall = defenses.filter((d) => !(d.type === "spikes" || (d.type === "barrel" && d.spent) || (d.type === "barricade" && d.down)));
     tall.sort((a, b) => a.y - b.y);
-    for (const d of tall) drawDefense(ctx, d, 1);
+    for (const d of tall) drawDefense(ctx, d, d.off > 0 ? 0.42 : 1);
+    for (const d of defenses) if (d.off > 0) drawWrecked(d);
     const s = selDef ? defenses.find((d) => d.id === selDef) : null;
     if (s) {
       ctx.save();
