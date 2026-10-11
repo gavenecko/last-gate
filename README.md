@@ -464,3 +464,10 @@ Heroines and zombies are the pngs in `assets/`, drawn as whole cutout sprites (n
 - **When bumping `?v=` in index.html, bump `VERSION` in sw.js to match** (that is what refreshes cached art).
 - `js/pwa.js`: registers the worker; title-screen ADD TO PHONE button driven by `beforeinstallprompt`, hidden once installed; iOS gets a "Share → Add to Home Screen" hint.
 - Classic is untouched (no manifest link) but its pages are also covered by the worker, network-first.
+
+## v28: outfits
+
+Every heroine has three looks: **Classic** (default), **Cute** and **Spooky**. Pick one on the front of her card (shop face, long-press her ability button, tap her on the field, or CARDS on the title). Switching is free and instant: the card art, shop face, ability button and her field walk sheet all change, mid-run included. The choice is saved in `last-gate-meta` (`outfits`).
+
+- Art: `assets/outfits/<id>-<outfit>.png` (720x720 portrait), `assets/outfits/<id>-<outfit>-walk.png` (4-frame strip, height 640, faces right like the classic sheets, same on-field height), `assets/outfits/thumbs/<id>-<outfit>.jpg` (picker thumbnails).
+- Outfit art loads only when a heroine wears it. Classic art stays on screen until it arrives, and if a file fails it simply stays classic. The service worker caches it on first use.
