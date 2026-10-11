@@ -7326,7 +7326,7 @@
     back.innerHTML = "";
     const inner = el("div", "hcIn");
     const ghost = el("img", "hcGhost");
-    ghost.src = src;
+    setFace(ghost, kind);
     ghost.alt = "";
     ghost.draggable = false;
     inner.appendChild(ghost);
