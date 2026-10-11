@@ -2492,3 +2492,31 @@ html.pwa #titleScreen { padding-left: calc(18px + env(safe-area-inset-left)); pa
 /* Outfit portraits are square 720px paintings: frame them like the classic squares. */
 #heroCard[data-kind][data-art="cute"] .hcArt img,
 #heroCard[data-kind][data-art="spooky"] .hcArt img { --aw: 140%; --al: -20%; --at: -3%; }
+/* v28: save and resume. CONTINUE sits above PLAY when a run is saved. */
+#continueBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-height: 64px;
+  margin: 0 0 10px;
+  padding: 9px 10px 8px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffe07a, #f0b53a);
+  color: #1d1406;
+  box-shadow: 0 0 0 2px rgba(255, 224, 122, 0.25), 0 6px 22px rgba(240, 181, 58, 0.28);
+}
+#continueBtn[hidden] { display: none !important; }
+#continueBtn b { font-family: "Passion One", Impact, sans-serif; font-size: 32px; letter-spacing: 0.06em; line-height: 1; }
+#continueBtn small { font-size: 12px; font-weight: 800; color: #4a3610; margin-top: 4px; letter-spacing: 0.02em; }
+#continueBtn:active { transform: scale(0.99); }
+#continueBtn:not([hidden]) ~ #play {
+  min-height: 52px;
+  font-size: 26px;
+  background: linear-gradient(180deg, #3a1d2a, #24121b);
+  color: #ff8fb6;
+  border: 1px solid #ff3d78;
+}
+.saveNote { margin: 0 0 10px; font-size: 13px; color: var(--muted); line-height: 1.35; }
+.saveNote[hidden] { display: none !important; }

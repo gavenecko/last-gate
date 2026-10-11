@@ -1005,6 +1005,8 @@
       od: 0, odT: 0, odMax: 6, odUses: 0, doomCd: 15, phoenixUsed: false,
       obj: null, pickBoost: 0, objDone: 0, objFail: 0,
       daily: null, rngN: {},
+      // Save / resume: which run this is (ties the mid-wave marker to its save).
+      runId: "",
     };
   }
   const state = freshState();
@@ -1373,6 +1375,9 @@
 
   function startWave() {
     if (state.phase !== "shop") return;
+    // The stage-start snapshot: quitting mid-wave comes back to exactly this.
+    saveRun(true);
+    writeMidMarker(true);
     const spec = stageSpec(state.wave);
     if (state.twistWave !== state.wave) setTwists([]);
     state.phase = "fight";
@@ -6015,6 +6020,7 @@
   function win() {
     if (state.phase === "won" || state.phase === "lost") return;
     if (cardOpen) closeCard();
+    clearRunSave();
     state.phase = "won";
     showEnd("won");
   }
@@ -6026,6 +6032,7 @@
     saveMeta();
     if (cardOpen) closeCard();
     state.lossAsh = ashGain;
+    clearRunSave();
     state.phase = "lost";
     state.baseHp = 0;
     showEnd("lost");
@@ -6102,10 +6109,14 @@
     $("loadoutScreen").classList.add("hidden");
   }
 
+  // The restart confirm doubles as "start a new run over your save?" on the title screen.
+  let confirmAction = null;
   function requestRestart() {
     if (state.phase === "title" || !state.runLive) return;
     const confirm = $("restartConfirm");
     if (!confirm.classList.contains("hidden")) return;
+    confirmAction = null;
+    $("restartConfirmPrompt").textContent = "Are you sure you want to restart?";
     confirm.classList.remove("hidden");
   }
 
@@ -6114,11 +6125,15 @@
     if (confirm.classList.contains("hidden")) return;
     confirm.classList.add("hidden");
     unlock();
+    const act = confirmAction;
+    confirmAction = null;
+    if (act) { clearRunSave(); act(); return; }
     startRun();
   }
 
   function cancelRestart() {
     $("restartConfirm").classList.add("hidden");
+    confirmAction = null;
   }
 
   function startRun(region, daily) {
@@ -6128,7 +6143,10 @@
     if (which === "chapel" && meta.regions.chapel) safe = "chapel";
     pickedRegion = safe;
     if (cardOpen) closeCard();
+    clearRunSave();
+    saveNote = "";
     resetRun(true);
+    state.runId = Date.now().toString(36) + "-" + ((Math.random() * 1e6) | 0).toString(36);
     state.daily = daily || null;
     const startN = safe === "chapel" ? 51 : safe === "marsh" ? 21 : 1;
     state.wave = startN;
@@ -6173,6 +6191,7 @@
     renderEndlessLine();
     renderLoadoutBtn();
     renderDailyBtn();
+    renderContinue();
   }
 
   function enterPause() {
@@ -8044,6 +8063,7 @@
     clearSplashArt();
     ensureStock();
     ensureObjective();
+    saveRun(true);
     if (back) openShop();
   }
 
@@ -8081,6 +8101,7 @@
     else renderIntroStep(p);
     const panel = ov.querySelector(".panel");
     if (panel) panel.scrollTop = 0;
+    saveRun(true);
   }
 
   function lockChoices(picked) {
@@ -8088,6 +8109,7 @@
     for (const k of kids) k.disabled = k !== picked;
     if (picked) picked.classList.add("picked");
     $("ovBtn").disabled = false;
+    saveRun(true);
   }
 
   function skipCash() { return 10 + Math.round(state.wave * 0.8); }
@@ -8104,7 +8126,8 @@
       : mode === "rare"
       ? (spec.boss && !bonus ? "Boss down. Rare or better, and it stays for the run." : "Rare or better. It stays for the run.")
       : "It stays for the run. Same-tag cards build toward set bonuses at 3, 5 and 7.";
-    p.offer = rollCardOffer(mode, bonus ? 0 : p.curse);
+    // A resumed save brings its offer with it; only a fresh step rolls.
+    if (!p.offer || !p.offer.length) p.offer = rollCardOffer(mode, bonus ? 0 : p.curse);
     state.offer = p.offer;
     const box = $("ovChoices");
     for (const card of p.offer) {
@@ -8144,13 +8167,15 @@
 
   function renderRelicStep(p) {
     const mode = stepArg(p) || p.relicMode || "pick";
-    const pool = relicPool();
-    const rnd = rngFor("relicstep");
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = (rnd() * (i + 1)) | 0;
-      const t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+    if (!p.relicOffer || !p.relicOffer.length) {
+      const pool = relicPool();
+      const rnd = rngFor("relicstep");
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = (rnd() * (i + 1)) | 0;
+        const t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+      }
+      p.relicOffer = pool.slice(0, mode === "one" ? 1 : 2).map((r) => r.id);
     }
-    p.relicOffer = pool.slice(0, mode === "one" ? 1 : 2).map((r) => r.id);
     $("ovKicker").textContent = "RELIC";
     $("ovTitle").textContent = p.relicOffer.length > 1 ? "Pick a relic" : "You found a relic";
     $("ovBody").textContent = "Relics bend the rules for the rest of this run.";
@@ -10525,28 +10550,261 @@
   }
   canvas.addEventListener("pointerup", (ev) => endDrag(ev, true), { passive: false });
   canvas.addEventListener("pointercancel", (ev) => endDrag(ev, false), { passive: false });
+  // ---------- Save / resume a run ----------
+  // The whole run lives in one localStorage key, rewritten at safe checkpoints: between stages
+  // (shop/brief, including a pending card / relic / map / mystery pick with its exact offer) and
+  // right before a wave starts. Nothing is written during a wave, so the last save is always the
+  // stage-start snapshot. A tiny mid-wave marker carries only the gate HP so quitting a wave
+  // keeps the damage but none of the gains.
+  const RUN_KEY = "last-gate-run";
+  const MID_KEY = "last-gate-run-mid";
+  const RUN_VER = 1;
+  const RUN_SKIP = { phase: 1, pausedFrom: 1, muted: 1, runLive: 1, bm: 1, shake: 1, baseFlash: 1, banner: 1, shout: 1, slowmo: 1, spawnQ: 1, event: 1, fireWall: 1, offer: 1, post: 1 };
+  let runSaveStr = "";
+  let runSaveAcc = 0;
+  let midHp = -1;
+  let saveNote = "";
+
+  function runPhase() { return state.phase === "paused" ? state.pausedFrom : state.phase; }
+  function runSavable() {
+    if (!state.runLive || !state.runId) return false;
+    const ph = runPhase();
+    return ph === "shop" || ph === "brief";
+  }
+  function serializeRun() {
+    const st = {};
+    for (const k in state) if (!RUN_SKIP[k]) st[k] = state[k];
+    const ph = runPhase();
+    let post = null;
+    if (ph === "brief" && state.post) {
+      post = Object.assign({}, state.post);
+      post.steps = state.post.steps.slice();
+      post.offer = (state.post.offer || []).map((c) => (c && c.id) || c);
+      post.relicOffer = (state.post.relicOffer || []).slice();
+    }
+    return {
+      v: RUN_VER,
+      phase: post ? "brief" : "shop",
+      state: st,
+      post: post,
+      units: units.map((u) => Object.assign({}, u, { hold: u.hold ? { x: u.hold.x, y: u.hold.y } : null })),
+      defenses: defenses.map((d) => Object.assign({}, d, { zap: null, flash: 0 })),
+    };
+  }
+  function saveRun() {
+    if (!runSavable()) return false;
+    try {
+      const body = JSON.stringify(serializeRun());
+      if (body === runSaveStr) return true;
+      localStorage.setItem(RUN_KEY, '{"at":' + Date.now() + "," + body.slice(1));
+      runSaveStr = body;
+      return true;
+    } catch (err) { return false; }
+  }
+  function clearRunSave() {
+    runSaveStr = "";
+    midHp = -1;
+    try { localStorage.removeItem(RUN_KEY); localStorage.removeItem(MID_KEY); } catch (err) { /* fine */ }
+  }
+  function writeMidMarker(force) {
+    if (!state.runLive || !state.runId) return;
+    if (!force && runPhase() !== "fight") return;
+    const hp = Math.max(0, Math.ceil(state.baseHp));
+    if (!force && hp === midHp) return;
+    midHp = hp;
+    try { localStorage.setItem(MID_KEY, JSON.stringify({ run: state.runId, wave: state.wave, hp: hp, at: Date.now() })); } catch (err) { /* fine */ }
+  }
+  function readMid() {
+    try { const m = JSON.parse(localStorage.getItem(MID_KEY) || "null"); return m && typeof m === "object" ? m : null; } catch (err) { return null; }
+  }
+  function finiteNum(v) { return typeof v === "number" && isFinite(v); }
+  function validRun(d) {
+    if (!d || typeof d !== "object" || d.v !== RUN_VER) return false;
+    const st = d.state;
+    if (!st || typeof st !== "object" || typeof st.runId !== "string" || !st.runId) return false;
+    if (!finiteNum(st.wave) || st.wave < 1 || st.wave > 5000) return false;
+    if (!finiteNum(st.cash) || !finiteNum(st.baseHp) || !finiteNum(st.baseMax) || st.baseHp <= 0 || st.baseMax <= 0) return false;
+    if (!st.ups || typeof st.ups !== "object" || !st.map || typeof st.map !== "object") return false;
+    if (!Array.isArray(st.cards) || !st.cards.every((id) => CARD_BY_ID[id])) return false;
+    if (!Array.isArray(st.relics) || !st.relics.every((id) => RELIC_BY_ID[id])) return false;
+    if (!Array.isArray(d.units) || !d.units.length || !d.units.every((u) => u && HEROES[u.kind] && finiteNum(u.x) && finiteNum(u.y))) return false;
+    if (!Array.isArray(d.defenses) || !d.defenses.every((x) => x && DEFS[x.type] && finiteNum(x.x) && finiteNum(x.y))) return false;
+    if (d.phase !== "shop" && d.phase !== "brief") return false;
+    if (d.phase === "brief") {
+      const p = d.post;
+      if (!p || !Array.isArray(p.steps) || !finiteNum(p.i) || p.i >= p.steps.length) return false;
+      if (!Array.isArray(p.offer) || !p.offer.every((id) => CARD_BY_ID[id])) return false;
+      if (!Array.isArray(p.relicOffer) || !p.relicOffer.every((id) => RELIC_BY_ID[id])) return false;
+    }
+    if (st.daily && (typeof st.daily !== "object" || typeof st.daily.key !== "string" || !Array.isArray(st.daily.mods))) return false;
+    return true;
+  }
+  // The saved run if it can be resumed. Broken, old-format or stale-daily saves are dropped here.
+  function peekRun() {
+    let raw = null;
+    try { raw = localStorage.getItem(RUN_KEY); } catch (err) { return null; }
+    if (!raw) return null;
+    let d = null;
+    try { d = JSON.parse(raw); } catch (err) { d = null; }
+    if (!validRun(d)) {
+      clearRunSave();
+      saveNote = "Your saved run could not be loaded, so it was cleared.";
+      return null;
+    }
+    if (d.state.daily && d.state.daily.key !== dateKey()) {
+      clearRunSave();
+      saveNote = "Your Daily Run from " + prettyDate(d.state.daily.key) + " ended with its day. Daily saves only resume on the same date.";
+      return null;
+    }
+    return d;
+  }
+  function savedWhen(at) {
+    if (!finiteNum(at)) return "";
+    const t = new Date(at);
+    const now = new Date();
+    const time = t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    if (dateKey(t) === dateKey(now)) return "today " + time;
+    const y = new Date(now.getTime() - 864e5);
+    if (dateKey(t) === dateKey(y)) return "yesterday " + time;
+    return prettyDate(dateKey(t)) + " " + time;
+  }
+  function runModeName(st) {
+    if (st.daily) return "Daily " + prettyDate(st.daily.key);
+    if (st.endless) return "Endless";
+    return "Normal";
+  }
+  const REGION_NAME = { yard: "The Yard", marsh: "The Marsh", chapel: "The Chapel" };
+  function renderContinue() {
+    const btn = $("continueBtn");
+    if (!btn) return;
+    const d = peekRun();
+    const note = $("saveNote");
+    if (note) { note.hidden = !saveNote; note.textContent = saveNote; }
+    if (!d) { btn.hidden = true; return; }
+    btn.hidden = false;
+    const st = d.state;
+    $("continueInfo").textContent = "Stage " + st.wave + "  ·  " + REGION_NAME[regionOf(st.wave)] + "  ·  " + runModeName(st) + "  ·  saved " + savedWhen(d.at);
+  }
+  // Starting any new run over a save asks first.
+  function guardNewRun(go) {
+    const d = peekRun();
+    if (!d) { renderContinue(); go(); return; }
+    confirmAction = go;
+    $("restartConfirmPrompt").textContent = "Start a new run? Your saved run at stage " + d.state.wave + " will be lost.";
+    $("restartConfirm").classList.remove("hidden");
+  }
+  function resumeRun() {
+    const d = peekRun();
+    if (!d) { renderContinue(); return false; }
+    if (cardOpen) closeCard();
+    hideMenus();
+    forceCloseShop();
+    saveNote = "";
+    resetRun(true);
+    const st = d.state;
+    for (const k in st) if (!RUN_SKIP[k]) state[k] = st[k];
+    state.offer = [];
+    state.post = null;
+    state.spawnQ = [];
+    state.event = null;
+    state.fireWall = null;
+    for (const u of d.units) {
+      units.push(Object.assign({}, u, { muzzle: 0, lunge: 0, combat: false, dazeT: 0, slowT: 0, stormT: 0, whirlT: 0, tower: false }));
+      if (u.id > uid) uid = u.id;
+    }
+    for (const x of d.defenses) {
+      defenses.push(Object.assign({}, x, { zap: null, flash: 0 }));
+      if (x.id > defId) defId = x.id;
+    }
+    state.runLive = true;
+    state.bm = null;
+    refreshMods();
+    applyGateMax();
+    pickedRegion = state.startRegion || "yard";
+    let note = "";
+    const mid = readMid();
+    if (mid && mid.run === state.runId && mid.wave === state.wave && d.phase === "shop") {
+      // Quit mid-wave: back to the start of that stage. Gains from the half-played wave are gone,
+      // and the gate keeps whatever damage it had taken, so quitting never dodges a loss.
+      if (finiteNum(mid.hp) && mid.hp < state.baseHp) state.baseHp = Math.max(1, mid.hp);
+      note = "Stage " + state.wave + " restarts from the top. The gate keeps its damage.";
+    }
+    try { localStorage.removeItem(MID_KEY); } catch (err) { /* fine */ }
+    midHp = -1;
+    $("titleScreen").classList.add("hidden");
+    $("pauseScreen").classList.add("hidden");
+    const ov = $("overlay");
+    if (d.phase === "brief" && d.post) {
+      const p = d.post;
+      p.offer = p.offer.map((id) => CARD_BY_ID[id]);
+      state.post = p;
+      state.phase = "brief";
+      const spec = stageSpec(p.cleared || state.wave);
+      ov.dataset.art = (spec.boss || spec.finale) ? "boss" : state.wave >= 51 ? "chapel" : state.wave >= 21 ? "marsh" : "yard";
+      setRandomSplash(ov);
+      ov.classList.add("splash");
+      ov.classList.remove("hidden");
+      if (p.i < 0 || (stepNeedsPick(p) && p.picked)) nextPostStep();
+      else renderPostStep();
+    } else {
+      state.phase = "shop";
+      ov.classList.add("hidden");
+      delete ov.dataset.step;
+      clearSplashArt();
+      ensureStock();
+      ensureObjective();
+    }
+    renderBuild();
+    runSaveStr = "";
+    saveRun();
+    toast(note || "Run resumed  ·  stage " + state.wave, note ? 2600 : 1600);
+    return true;
+  }
+  // Called every frame with real time: cheap change-checked saves between waves, HP marker in a wave.
+  function runSaveTick(dt) {
+    runSaveAcc += dt;
+    if (runSaveAcc < 0.5) return;
+    runSaveAcc = 0;
+    if (runSavable()) saveRun();
+    else if (runPhase() === "fight") writeMidMarker(false);
+  }
+  function onAppHidden() {
+    if (!state.runLive) return;
+    // Leaving the app mid-wave pauses the game so nothing happens while you're away.
+    if (state.phase === "fight" && !shopOpen && !cardOpen && !placing) enterPause();
+    if (runSavable()) saveRun();
+    else writeMidMarker(false);
+  }
+
   canvas.addEventListener("contextmenu", (ev) => ev.preventDefault());
   canvas.addEventListener("touchstart", (ev) => { if (ev.cancelable) ev.preventDefault(); }, { passive: false });
   canvas.addEventListener("touchmove", (ev) => { if (ev.cancelable) ev.preventDefault(); }, { passive: false });
 
-  $("play").addEventListener("click", () => {
-    unlock();
-    startRun(pickedRegion);
+  function wakeAudio() {
     if (audioCtx && audioCtx.state === "suspended") {
       const pending = audioCtx.resume();
       if (pending && typeof pending.catch === "function") pending.catch(() => {});
     }
     startMusic();
+  }
+  $("play").addEventListener("click", () => {
+    unlock();
+    guardNewRun(() => {
+      startRun(pickedRegion);
+      wakeAudio();
+    });
+  });
+  $("continueBtn").addEventListener("click", () => {
+    unlock();
+    if (resumeRun()) wakeAudio();
   });
   $("titleMute").addEventListener("click", () => { unlock(); onMute(); });
   $("dailyBtn").addEventListener("click", () => {
     unlock();
-    startDaily();
-    if (audioCtx && audioCtx.state === "suspended") {
-      const pending = audioCtx.resume();
-      if (pending && typeof pending.catch === "function") pending.catch(() => {});
-    }
-    startMusic();
+    guardNewRun(() => {
+      startDaily();
+      wakeAudio();
+    });
   });
   $("odBtn").addEventListener("click", () => {
     unlock();
@@ -10590,8 +10848,8 @@
   $("medalClose").addEventListener("click", () => { $("medalScreen").classList.add("hidden"); });
   $("ovEndless").addEventListener("click", () => { unlock(); startEndless(); });
   const flushMeta = () => { try { saveMeta(); } catch (err) { /* fine */ } };
-  window.addEventListener("pagehide", flushMeta);
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushMeta(); });
+  window.addEventListener("pagehide", () => { flushMeta(); onAppHidden(); });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") { flushMeta(); onAppHidden(); } });
   $("skillClose").addEventListener("click", () => { $("skillScreen").classList.add("hidden"); });
   $("labClose").addEventListener("click", () => { $("labScreen").classList.add("hidden"); });
   $("loadoutBtn").addEventListener("click", () => { unlock(); openLoadouts(); });
@@ -10654,9 +10912,11 @@
   renderLoadoutBtn();
   renderEndlessLine();
   renderDailyBtn();
+  renderContinue();
   syncSoundLabels();
 
   let last = 0;
+  let prevTs = 0;
   function frame(ts) {
     let dt = last ? (ts - last) / 1000 : 0.016;
     last = ts;
@@ -10666,6 +10926,8 @@
       state.slowmo -= dt;
       dt *= 0.25;
     }
+    runSaveTick(prevTs ? Math.min(1, Math.max(0, (ts - prevTs) / 1000)) : 0.016);
+    prevTs = ts;
     update(dt);
     draw();
     syncHud();
