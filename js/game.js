@@ -1334,7 +1334,7 @@
     if (state.freezeT > 0) foe.stunT = state.freezeT * (proto.boss ? 0.5 : 1);
     enemies.push(foe);
     state.spawned++;
-    if (!opts.quiet) playGroan(!!proto.boss);
+    if (!opts.quiet) playGroan(!!proto.boss, foe.x);
     return foe;
   }
 
@@ -5766,7 +5766,8 @@
   // ---------- Recorded sound effects ----------
   // Five recorded samples decoded once the audio context unlocks. Every call falls back to the
   // old synth sound until its buffer is ready (or if decoding fails).
-  const SFX_FILES = { gun: "assets/sfx/gunshot.mp3?v=31", fire: "assets/sfx/fire.mp3?v=31", magic: "assets/sfx/magic.mp3?v=31", upgrade: "assets/sfx/upgrade.mp3?v=31", boom: "assets/sfx/explosion.mp3?v=31" };
+  const SFX_FILES = { gun: "assets/sfx/gunshot.mp3?v=31", fire: "assets/sfx/fire.mp3?v=31", magic: "assets/sfx/magic.mp3?v=31", upgrade: "assets/sfx/upgrade.mp3?v=31", boom: "assets/sfx/explosion.mp3?v=31",
+    spawn1: "assets/sfx/spawn-1.mp3?v=31", spawn2: "assets/sfx/spawn-2.mp3?v=31", spawn3: "assets/sfx/spawn-3.mp3?v=31" };
   // Shortest gap between two plays of the same sample, so big squads blend instead of stacking.
   const SFX_GAP = { gun: 0.055, fire: 0.12, magic: 0.15, upgrade: 0.06, boom: 0.09 };
   const SFX_VOICES = 8;
@@ -5819,7 +5820,8 @@
 
   // Play a recorded sample. Returns false only when the sample isn't loaded, so the caller can
   // fall back to its synth sound. Throttled or capped plays return true (handled, silently).
-  // o: gain, rate, vary (pitch spread, default 0.07), key (throttle bucket), gap (seconds), force
+  // o: gain, rate, vary (pitch spread, default 0.07), key (throttle bucket), gap (seconds), force,
+  //    cap (voice limit for this play, default SFX_VOICES), pan (-1..1)
   function sfx(name, o) {
     if (!sfxOk()) return true;
     const buf = sfxBuf[name];
@@ -5833,7 +5835,7 @@
     const keep = [];
     for (let i = 0; i < sfxLive.length; i++) if (sfxLive[i] > now) { keep.push(sfxLive[i]); live++; }
     sfxLive = keep;
-    if (live >= SFX_VOICES && !o.force) return true;
+    if (live >= (o.cap || SFX_VOICES) && !o.force) return true;
     sfxLast[key] = now;
     try {
       const src = audioCtx.createBufferSource();
@@ -5844,7 +5846,14 @@
       const g = audioCtx.createGain();
       g.gain.value = (o.gain != null ? o.gain : 0.3) * (0.88 + Math.random() * 0.2);
       src.connect(g);
-      g.connect(sfxOut());
+      let tail = g;
+      if (o.pan && audioCtx.createStereoPanner) {
+        const pn = audioCtx.createStereoPanner();
+        pn.pan.value = Math.max(-1, Math.min(1, o.pan));
+        g.connect(pn);
+        tail = pn;
+      }
+      tail.connect(sfxOut());
       src.start(now);
       sfxLive.push(now + buf.duration / rate);
       sfxPlayed(name, key);
@@ -5967,10 +5976,22 @@
     } catch (err) { /* ignore */ }
   }
 
-  function playGroan(deep) {
+  // Ordinary spawns: one of the three recorded groans, at most one every 0.6-0.9s, panned
+  // lightly toward the side it came from and kept under the combat sounds. The recordings
+  // replace the old synth groan (which stays as the fallback). Boss / special spawns keep
+  // the deep synth groan and the boss sting.
+  function playGroan(deep, x) {
     if (!sfxOk()) return;
     const now = audioCtx.currentTime || 0;
     if (!deep && now < groanAt) return;
+    if (!deep && sfxBuf.spawn1) {
+      groanAt = now + 0.6 + Math.random() * 0.3;
+      const pick = "spawn" + (1 + ((Math.random() * 3) | 0));
+      const name = sfxBuf[pick] ? pick : "spawn1";
+      const pan = typeof x === "number" ? ((x / WORLD_W) * 2 - 1) * 0.45 : 0;
+      sfx(name, { gain: 0.13, rate: 1, vary: 0.09, key: "spawn", gap: 0, cap: 6, pan: pan });
+      return;
+    }
     if (!deep) groanAt = now + 0.7;
     try {
       const freq = deep ? rand(46, 64) : rand(70, 110);

@@ -9,7 +9,7 @@
  *   instead the full file is fetched once in the background and later Range requests
  *   are answered by slicing that cached copy.
  */
-const VERSION = "31";
+const VERSION = "32";
 const SHELL = "lastgate-shell-v" + VERSION;
 const ASSETS = "lastgate-assets-v" + VERSION;
 const MUSIC = "lastgate-music-1"; // music files rarely change; kept across versions
@@ -23,7 +23,7 @@ const PRECACHE_SHELL = [
   "./manifest.webmanifest",
 ];
 const SFX_REV = "31";
-const SFX = ["gunshot", "fire", "magic", "upgrade", "explosion"].map((n) => "./assets/sfx/" + n + ".mp3?v=" + SFX_REV);
+const SFX = ["gunshot", "fire", "magic", "upgrade", "explosion", "spawn-1", "spawn-2", "spawn-3"].map((n) => "./assets/sfx/" + n + ".mp3?v=" + SFX_REV);
 const PRECACHE_ASSETS = [
   "./assets/title-art.jpg",
   "./assets/PassionOne-Bold.ttf",
