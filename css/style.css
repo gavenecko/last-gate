@@ -1263,8 +1263,12 @@ button { font: inherit; color: inherit; }
 #heroCard[data-frame="gold"] { --frameBg: linear-gradient(160deg, #fff4bf, #b8860b 38%, #ffd75a 58%, #7f5a06); }
 #heroCard[data-frame="holo"] { --frameBg: linear-gradient(120deg, #ff5ea8, #ffd36a, #7dffb3, #6ac8ff, #c49bff, #ff5ea8, #ffd36a); }
 .hcStage {
+  position: relative;
   width: min(384px, 94vw);
-  height: min(calc(100dvh - 86px), 640px);
+  /* Fit above the button bar on every phone, including PWA fullscreen with notch/gesture-bar insets. */
+  height: min(calc(100vh - 86px - env(safe-area-inset-top) - env(safe-area-inset-bottom)), 640px);
+  height: min(calc(100dvh - 86px - env(safe-area-inset-top) - env(safe-area-inset-bottom)), 640px);
+  min-height: 0;
   perspective: 1100px;
   flex: 0 0 auto;
 }
@@ -1310,6 +1314,12 @@ button { font: inherit; color: inherit; }
   100% { background-position: 300% 50%; }
 }
 .hcBack { transform: rotateY(180deg); }
+/* The face turned away is hidden outright (swapped at the flip's midpoint). backface-visibility alone
+   still lets the turned-away face catch touch scrolling in Chrome, which froze the front body. */
+.hcFront, .hcBack { transition: visibility 0s linear 0.3s; }
+.hcBack { visibility: hidden; }
+.hcFlip.flipped .hcBack { visibility: visible; }
+.hcFlip.flipped .hcFront { visibility: hidden; }
 .hcArt {
   position: relative;
   flex: 0 0 47%;
@@ -1438,9 +1448,10 @@ button { font: inherit; color: inherit; }
 }
 .hcBody {
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   touch-action: pan-y;
-  padding: 9px 11px 12px;
+  padding: 9px 11px 28px;
 }
 .hcIn {
   border-radius: 15px;
@@ -1449,11 +1460,15 @@ button { font: inherit; color: inherit; }
   flex-direction: column;
   gap: 10px;
   position: relative;
-  overflow: hidden;
-  touch-action: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding-bottom: 22px;
   cursor: pointer;
 }
-.hcIn > * { position: relative; }
+.hcIn > * { position: relative; flex-shrink: 0; }
 .hcGhost {
   position: absolute !important;
   right: -18%;
@@ -1539,7 +1554,32 @@ button { font: inherit; color: inherit; }
 }
 .traitBtn b { display: block; font-family: "Passion One", Impact, sans-serif; font-size: 18px; letter-spacing: 0.03em; color: #ffe36a; line-height: 1; }
 .traitBtn span { display: block; font-size: 11.5px; color: #d6d0c2; margin-top: 3px; line-height: 1.25; }
-.traitBtn:active { transform: scale(0.97); }
+/* No press-scale inside the 3D card: a transform on :active knocks the button out of the tap's hit test. */
+.hcFace button:active { transform: none !important; filter: brightness(1.25); }
+.hcPick.done { border-color: var(--ac); animation: none; background: color-mix(in srgb, var(--ac) 12%, transparent); }
+.hcPick.done > p { color: var(--ac); font-size: 13px; margin-bottom: 3px; }
+.hcPick.done .sub { display: block; font-size: 12px; color: #d6d0c2; }
+.hcPick.done .next { color: var(--muted); margin-top: 3px; }
+#hcToast {
+  position: absolute;
+  left: 50%;
+  top: calc(14px + env(safe-area-inset-top));
+  transform: translate(-50%, -10px);
+  z-index: 3;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: rgba(10, 12, 18, 0.94);
+  border: 1px solid var(--ac);
+  color: var(--ac);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  font-size: 14px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+#hcToast.show { opacity: 1; transform: translate(-50%, 0); }
 .hcTrait { display: flex; gap: 8px; align-items: center; }
 .hcTrait .tier {
   flex: 0 0 34px;
@@ -1610,13 +1650,20 @@ button { font: inherit; color: inherit; }
 .hcFrames span.on { color: #fff; border-color: var(--fc); box-shadow: inset 0 0 10px color-mix(in srgb, var(--fc) 35%, transparent); }
 .hcQuote { margin: auto 0 0; color: #b9b2a4; font-style: italic; font-size: 13px; }
 .hcTapHint { font-size: 10px; letter-spacing: 0.14em; font-weight: 800; color: #6c7387; text-align: center; }
-@media (max-height: 700px) {
-  .hcArt { flex-basis: 42%; }
+@media (max-height: 760px) {
+  .hcArt { flex-basis: 40%; }
   .hcPlate h2 { font-size: 26px; }
+}
+@media (max-height: 660px) {
+  .hcArt { flex-basis: 33%; }
+  .hcPlate h2 { font-size: 22px; }
+  #heroCard { gap: 6px; }
+  .hcActions button { min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .hcShine, #heroCard[data-frame="holo"] .hcFace, .hcPick, .hire.due .iBadge, .hcLv.due { animation: none; }
   .hcFlip { transition-duration: 0.01s; }
+  .hcFront, .hcBack { transition-delay: 0s; }
   #heroCard.opening .hcTilt { animation: none; }
 }
 
@@ -2457,7 +2504,7 @@ html.pwa #titleScreen { padding-left: calc(18px + env(safe-area-inset-left)); pa
   background: color-mix(in srgb, var(--ac) 20%, transparent);
   box-shadow: 0 0 10px color-mix(in srgb, var(--ac) 35%, transparent);
 }
-.ofBtn:active { transform: scale(0.97); }
+.ofBtn:active { filter: brightness(1.2); }
 .ofThumb {
   flex: none;
   width: 34px;

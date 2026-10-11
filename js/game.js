@@ -6783,7 +6783,12 @@
     if (!tr) return false;
     state.traits[kind][tier] = tr.id;
     refreshMods();
+    lastLearned = { kind: kind, id: tr.id };
     toast(HEROES[kind].short + " learns " + tr.name, 1400);
+    if (cardOpen) cardToast(tr.name + " learned!");
+    // The level-up star on her ability button and shop face clears right away, even while paused.
+    try { syncAbilBar(); if (shopOpen) syncStock(); } catch (err) { /* fine */ }
+    saveRun();
     blip(660, 0.09, "triangle", 0.035);
     blip(990, 0.1, "sine", 0.02);
     return true;
@@ -7157,6 +7162,46 @@
   let cardFlipped = false;
   let cardTilt = null;
   let tapTimer = 0;
+  let lastLearned = null; // { kind, id } of the trait just picked, shown in the card's pick box
+  let cardHoldUntil = 0; // gyro tilt pauses while a finger is on the card body (taps and scrolls stay steady)
+  let cardToastTimer = 0;
+
+  function cardToast(msg) {
+    const t = $("hcToast");
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.remove("show");
+    void t.offsetWidth;
+    t.classList.add("show");
+    clearTimeout(cardToastTimer);
+    cardToastTimer = setTimeout(() => t.classList.remove("show"), 1600);
+  }
+
+  // Buttons inside the 3D card fire on a clean tap (pointerup on the same button, finger barely moved).
+  // Chrome's tap-to-click hit test can miss a button inside a tilted 3D card and hand the click to
+  // the row behind it, so we don't rely on "click" alone. Keyboard clicks still work.
+  function cardTap(btn, fn) {
+    let down = null;
+    let firedAt = 0;
+    const run = (ev) => { firedAt = performance.now(); ev.stopPropagation(); fn(ev); };
+    btn.addEventListener("pointerdown", (ev) => {
+      if (ev.button > 0) return;
+      down = { id: ev.pointerId, x: ev.clientX, y: ev.clientY };
+    });
+    btn.addEventListener("pointercancel", () => { down = null; });
+    btn.addEventListener("pointerup", (ev) => {
+      const d = down;
+      down = null;
+      if (!d || d.id !== ev.pointerId || btn.disabled) return;
+      if (Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 12) return;
+      run(ev);
+    });
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (performance.now() - firedAt < 700) return;
+      run(ev);
+    });
+  }
 
   function el(tag, cls, text) {
     const n = document.createElement(tag);
@@ -7190,6 +7235,7 @@
     const box = $("heroCard");
     box.dataset.from = from || "";
     box.classList.remove("hidden");
+    scrollCardTop(); // after un-hiding: scrollTop set on a display:none box is ignored
     box.classList.remove("opening");
     void box.offsetWidth;
     box.classList.add("opening");
@@ -7200,6 +7246,8 @@
   function closeCard() {
     if (!cardOpen) return;
     cardOpen = false;
+    lastLearned = null;
+    cardHoldUntil = 0;
     cardTilt = null;
     $("heroCard").classList.add("hidden");
     setFlip(false);
@@ -7209,8 +7257,17 @@
   function stepCard(dir) {
     const i = ORDER.indexOf(cardKind);
     cardKind = ORDER[(i + dir + ORDER.length) % ORDER.length];
+    lastLearned = null;
     renderCard();
+    scrollCardTop();
     blip(480, 0.04, "triangle", 0.02);
+  }
+
+  // A fresh card (or the next heroine) starts at the top of her body and back.
+  function scrollCardTop() {
+    $("hcBody").scrollTop = 0;
+    const bi = document.querySelector("#hcBack .hcIn");
+    if (bi) bi.scrollTop = 0;
   }
 
   function setFlip(on) {
@@ -7322,8 +7379,7 @@
       b.appendChild(t);
       b.appendChild(el("span", "ofName", OUTFIT_NAMES[o]));
       if (o !== "classic" && !meta.outfitSeen) b.appendChild(el("span", "ofNew", "NEW"));
-      b.addEventListener("click", (ev) => {
-        ev.stopPropagation();
+      cardTap(b, () => {
         if (o === outfitOf(kind)) return;
         setOutfit(kind, o);
         blip(o === "spooky" ? 300 : o === "cute" ? 720 : 520, 0.05, "triangle", 0.025);
@@ -7344,14 +7400,23 @@
         b.dataset.trait = tr.id;
         b.appendChild(el("b", "", tr.name));
         b.appendChild(el("span", "", tr.desc));
-        b.addEventListener("click", (ev) => {
-          ev.stopPropagation();
+        cardTap(b, () => {
+          unlock();
           if (pickTrait(kind, due, idx)) renderCard();
         });
         row.appendChild(b);
       });
       pick.appendChild(row);
       body.appendChild(pick);
+    } else if (inRun && lastLearned && lastLearned.kind === kind && TRAIT_BY_ID[lastLearned.id]) {
+      const tr = TRAIT_BY_ID[lastLearned.id];
+      const done = el("div", "hcPick done");
+      done.appendChild(el("p", "", "\u2713 " + tr.name.toUpperCase() + " LEARNED"));
+      done.appendChild(el("span", "sub", tr.desc));
+      let nextLv = 0;
+      for (let t = 0; t < TRAIT_LV.length; t++) if (!state.traits[kind][t]) { nextLv = TRAIT_LV[t]; break; }
+      done.appendChild(el("span", "sub next", nextLv ? "Next trait pick at LV " + nextLv + "." : "All three traits learned."));
+      body.appendChild(done);
     }
 
     const s = heroStats(kind);
@@ -7403,7 +7468,7 @@
       const btn = el("button", "promoBtn", owned.length ? "PROMOTE  ·  $" + cost : "Hire her to promote");
       btn.type = "button";
       btn.disabled = !owned.length || !canShop() || state.cash < cost;
-      btn.addEventListener("click", (ev) => { ev.stopPropagation(); unlock(); buyPromo(kind); });
+      cardTap(btn, () => { unlock(); buyPromo(kind); });
       pb.appendChild(btn);
       body.appendChild(pb);
     }
@@ -7558,6 +7623,8 @@
         if (Math.hypot(ev.clientX - cardTilt.sx, ev.clientY - cardTilt.sy) > 8) cardTilt.moved = true;
         tiltTo(ev.clientX, ev.clientY, true);
       } else if (!cardTilt && ev.pointerType === "mouse") {
+        // Hover-tilt only over the art (or the back); the front body stays flat so buttons hold still.
+        if (ev.target.closest && ev.target.closest(".hcBody")) { if ($("hcTilt").classList.contains("live")) resetTilt(); return; }
         tiltTo(ev.clientX, ev.clientY, true);
       }
     });
@@ -7585,10 +7652,25 @@
       if (ev.target === $("heroCard") && cardArmed) closeCard();
     });
     $("heroCard").addEventListener("pointerdown", () => { cardArmed = true; });
+    // A finger on the scrolling body (front or back) holds the card steady: no gyro tilt under a tap or scroll.
+    const hold = (ev) => {
+      if (!ev.target.closest || !ev.target.closest(".hcBody, .hcIn")) return;
+      cardHoldUntil = Infinity;
+      if (cardTilt) return;
+      resetTilt();
+    };
+    const release = () => { if (cardHoldUntil === Infinity) cardHoldUntil = performance.now() + 900; };
+    stageEl.addEventListener("pointerdown", hold, true);
+    window.addEventListener("pointerup", release, true);
+    window.addEventListener("pointercancel", release, true);
+    for (const sc of [$("hcBody"), $("hcBack")]) {
+      sc.addEventListener("scroll", () => { cardHoldUntil = Math.max(cardHoldUntil, performance.now() + 900); }, { passive: true, capture: true });
+    }
     // Gyro parallax where the browser gives it without asking (Android). Gentle, and only while no finger is down.
     let gyroT = 0;
     window.addEventListener("deviceorientation", (ev) => {
       if (!cardOpen || cardTilt || ev.gamma == null || ev.beta == null) return;
+      if (performance.now() < cardHoldUntil) return;
       const now = performance.now();
       if (now - gyroT < 50) return;
       gyroT = now;
