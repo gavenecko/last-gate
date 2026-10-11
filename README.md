@@ -456,3 +456,11 @@ Clearing stage 100 wins the run and offers ENDLESS. Stage 101 and on keep going:
 ## Art
 
 Heroines and zombies are the pngs in `assets/`, drawn as whole cutout sprites (no circular clip) with a stride-based walk cycle. Heroine faces in the ability strip, shop and cards use the same art. New enemy types reuse those sprites and are tinted in play. Do not replace those files from the game. Display type is Passion One (`assets/OFL-PassionOne.txt`). The center building is `assets/base.png`; owned Wall, Aura, and Turret show `upgrade-wall.png`, `upgrade-aura.png`, and `upgrade-turret.png` on the yard. The ground for each region (Yard, Marsh, Chapel) is drawn in code on a seeded offscreen canvas, with only ripples, fog, and candle flames animated live.
+
+## v27: installable app (PWA)
+
+- `manifest.webmanifest` (fullscreen, portrait, dark) + icons in `assets/icons/` (192, 512, 512 maskable, apple-touch-icon).
+- `sw.js` service worker (scope `./`): network-first for pages/JS/CSS (updates appear without a force-refresh, 4 s fallback to cache on a bad connection), cache-first for images/fonts in `lastgate-assets-v<VERSION>`, old versions deleted on activate. Music is cached as a whole file in the background on first play and Range requests are served by slicing it (no partial 206 responses are ever cached).
+- **When bumping `?v=` in index.html, bump `VERSION` in sw.js to match** (that is what refreshes cached art).
+- `js/pwa.js`: registers the worker; title-screen ADD TO PHONE button driven by `beforeinstallprompt`, hidden once installed; iOS gets a "Share → Add to Home Screen" hint.
+- Classic is untouched (no manifest link) but its pages are also covered by the worker, network-first.

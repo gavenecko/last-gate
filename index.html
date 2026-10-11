@@ -4,8 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#07080d">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Last Gate">
+  <meta name="application-name" content="Last Gate">
   <title>Last Gate</title>
-  <link rel="stylesheet" href="css/style.css?v=26">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css?v=27">
 </head>
 <body>
   <div id="app">
@@ -103,6 +111,8 @@
         <button id="titleMedals" type="button">MEDALS</button>
       </div>
       <button id="titleMute" type="button">SOUND ON</button>
+      <button id="installBtn" class="installBtn" type="button" hidden><span aria-hidden="true">&#x2B07;</span> ADD TO PHONE</button>
+      <p id="installHint" class="installHint" hidden>To install: tap Share <span aria-hidden="true">&#x2191;</span> then <b>Add to Home Screen</b></p>
       <a id="versionLink" class="versionLink" href="classic/">Classic version</a>
     </div>
   </div>
@@ -219,6 +229,7 @@
       </div>
     </div>
   </div>
-  <script src="js/game.js?v=26"></script>
+  <script src="js/game.js?v=27"></script>
+  <script src="js/pwa.js?v=27"></script>
 </body>
 </html>
