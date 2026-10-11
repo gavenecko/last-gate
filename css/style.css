@@ -2492,7 +2492,7 @@ html.pwa #titleScreen { padding-left: calc(18px + env(safe-area-inset-left)); pa
 /* Outfit portraits are square 720px paintings: frame them like the classic squares. */
 #heroCard[data-kind][data-art="cute"] .hcArt img,
 #heroCard[data-kind][data-art="spooky"] .hcArt img { --aw: 140%; --al: -20%; --at: -3%; }
-/* v28: save and resume. CONTINUE sits above PLAY when a run is saved. */
+/* v29: save and resume. CONTINUE sits above PLAY when a run is saved. */
 #continueBtn {
   display: flex;
   flex-direction: column;
