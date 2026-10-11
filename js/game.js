@@ -7243,7 +7243,7 @@
       body.appendChild(xp);
       const pr = promoRank(kind);
       const psec = el("h4", "hcSec", "PROMOTION");
-      psec.appendChild(el("small", "", "+8% damage, +4% rate per rank. No cap."));
+      psec.appendChild(el("small", "", "+" + Math.round((PROMO_DMG - 1) * 100) + "% damage, +" + Math.round((PROMO_RATE - 1) * 100) + "% rate per rank. No cap."));
       body.appendChild(psec);
       const pb = el("div", "hcBox hcPromo" + (pr ? " on" : " off"));
       pb.appendChild(el("span", "right", pr ? "x" + Math.pow(PROMO_DMG, pr).toFixed(2) + " dmg" : "Rank 0"));
