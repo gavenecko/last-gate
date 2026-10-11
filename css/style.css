@@ -2426,7 +2426,7 @@ html.pwa #titleScreen { padding-left: calc(18px + env(safe-area-inset-left)); pa
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 7px 0 2px;
+  margin: 7px 0 7px;
 }
 .hcOfLbl {
   flex: none;
