@@ -402,6 +402,7 @@
       medals: {}, life: {}, epics: 0, bestEndless: 0, bestCombo: 0,
       loadouts: { default: 1 }, loadout: "default",
       daily: { best: {}, streak: 0, last: "" }, legends: 0,
+      outfits: {}, outfitSeen: 0,
     };
   }
 
@@ -444,6 +445,10 @@
         if (data.daily.best && typeof data.daily.best === "object") for (const k in data.daily.best) meta.daily.best[k] = Math.max(0, data.daily.best[k] | 0);
       }
       meta.legends = Math.max(0, data.legends | 0);
+      if (data.outfits && typeof data.outfits === "object") {
+        for (const k of ORDER) if (data.outfits[k] === "cute" || data.outfits[k] === "spooky") meta.outfits[k] = data.outfits[k];
+      }
+      meta.outfitSeen = data.outfitSeen ? 1 : 0;
       return meta;
     } catch (err) {
       return defaultMeta();
@@ -841,6 +846,83 @@
       img.onerror = () => { sprites[key] = null; };
       img.src = row[1];
     }
+  }
+
+  // ----- Outfits -----
+  // Classic art is the default. Cute / Spooky art loads only once a heroine wears it;
+  // until it arrives (or if it fails) the classic face and walk sheet stay on screen.
+  //   assets/outfits/<id>-<outfit>.png        720x720 portrait (shop, ability strip, card)
+  //   assets/outfits/<id>-<outfit>-walk.png   4-frame strip, height 640, faces right like the classic sheets
+  //   assets/outfits/thumbs/<id>-<outfit>.jpg 120x120 picker thumbnail
+  const OUTFITS = ["classic", "cute", "spooky"];
+  const OUTFIT_NAMES = { classic: "Classic", cute: "Cute", spooky: "Spooky" };
+  const outfitFace = {};  // "vera-cute" -> "load" | "ok" | "err"
+  const outfitWalk = {};  // "vera@cute" -> "load" | "ok" | "err"
+  function outfitOf(k) {
+    const o = meta && meta.outfits ? meta.outfits[k] : "";
+    return o === "cute" || o === "spooky" ? o : "classic";
+  }
+  function outfitFaceUrl(k, o) {
+    return o === "classic" ? "assets/" + k + ".png" : "assets/outfits/" + k + "-" + o + ".png";
+  }
+  // The outfit whose face art is ready to show right now.
+  function shownOutfit(k) {
+    const o = outfitOf(k);
+    return o !== "classic" && outfitFace[k + "-" + o] === "ok" ? o : "classic";
+  }
+  function faceSrc(k) { return outfitFaceUrl(k, shownOutfit(k)); }
+  function wantOutfitFace(k) {
+    const o = outfitOf(k);
+    const key = k + "-" + o;
+    if (o === "classic" || outfitFace[key]) return;
+    outfitFace[key] = "load";
+    const im = new Image();
+    im.decoding = "async";
+    im.onload = () => { outfitFace[key] = "ok"; refreshFaces(k); };
+    im.onerror = () => { outfitFace[key] = "err"; };
+    im.src = outfitFaceUrl(k, o);
+  }
+  // Point an <img> at a heroine's current face. Tagged so an outfit change can find it again.
+  function setFace(img, k) {
+    img.dataset.face = k;
+    const src = faceSrc(k);
+    if (img.getAttribute("src") !== src) img.setAttribute("src", src);
+    wantOutfitFace(k);
+  }
+  function refreshFaces(k) {
+    const list = document.querySelectorAll('img[data-face="' + k + '"]');
+    for (const im of list) setFace(im, k);
+    const box = document.getElementById("heroCard");
+    if (box && box.dataset.kind === k) box.dataset.art = shownOutfit(k);
+  }
+  // Walk-sheet key for drawSprite: the outfit sheet once loaded, the classic sheet until then.
+  function heroSheetKey(k) {
+    const o = outfitOf(k);
+    if (o === "classic") return k;
+    const key = k + "@" + o;
+    const st = outfitWalk[key];
+    if (st === "ok") return key;
+    if (!st) {
+      outfitWalk[key] = "load";
+      const sheet = new Image();
+      sheet.decoding = "async";
+      sheet.onload = () => { walks[key] = sheet; outfitWalk[key] = "ok"; };
+      sheet.onerror = () => { outfitWalk[key] = "err"; };
+      sheet.src = "assets/outfits/" + k + "-" + o + "-walk.png";
+    }
+    return k;
+  }
+  function setOutfit(k, o) {
+    if (!HEROES[k] || !OUTFITS.includes(o)) return;
+    if (o === "classic") delete meta.outfits[k];
+    else meta.outfits[k] = o;
+    meta.outfitSeen = 1;
+    saveMeta();
+    heroSheetKey(k);
+    refreshFaces(k);
+  }
+  function preloadOutfits() {
+    for (const k of ORDER) if (outfitOf(k) !== "classic") { heroSheetKey(k); wantOutfitFace(k); }
   }
 
   const units = [];
@@ -3359,7 +3441,7 @@
     ctx.fill();
     const face = Math.cos(u.facing || 0) >= 0 ? 1 : -1;
     const frame = Math.floor(moving ? u.walk / strideLen : state.time * 0.45) % WALK_FRAMES;
-    drawSprite(u.kind, x, y, height, {
+    drawSprite(heroSheetKey(u.kind), x, y, height, {
       frame: frame,
       bob: reduceMotion ? 0 : -Math.abs(Math.sin((moving ? u.walk / strideLen : state.time * 0.45) * Math.PI)) * (moving ? 0.45 : 0.2),
       rot: attack * 0.22 * face,
@@ -6768,7 +6850,7 @@
       b.setAttribute("aria-label", HEROES[k].short + ": " + ABILITIES[k].name + " (key " + (ORDER.indexOf(k) + 1) + ")");
       b.title = HEROES[k].short + " · " + ABILITIES[k].name + " — " + ABILITIES[k].desc;
       const img = document.createElement("img");
-      img.src = "assets/" + k + ".png";
+      setFace(img, k);
       img.alt = "";
       img.draggable = false;
       const cd = document.createElement("i");
@@ -7016,8 +7098,8 @@
     box.dataset.frame = frame;
     box.style.setProperty("--ac", h.accent);
     const img = $("hcImg");
-    const src = "assets/" + kind + ".png";
-    if (img.getAttribute("src") !== src) img.setAttribute("src", src);
+    setFace(img, kind);
+    box.dataset.art = shownOutfit(kind);
     img.alt = h.name;
     $("hcRar").textContent = (frame === "standard" ? "HEROINE" : frame.toUpperCase()) + "  ·  BOND " + bond;
     $("hcName").textContent = h.name;
@@ -7049,6 +7131,37 @@
     role.appendChild(el("span", "hcChip" + (owned.length ? " ok" : ""), status));
     role.appendChild(el("span", "hcChip", "Bond " + bond));
     body.appendChild(role);
+    const wear = outfitOf(kind);
+    const ofRow = el("div", "hcOutfits");
+    ofRow.setAttribute("role", "radiogroup");
+    ofRow.setAttribute("aria-label", "Outfit");
+    ofRow.appendChild(el("span", "hcOfLbl", "OUTFIT"));
+    for (const o of OUTFITS) {
+      const b = el("button", "ofBtn" + (o === wear ? " on" : ""));
+      b.type = "button";
+      b.dataset.outfit = o;
+      b.setAttribute("role", "radio");
+      b.setAttribute("aria-checked", o === wear ? "true" : "false");
+      b.setAttribute("aria-label", OUTFIT_NAMES[o] + " outfit");
+      const t = el("img", "ofThumb");
+      t.alt = "";
+      t.draggable = false;
+      t.decoding = "async";
+      t.src = "assets/outfits/thumbs/" + kind + "-" + o + ".jpg";
+      t.onerror = () => { t.style.visibility = "hidden"; };
+      b.appendChild(t);
+      b.appendChild(el("span", "ofName", OUTFIT_NAMES[o]));
+      if (o !== "classic" && !meta.outfitSeen) b.appendChild(el("span", "ofNew", "NEW"));
+      b.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        if (o === outfitOf(kind)) return;
+        setOutfit(kind, o);
+        blip(o === "spooky" ? 300 : o === "cute" ? 720 : 520, 0.05, "triangle", 0.025);
+        renderCard();
+      });
+      ofRow.appendChild(b);
+    }
+    body.appendChild(ofRow);
     body.appendChild(el("p", "hcBio", lore.bio));
 
     if (due >= 0) {
@@ -8454,7 +8567,7 @@
     img.alt = "";
     img.draggable = false;
     img.onerror = () => { img.style.display = "none"; };
-    img.src = "assets/" + id + ".png";
+    setFace(img, id);
     cardBtn.appendChild(img);
     cardBtn.appendChild(el("span", "iBadge", "i"));
     cardBtn.addEventListener("click", () => { unlock(); openCard(id, "shop"); });
@@ -8730,7 +8843,7 @@
     for (const k of lo.units) {
       if (k === "?") { box.appendChild(el("span", "loQ", "?")); continue; }
       const img = document.createElement("img");
-      img.src = "assets/" + k + ".png";
+      setFace(img, k);
       img.alt = "";
       img.draggable = false;
       img.className = "loFace";
@@ -9039,7 +9152,7 @@
       b.dataset.price = cost;
       b.style.setProperty("--ac", HEROES[k].accent);
       const img = el("img", "face");
-      img.src = "assets/" + k + ".png";
+      setFace(img, k);
       img.alt = "";
       img.draggable = false;
       b.appendChild(img);
@@ -9109,7 +9222,7 @@
     const coolNow = state.phase === "fight" && hiredKinds().some((k) => state.abil[k] > 0);
     item("refill", MARKET.refill.name, state.phase === "fight" ? MARKET.refill.desc : "Waves only. Every ability ready.", marketPrice("refill"), () => buyMarket("refill"), state.phase !== "fight" ? "WAVES" : coolNow ? "" : "READY", el("span", "bmGlyph g-stim", "+"));
     const face = el("img", "face");
-    face.src = "assets/" + mk.merc + ".png";
+    setFace(face, mk.merc);
     face.alt = "";
     face.draggable = false;
     item("merc", "Mercenary: " + HEROES[mk.merc].name, "Fights 3 stages in her own extra slot, then leaves.", marketPrice("merc"), () => buyMarket("merc"), mk.mercSold ? "SIGNED" : mercCount() >= 2 ? "2 MAX" : "", face);
@@ -10535,6 +10648,7 @@
   else window.addEventListener("resize", resize);
 
   loadSprites();
+  preloadOutfits();
   refreshMods();
   renderRegions();
   renderLoadoutBtn();

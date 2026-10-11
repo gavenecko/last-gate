@@ -7,7 +7,7 @@
  *   instead the full file is fetched once in the background and later Range requests
  *   are answered by slicing that cached copy.
  */
-const VERSION = "27";
+const VERSION = "28";
 const SHELL = "lastgate-shell-v" + VERSION;
 const ASSETS = "lastgate-assets-v" + VERSION;
 const MUSIC = "lastgate-music-1"; // music files rarely change; kept across versions

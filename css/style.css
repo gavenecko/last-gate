@@ -2420,3 +2420,75 @@ button.relic:active { transform: rotate(-3deg) scale(0.94); }
 /* Notch / rounded corners on side edges (landscape or cutouts) when running edge-to-edge. */
 #app { box-sizing: border-box; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
 html.pwa #titleScreen { padding-left: calc(18px + env(safe-area-inset-left)); padding-right: calc(18px + env(safe-area-inset-right)); }
+
+/* Outfit picker on the heroine card */
+.hcOutfits {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 7px 0 2px;
+}
+.hcOfLbl {
+  flex: none;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+}
+.ofBtn {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 3px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.ofBtn.on {
+  border-color: var(--ac);
+  background: color-mix(in srgb, var(--ac) 20%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--ac) 35%, transparent);
+}
+.ofBtn:active { transform: scale(0.97); }
+.ofThumb {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  object-fit: cover;
+  background: #141820;
+}
+.ofBtn.on .ofThumb { box-shadow: 0 0 0 2px var(--ac); }
+.ofName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.ofBtn.on .ofName { color: var(--ac); }
+.ofNew {
+  position: absolute;
+  top: -6px;
+  right: -3px;
+  padding: 1px 4px;
+  border-radius: 6px;
+  background: #ff4d6a;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+/* Outfit portraits are square 720px paintings: frame them like the classic squares. */
+#heroCard[data-kind][data-art="cute"] .hcArt img,
+#heroCard[data-kind][data-art="spooky"] .hcArt img { --aw: 140%; --al: -20%; --at: -3%; }
