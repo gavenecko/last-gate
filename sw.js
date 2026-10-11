@@ -3,11 +3,13 @@
  * - Pages, JS, CSS, manifest: network-first (updates show without a force-refresh),
  *   falling back to the cache when offline or the network is slow.
  * - Images, fonts, other assets: cache-first in a versioned cache (dropped on each new version).
+ * - Sound effects (assets/sfx/): small files fetched whole, so cache-first like images and
+ *   precached on install. SFX_REV is their own cache-bust (matches the ?v= in game.js).
  * - Music: audio elements send Range requests. We never cache a partial 206 response;
  *   instead the full file is fetched once in the background and later Range requests
  *   are answered by slicing that cached copy.
  */
-const VERSION = "30";
+const VERSION = "31";
 const SHELL = "lastgate-shell-v" + VERSION;
 const ASSETS = "lastgate-assets-v" + VERSION;
 const MUSIC = "lastgate-music-1"; // music files rarely change; kept across versions
@@ -20,13 +22,15 @@ const PRECACHE_SHELL = [
   "./js/pwa.js?v=" + VERSION,
   "./manifest.webmanifest",
 ];
+const SFX_REV = "31";
+const SFX = ["gunshot", "fire", "magic", "upgrade", "explosion"].map((n) => "./assets/sfx/" + n + ".mp3?v=" + SFX_REV);
 const PRECACHE_ASSETS = [
   "./assets/title-art.jpg",
   "./assets/PassionOne-Bold.ttf",
   "./assets/icons/icon-192.png",
   "./assets/icons/icon-512.png",
   "./assets/icons/apple-touch-icon.png",
-];
+].concat(SFX);
 
 async function precache(name, urls) {
   const cache = await caches.open(name);
@@ -127,6 +131,7 @@ self.addEventListener("fetch", (event) => {
   if (!url.pathname.startsWith(scope.pathname)) return;
   const path = url.pathname;
 
+  if (path.includes("/assets/sfx/") && !req.headers.has("range")) { event.respondWith(cacheFirst(req).catch(() => fetch(req))); return; }
   if (/\.(mp3|ogg|m4a|wav)$/i.test(path)) { event.respondWith(music(event, req).catch(() => fetch(req))); return; }
   if (req.headers.has("range")) return; // any other partial request: leave to the browser
   if (path.endsWith("/sw.js")) return;

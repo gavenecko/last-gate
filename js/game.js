@@ -1176,7 +1176,7 @@
     const u = addUnit(id);
     layoutHomes();
     toast(u.named ? HEROES[id].name + " joins" : HEROES[id].extra + " joins (lower rank)");
-    blip(520, 0.07, "square", 0.03);
+    buySfx(0.34, 520, 0.07, "square", 0.03);
   }
 
   function buyUp(id) {
@@ -1189,7 +1189,7 @@
     state.cash -= cost;
     state.ups[id] += 1;
     toast(up.name + " LV " + state.ups[id]);
-    blip(300, 0.08, "square", 0.035);
+    buySfx(0.34, 300, 0.08, "square", 0.035);
   }
 
   function edgePoint() {
@@ -1588,6 +1588,7 @@
       const dist = Math.hypot(e.x - BASE.x, e.y - BASE.y);
       burst(e.x, e.y, "#e39a45", 16, 7);
       rings.push({ x: e.x, y: e.y, r: 0.4, max: e.explodeR, life: 0.4, color: "#ffb15a" });
+      boomSfx(0.2, 1.15, "bloater", 0.2);
       if (dist <= e.explodeR) hurtBase(e.explode);
     }
     if (state.tw.exploding && !e.egg && !e.boss && bursts.length < 48) {
@@ -1706,7 +1707,7 @@
     u.lunge = 1;
     u.facing = Math.atan2(target.y - u.y, target.x - u.x);
     state.shots++;
-    playShot(s.kind);
+    playShot(s.kind, u.kind);
     if (s.kind === "snipe") {
       let dmg = s.dmg;
       if (target.max > 0 && target.hp > target.max * 0.5) dmg *= u.named ? 1.35 : 1.15;
@@ -1838,6 +1839,7 @@
       }
     }
     burst(p.tx, p.ty, "#ff9a3c", p.big ? 20 : 8, p.big ? 9 : 5);
+    sfx("fire", { gain: p.big ? 0.34 : 0.22, rate: p.big ? 0.85 : 1 });
     if (p.big) {
       rings.push({ x: p.tx, y: p.ty, r: 0.8, max: p.aoe, life: 0.35, color: "#ffb15a" });
       if (!reduceMotion) state.shake = Math.min(1.1, state.shake + 0.2);
@@ -2276,6 +2278,7 @@
     }
     rings.push({ x: bx, y: by, r: 0.3, max: 2.4, life: 0.22, color: "#ff5d6c" });
     burst(bx, by, "#ff5d6c", 6, 5);
+    if (!chained) boomSfx(bm.mineArea ? 0.4 : 0.3, bm.mineArea ? 0.95 : 1.12, "mine", 0.12);
     if ((state.cardSet.chainmines || bm.mineChain) && !chained) {
       // Area blast round the first mine, then a second mine on the next zombie out.
       rings.push({ x: bx, y: by, r: 0.6, max: 6.5, life: 0.3, color: "#ffb15a" });
@@ -2329,6 +2332,7 @@
     if (state.turretCd <= 0) {
       state.turretCd = 1 / (spec.rate * B().turretRate);
       state.turretFlash = 0.08;
+      sfx("gun", { gain: state.cardSet.twinbarrel ? 0.2 : 0.16, rate: 1.04, key: "turret", gap: 0.07 });
       const ang = state.turretAng;
       bolts.push({
         x: BASE.x + Math.cos(ang) * (BASE.r * 0.85),
@@ -2646,7 +2650,7 @@
         rings.push({ x: m.x, y: m.y, r: 0.8, max: m.r, life: 0.35, color: "#ffb15a" });
         burst(m.x, m.y, "#ff9a3c", 14, 8);
         state.shake = Math.min(1.3, state.shake + 0.35);
-        playShot("blast");
+        if (!boomSfx(0.36, 1.05, "mortar", 0.3)) playShot("blast");
       }
       if (state.phase !== "fight") return;
     }
@@ -2680,6 +2684,8 @@
       done++;
       rings.push({ x: b.x, y: b.y, r: 0.6, max: b.r, life: 0.3, color: "#ffcf5a" });
       burst(b.x, b.y, "#ffb04a", 5, 6);
+      if (b.safe) sfx("fire", { gain: 0.1, rate: 1.2, key: "burnset", gap: 0.3 });
+      else boomSfx(0.13, 1.25, "corpse", 0.22);
       let hit = 0;
       for (const e of enemies) {
         if (e.dead) continue;
@@ -3071,7 +3077,7 @@
             hurtEnemy(e, f.dmg, 1, "vera");
             burst(f.x, f.y - 4, "#ffe9a0", 10, 8);
             state.shake = Math.min(1.5, state.shake + 0.25);
-            playShot("snipe");
+            if (!sfx("gun", { gain: 0.42, rate: 0.82, key: "deadeye", gap: 0.06 })) playShot("snipe");
           }
           fxs[i] = { kind: "beam", sx: f.sx, sy: f.sy, x: f.x, y: f.y - 4, life: 0.28, total: 0.28 };
         }
@@ -3091,11 +3097,21 @@
         sfxOsc(now, 1200, 0.25, 0.05, "sine", 2400);
         sfxOsc(now + 0.05, 1800, 0.2, 0.04, "sine", 3000);
       } else if (kind === "roxie" || kind === "lila") {
-        sfxNoise(now, 0.6, 0.4, "lowpass", 900, 0.7, 180, 0.03);
-        sfxOsc(now, 80, 0.4, 0.2, "sawtooth", 40);
+        // Dragon's Breath: a deep fire roar. Fire Wall: a slower, longer burn.
+        const ok = kind === "roxie"
+          ? sfx("fire", { gain: 0.55, rate: 0.78, vary: 0.04, force: true })
+          : sfx("fire", { gain: 0.5, rate: 0.66, vary: 0.04, force: true });
+        if (ok) sfxOsc(now, 80, 0.4, 0.12, "sawtooth", 40);
+        else {
+          sfxNoise(now, 0.6, 0.4, "lowpass", 900, 0.7, 180, 0.03);
+          sfxOsc(now, 80, 0.4, 0.2, "sawtooth", 40);
+        }
       } else if (kind === "nyx") {
-        sfxOsc(now, 900, 0.6, 0.07, "triangle", 120);
-        sfxOsc(now + 0.08, 1350, 0.5, 0.04, "sine", 200);
+        // Time Freeze: the magic whoosh pitched down so it rings longer.
+        if (!sfx("magic", { gain: 0.5, rate: 0.72, vary: 0.03, force: true })) {
+          sfxOsc(now, 900, 0.6, 0.07, "triangle", 120);
+          sfxOsc(now + 0.08, 1350, 0.5, 0.04, "sine", 200);
+        }
       } else if (kind === "sable") {
         sfxOsc(now, 220, 0.3, 0.08, "square", 660);
       } else {
@@ -5632,6 +5648,7 @@
       if (!AC) return;
       if (!audioCtx) audioCtx = new AC();
       if (audioCtx.state === "suspended") audioCtx.resume();
+      loadSfx();
     } catch (err) { /* autoplay */ }
   }
 
@@ -5746,6 +5763,104 @@
   let shotBusy = [];
   let groanAt = 0;
 
+  // ---------- Recorded sound effects ----------
+  // Five recorded samples decoded once the audio context unlocks. Every call falls back to the
+  // old synth sound until its buffer is ready (or if decoding fails).
+  const SFX_FILES = { gun: "assets/sfx/gunshot.mp3?v=31", fire: "assets/sfx/fire.mp3?v=31", magic: "assets/sfx/magic.mp3?v=31", upgrade: "assets/sfx/upgrade.mp3?v=31", boom: "assets/sfx/explosion.mp3?v=31" };
+  // Shortest gap between two plays of the same sample, so big squads blend instead of stacking.
+  const SFX_GAP = { gun: 0.055, fire: 0.12, magic: 0.15, upgrade: 0.06, boom: 0.09 };
+  const SFX_VOICES = 8;
+  const sfxBuf = {};
+  const sfxLast = {};
+  let sfxLive = [];
+  let sfxLoading = false;
+  let sfxBus = null;
+
+  function sfxOut() {
+    if (sfxBus) return sfxBus;
+    const g = audioCtx.createGain();
+    g.gain.value = 0.9;
+    let out = g;
+    try {
+      const c = audioCtx.createDynamicsCompressor();
+      c.threshold.value = -14;
+      c.knee.value = 10;
+      c.ratio.value = 6;
+      c.attack.value = 0.003;
+      c.release.value = 0.18;
+      g.connect(c);
+      out = c;
+    } catch (err) { /* plain gain */ }
+    out.connect(audioCtx.destination);
+    sfxBus = g;
+    return sfxBus;
+  }
+
+  function decodeSfx(ab) {
+    return new Promise((ok, no) => {
+      try {
+        const p = audioCtx.decodeAudioData(ab, ok, no);
+        if (p && typeof p.then === "function") p.then(ok, no);
+      } catch (err) { no(err); }
+    });
+  }
+
+  function loadSfx() {
+    if (sfxLoading || !audioCtx || typeof fetch !== "function") return;
+    sfxLoading = true;
+    for (const name in SFX_FILES) {
+      fetch(SFX_FILES[name])
+        .then((r) => { if (!r.ok) throw new Error("sfx " + r.status); return r.arrayBuffer(); })
+        .then((ab) => decodeSfx(ab))
+        .then((buf) => { if (buf && buf.duration > 0) sfxBuf[name] = buf; })
+        .catch(() => { /* keep the synth fallback */ });
+    }
+  }
+
+  // Play a recorded sample. Returns false only when the sample isn't loaded, so the caller can
+  // fall back to its synth sound. Throttled or capped plays return true (handled, silently).
+  // o: gain, rate, vary (pitch spread, default 0.07), key (throttle bucket), gap (seconds), force
+  function sfx(name, o) {
+    if (!sfxOk()) return true;
+    const buf = sfxBuf[name];
+    if (!buf) return false;
+    o = o || {};
+    const now = audioCtx.currentTime || 0;
+    const key = o.key || name;
+    const gap = o.gap != null ? o.gap : SFX_GAP[name] || 0.05;
+    if (!o.force && sfxLast[key] != null && now - sfxLast[key] < gap) return true;
+    let live = 0;
+    const keep = [];
+    for (let i = 0; i < sfxLive.length; i++) if (sfxLive[i] > now) { keep.push(sfxLive[i]); live++; }
+    sfxLive = keep;
+    if (live >= SFX_VOICES && !o.force) return true;
+    sfxLast[key] = now;
+    try {
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      const vary = o.vary != null ? o.vary : 0.07;
+      const rate = (o.rate || 1) * (1 + (Math.random() * 2 - 1) * vary);
+      src.playbackRate.value = rate;
+      const g = audioCtx.createGain();
+      g.gain.value = (o.gain != null ? o.gain : 0.3) * (0.88 + Math.random() * 0.2);
+      src.connect(g);
+      g.connect(sfxOut());
+      src.start(now);
+      sfxLive.push(now + buf.duration / rate);
+      sfxPlayed(name, key);
+    } catch (err) { /* ignore */ }
+    return true;
+  }
+  function sfxPlayed() { /* test hook */ }
+
+  // Purchases of any kind: the recorded chime, or the old blip until it loads.
+  function buySfx(gain, f, d, type, g) {
+    if (!sfx("upgrade", { gain: gain, vary: 0.04 })) blip(f, d, type, g);
+  }
+  function boomSfx(gain, rate, key, gap) {
+    return sfx("boom", { gain: gain, rate: rate || 1, key: key || "boom", gap: gap });
+  }
+
   function sfxOk() {
     return !!(audioCtx && !state.muted);
   }
@@ -5820,8 +5935,16 @@
     src.stop(when + dur + 0.02);
   }
 
-  function playShot(kind) {
-    if (!sfxOk() || !reserveShot()) return;
+  // Heroine attacks. Guns share the recorded gunshot (pitched per weapon), Lila's throw a light
+  // fire whoosh, Nyx's hex the magic whoosh. Wren's cleave stays synth.
+  function playShot(kind, by) {
+    if (!sfxOk()) return;
+    if (kind === "snipe" && sfx("gun", { gain: 0.3, rate: 0.9 })) return;
+    if (kind === "blast" && sfx("gun", { gain: 0.38, rate: 0.78 })) return;
+    if (kind === "volley" && sfx("gun", { gain: 0.22, rate: 1.16 })) return;
+    if (kind === "patch" && sfx("fire", { gain: 0.14, rate: 1.15, key: "fireThrow", gap: 0.15 })) return;
+    if (kind === "pulse" && sfx("magic", { gain: 0.22, rate: 1.12 })) return;
+    if (!reserveShot()) return;
     const now = audioCtx.currentTime || 0;
     try {
       if (kind === "snipe") {
@@ -5886,6 +6009,7 @@
   function onMute() {
     state.muted = !state.muted;
     syncSoundLabels();
+    if (sfxBus) { try { sfxBus.gain.value = state.muted ? 0 : 0.9; } catch (err) { /* fine */ } }
     if (state.muted) { setMusicMuted(true); return; }
     unlock();
     if (state.runLive && state.phase !== "title") startMusic();
@@ -6020,8 +6144,13 @@
   function win() {
     if (state.phase === "won" || state.phase === "lost") return;
     if (cardOpen) closeCard();
-    clearRunSave();
+    // Keep the run saved on the win screen so closing the app here can still go Endless later.
+    // The save is dropped when the player leaves this screen without choosing Endless.
     state.phase = "won";
+    try { localStorage.removeItem(MID_KEY); } catch (err) { /* fine */ }
+    midHp = -1;
+    runSaveStr = "";
+    saveRun();
     showEnd("won");
   }
 
@@ -6177,6 +6306,7 @@
   }
 
   function showTitle() {
+    if (state.phase === "won") clearRunSave();
     pickedRegion = "yard";
     state.phase = "title";
     state.runLive = false;
@@ -6435,7 +6565,7 @@
     state.skills[kind] = rank + 1;
     const nodeName = rank === 1 ? SKILL_FORK[forkKey].name : SKILL_NODES[kind][rank].name;
     toast(HEROES[kind].short + " · " + nodeName);
-    blip(480, 0.06, "triangle", 0.03);
+    buySfx(0.3, 480, 0.06, "triangle", 0.03);
     renderSkills();
   }
 
@@ -6485,7 +6615,7 @@
     let label = id;
     for (let i = 0; i < LAB_TRACKS.length; i++) if (LAB_TRACKS[i].id === id) label = LAB_TRACKS[i].name;
     toast(label + " LV " + meta[id]);
-    blip(360, 0.07, "triangle", 0.03);
+    buySfx(0.3, 360, 0.07, "triangle", 0.03);
     renderLab();
   }
 
@@ -8138,7 +8268,7 @@
         p.picked = true;
         lockChoices(b);
         toast(card.curse ? card.name + "  ·  cursed" : card.name);
-        blip(card.curse ? 210 : 620, 0.09, "triangle", 0.035);
+        buySfx(0.24, card.curse ? 210 : 620, 0.09, "triangle", 0.035);
         autoAdvance(p);
       });
       box.appendChild(b);
@@ -8197,7 +8327,7 @@
         addRelic(id);
         p.picked = true;
         lockChoices(b);
-        blip(700, 0.1, "triangle", 0.035);
+        buySfx(0.28, 700, 0.1, "triangle", 0.035);
         autoAdvance(p);
       });
       box.appendChild(b);
@@ -8511,7 +8641,7 @@
     s.items = fillStock(items, stockSlots(), avoid, rngFor("reroll"));
     renderStock();
     toast(cost ? "Rerolled  -$" + cost : "Free reroll", 1000);
-    blip(360, 0.06, "square", 0.025);
+    buySfx(0.15, 360, 0.06, "square", 0.025);
     return true;
   }
 
@@ -8548,7 +8678,7 @@
       const u = addUnit(it.id);
       layoutHomes();
       toast(u.named ? HEROES[it.id].name + " joins" : HEROES[it.id].extra + " joins (lower rank)");
-      blip(520, 0.07, "square", 0.03);
+      buySfx(0.34, 520, 0.07, "square", 0.03);
     } else {
       const up = BASE_UPS[it.id];
       if (!upOpen(it.id)) { it.sold = true; renderStock(); toast(up.name + " is maxed"); return false; }
@@ -8557,7 +8687,7 @@
       state.ups[it.id] += 1;
       if (it.id === "mines" && state.ups.mines === 1) state.mineCd = MINES[1].every;
       toast(up.name + " LV " + state.ups[it.id]);
-      blip(300, 0.08, "square", 0.035);
+      buySfx(0.34, 300, 0.08, "square", 0.035);
     }
     it.sold = true;
     it.locked = false;
@@ -8926,7 +9056,7 @@
     meta.loadout = id;
     saveMeta();
     toast(lo.name + " unlocked");
-    blip(700, 0.1, "triangle", 0.035);
+    buySfx(0.3, 700, 0.1, "triangle", 0.035);
     renderLoadouts();
     renderLoadoutBtn();
     return true;
@@ -9016,7 +9146,7 @@
     refreshMods();
     if (r === 5) callout("PROMOTION · " + HEROES[kind].short.toUpperCase(), "Five stars", "Every rank past this is Elite. No cap.", "lv");
     else toast(HEROES[kind].short + "  ·  " + (r > 5 ? "Elite +" + (r - 5) : r + "\u2605") + "  -$" + cost, 1200);
-    blip(700 + Math.min(r, 12) * 25, 0.08, "triangle", 0.035);
+    buySfx(0.34, 700 + Math.min(r, 12) * 25, 0.08, "triangle", 0.035);
     afterSink();
     return true;
   }
@@ -9036,7 +9166,7 @@
     rebuild();
     healGate(30);
     toast("Fortify " + state.fort + "  ·  +30 max HP, 3% less damage  -$" + cost, 1400);
-    blip(260, 0.1, "square", 0.035);
+    buySfx(0.36, 260, 0.1, "square", 0.035);
     afterSink();
     return true;
   }
@@ -9117,7 +9247,7 @@
       refreshMods();
       toast(HEROES[mk.merc].short + " signs on for 3 stages", 1600);
     } else return false;
-    blip(330, 0.09, "sawtooth", 0.03);
+    buySfx(0.34, 330, 0.09, "sawtooth", 0.03);
     afterSink();
     return true;
   }
@@ -9370,7 +9500,7 @@
     placing = null;
     syncModeBar(true);
     toast(DEFS[d.type].name + " built  -$" + d.paid, 1200);
-    blip(240, 0.09, "square", 0.04);
+    buySfx(0.3, 240, 0.09, "square", 0.04);
     if (p.fromPause) enterPause();
     return true;
   }
@@ -9473,7 +9603,8 @@
     rings.push({ x: d.x, y: d.y, r: 0.5, max: R, life: 0.4, color: "#ff9a3c" });
     burst(d.x, d.y, "#ff7a3c", 18, 9);
     state.shake = Math.min(1.4, state.shake + (reduceMotion ? 0 : 0.5));
-    playShot("blast");
+    if (boomSfx(0.46, 1, "barrel", 0.1)) sfx("fire", { gain: 0.22, rate: 0.9, key: "barrelFire", gap: 0.2 });
+    else playShot("blast");
   }
   function teslaZap(d, first) {
     const chain = 3 + B().teslaChain;
@@ -10070,7 +10201,7 @@
       for (const e of enemies) if (!e.dead) hurtEnemy(e, e.boss ? dmg * 0.25 : dmg, 0);
       rings.push({ x: BASE.x, y: BASE.y, r: 2, max: 70, life: 0.6, color: "#ff7a3c" });
       shout("AFTERBURNER", "#ff7a3c", 3);
-      playShot("blast");
+      if (!boomSfx(0.5, 0.9, "afterburner", 0.5)) playShot("blast");
     }
   }
   function setMusicOd(on) {
@@ -10126,6 +10257,7 @@
         }
         rings.push({ x: BASE.x, y: BASE.y, r: 2, max: 80, life: 0.7, color: "#ffd36a" });
         shout("DOOMSDAY", "#ffd36a", 2);
+        sfx("magic", { gain: 0.32, rate: 0.62, vary: 0.02, force: true });
       }
     }
     const o = state.obj;
@@ -10569,7 +10701,7 @@
   function runSavable() {
     if (!state.runLive || !state.runId) return false;
     const ph = runPhase();
-    return ph === "shop" || ph === "brief";
+    return ph === "shop" || ph === "brief" || (ph === "won" && !state.endless);
   }
   function serializeRun() {
     const st = {};
@@ -10584,7 +10716,7 @@
     }
     return {
       v: RUN_VER,
-      phase: post ? "brief" : "shop",
+      phase: ph === "won" ? "won" : post ? "brief" : "shop",
       state: st,
       post: post,
       units: units.map((u) => Object.assign({}, u, { hold: u.hold ? { x: u.hold.x, y: u.hold.y } : null })),
@@ -10629,7 +10761,8 @@
     if (!Array.isArray(st.relics) || !st.relics.every((id) => RELIC_BY_ID[id])) return false;
     if (!Array.isArray(d.units) || !d.units.length || !d.units.every((u) => u && HEROES[u.kind] && finiteNum(u.x) && finiteNum(u.y))) return false;
     if (!Array.isArray(d.defenses) || !d.defenses.every((x) => x && DEFS[x.type] && finiteNum(x.x) && finiteNum(x.y))) return false;
-    if (d.phase !== "shop" && d.phase !== "brief") return false;
+    if (d.phase !== "shop" && d.phase !== "brief" && d.phase !== "won") return false;
+    if (d.phase === "won" && (st.endless || st.wave < FINALE)) return false;
     if (d.phase === "brief") {
       const p = d.post;
       if (!p || !Array.isArray(p.steps) || !finiteNum(p.i) || p.i >= p.steps.length) return false;
@@ -10668,7 +10801,8 @@
     if (dateKey(t) === dateKey(y)) return "yesterday " + time;
     return prettyDate(dateKey(t)) + " " + time;
   }
-  function runModeName(st) {
+  function runModeName(st, phase) {
+    if (phase === "won") return (st.daily ? "Daily " + prettyDate(st.daily.key) + "  ·  " : "") + "Cleared! Endless awaits";
     if (st.daily) return "Daily " + prettyDate(st.daily.key);
     if (st.endless) return "Endless";
     return "Normal";
@@ -10683,7 +10817,7 @@
     if (!d) { btn.hidden = true; return; }
     btn.hidden = false;
     const st = d.state;
-    $("continueInfo").textContent = "Stage " + st.wave + "  ·  " + REGION_NAME[regionOf(st.wave)] + "  ·  " + runModeName(st) + "  ·  saved " + savedWhen(d.at);
+    $("continueInfo").textContent = "Stage " + st.wave + "  ·  " + REGION_NAME[regionOf(st.wave)] + "  ·  " + runModeName(st, d.phase) + "  ·  saved " + savedWhen(d.at);
   }
   // Starting any new run over a save asks first.
   function guardNewRun(go) {
@@ -10734,6 +10868,16 @@
     $("titleScreen").classList.add("hidden");
     $("pauseScreen").classList.add("hidden");
     const ov = $("overlay");
+    if (d.phase === "won") {
+      // Back to the stage-100 win screen with ENDLESS on offer.
+      state.phase = "won";
+      renderBuild();
+      showEnd("won");
+      runSaveStr = "";
+      saveRun();
+      toast("Run resumed  ·  stage " + state.wave + " cleared", 1600);
+      return true;
+    }
     if (d.phase === "brief" && d.post) {
       const p = d.post;
       p.offer = p.offer.map((id) => CARD_BY_ID[id]);
