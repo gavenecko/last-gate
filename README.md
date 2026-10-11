@@ -453,6 +453,15 @@ Clearing stage 100 wins the run and offers ENDLESS. Stage 101 and on keep going:
 - Huge hits shake the screen a little. Reduced-motion settings turn the shake off.
 - Killing a boss slows time for a moment and calls it out.
 
+## Save and resume
+
+A run saves itself to this browser (`localStorage` key `last-gate-run`, separate from the meta save) at every safe point: between waves whenever anything changes (shop buys, rerolls, locks, promotions, defenses, traits), on every card, relic, map and mystery screen with its exact offer, and right before a wave starts. If a run is saved, the title screen shows a gold **CONTINUE** (stage, region, mode and when it was saved) above PLAY. PLAY or DAILY RUN over a save asks first ("Start a new run? Your saved run at stage N will be lost."). Restart, a breached gate and the stage-100 win clear the save.
+
+- Reopening on a pick screen shows the same cards, relics, map stops or mystery. Offers are never re-rolled on load.
+- Nothing is saved during a wave, so the save is always the stage-start snapshot. Leaving mid-wave (switching apps, closing the tab) pauses the game and writes a small marker with the gate's HP. CONTINUE then restarts that stage from its start: cash, kills and anything bought during the half-played wave are gone, and the gate keeps the damage it had taken, so quitting never dodges a loss or farms a stage.
+- A Daily Run save only resumes on the same date. On a later day it is dropped with a short note.
+- Saves carry a version number. A save that is broken or from an incompatible version is dropped quietly with a note.
+
 ## Art
 
 Heroines and zombies are the pngs in `assets/`, drawn as whole cutout sprites (no circular clip) with a stride-based walk cycle. Heroine faces in the ability strip, shop and cards use the same art. New enemy types reuse those sprites and are tinted in play. Do not replace those files from the game. Display type is Passion One (`assets/OFL-PassionOne.txt`). The center building is `assets/base.png`; owned Wall, Aura, and Turret show `upgrade-wall.png`, `upgrade-aura.png`, and `upgrade-turret.png` on the yard. The ground for each region (Yard, Marsh, Chapel) is drawn in code on a seeded offscreen canvas, with only ripples, fog, and candle flames animated live.

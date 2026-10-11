@@ -10709,7 +10709,7 @@
     state.event = null;
     state.fireWall = null;
     for (const u of d.units) {
-      units.push(Object.assign({}, u, { muzzle: 0, lunge: 0, combat: false, dazeT: 0, slowT: 0, stormT: 0, whirlT: 0, tower: false }));
+      units.push(Object.assign({}, u));
       if (u.id > uid) uid = u.id;
     }
     for (const x of d.defenses) {
