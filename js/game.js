@@ -6108,6 +6108,27 @@
     ov.querySelector(".panel").style.setProperty("--splash", 'url("' + href + '")');
   }
 
+  // Portrait phones show the painting whole (contain) over a blurred copy of itself; that copy lives on
+  // the overlay, so mirror whichever art the panel resolved (inline --splash or a data-art rule).
+  function syncSplashBg() {
+    const ov = $("overlay");
+    const panel = ov && ov.querySelector(".panel");
+    if (!panel) return;
+    const v = ov.classList.contains("splash") ? getComputedStyle(panel).getPropertyValue("--splash").trim() : "";
+    const cur = ov.style.getPropertyValue("--splashBg");
+    const want = v && v !== "none" ? v : "none";
+    if (cur !== want) ov.style.setProperty("--splashBg", want);
+  }
+  function watchSplashBg() {
+    const ov = $("overlay");
+    const panel = ov && ov.querySelector(".panel");
+    if (!ov || !panel || typeof MutationObserver === "undefined") return;
+    const mo = new MutationObserver(syncSplashBg);
+    mo.observe(ov, { attributes: true, attributeFilter: ["class", "data-art", "data-step"] });
+    mo.observe(panel, { attributes: true, attributeFilter: ["style"] });
+    syncSplashBg();
+  }
+
   function clearSplashArt() {
     const ov = $("overlay");
     if (ov.classList.contains("hidden") || !ov.classList.contains("splash")) delete ov.dataset.art;
@@ -11154,6 +11175,7 @@
 
   loadSprites();
   preloadOutfits();
+  watchSplashBg();
   refreshMods();
   renderRegions();
   renderLoadoutBtn();
