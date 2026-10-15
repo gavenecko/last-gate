@@ -20,7 +20,7 @@ The game as it was before the late-game rebalance (v24) is kept, frozen, under `
 4. During a wave, tap a face in the slim strip under the field to fire that heroine's ability. Hold it to open her card instead. Drag a heroine to move her; double-tap her to let her roam again; quick-tap her to open her card.
 5. Clear stage 100 to win, then keep going in Endless if you like. Every 10th stage is a boss (four bosses rotate). Stage 100 is the Last King. Pause, mute, and restart sit in the top bar. Restart asks first.
 
-Keyboard: during a wave `1`–`6` fire abilities (Vera, Roxie, Lila, Nyx, Sable, Wren). Outside a wave `1`–`9` buy the matching offer in the shop stock and `X` rerolls. `B` or `U` opens or closes the shop, Space starts the wave, `P` pauses, `Esc` closes the top menu or card (or pauses), `F` flips an open card and the arrow keys browse cards, `R` restarts, `M` mutes. With a mouse, drag and double-click work like touch.
+Keyboard: during a wave `1`–`6` fire abilities (Vera, Roxie, Lila, Nyx, Sable, Wren). Outside a wave `1`–`9` buy the matching offer in the shop stock and `X` rerolls. `B`, `U` or `S` opens or closes the shop, Space starts the wave (and pauses or resumes once a wave is running), `P` pauses, `F` goes fullscreen (it flips an open card instead), `Shift`+`1`–`6` opens that heroine's card (plain `1`–`6` does on the title screen and inside a card), `Esc` closes the top menu or card (or pauses), `F` flips an open card and the arrow keys browse cards, `R` restarts, `M` mutes. With a mouse, drag and double-click work like touch.
 
 Music is six looping tracks in `assets/music/` (mp3, played with an HTML audio element; a new track is picked when one ends, never the same one twice in a row). Sound effects (shots, blasts, stings) are made in the browser with the Web Audio API. Both start on PLAY, and on the first tap if the title is skipped. Mute in the top bar (or `M`) silences both and is saved. During Overdrive the music runs a little faster.
 
@@ -480,3 +480,13 @@ Every heroine has three looks: **Classic** (default), **Cute** and **Spooky**. P
 
 - Art: `assets/outfits/<id>-<outfit>.png` (720x720 portrait), `assets/outfits/<id>-<outfit>-walk.png` (4-frame strip, height 640, faces right like the classic sheets, same on-field height), `assets/outfits/thumbs/<id>-<outfit>.jpg` (picker thumbnails).
 - Outfit art loads only when a heroine wears it. Classic art stays on screen until it arrives, and if a file fails it simply stays classic. The service worker caches it on first use.
+
+## Settings, difficulty, tour (v35)
+
+- **Settings** (title screen and pause menu): Music and Effects volume sliders, Screen shake, Reduce flashes (same calm mode as the system "reduce motion" setting), Fullscreen (hidden where the browser has none), How to play, Credits, and Reset ALL progress (asks twice; keeps the volume settings). Saved under `last-gate-settings`.
+- **Difficulty** (title screen, picked per run, stored on the run and in saves): Easy (zombie HP and gate damage x0.75, kill and clear cash x1.25, +$25 start), Normal (the shipped balance), Hard (zombie HP x1.3, gate damage x1.15, ash rewards x1.5). The Daily Run is always Normal.
+- **Guided tour**: a skippable coach-mark tour (drag, shop and hire, heroine cards, start the wave, tap abilities) on the very first PLAY of a fresh profile. Replay it from How to play. Remembered under `last-gate-tut`.
+
+## Publishing on itch.io
+
+Upload a zip with `index.html` at the top level (kind: HTML, "played in the browser"). Everything uses relative paths. When the page runs on `itch.io`/`itch.zone` or inside a non-GitHub iframe, the install button and the "Classic version" link are hidden and the service worker is not registered (`?itch=1` forces this on, `?itch=0` off). If the browser blocks `localStorage` inside the frame the game keeps working with in-memory saves for that session.

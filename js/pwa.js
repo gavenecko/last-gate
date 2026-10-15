@@ -3,6 +3,17 @@
   "use strict";
   var btn = document.getElementById("installBtn");
   var hint = document.getElementById("installHint");
+  // On itch.io (or any non-GitHub embed) the game is not an installable app: no install button, no service worker.
+  var embedded = !!(window.LG_ENV && window.LG_ENV.itch);
+  if (embedded) {
+    if (btn) btn.hidden = true;
+    if (hint) hint.hidden = true;
+    // Drop any worker a previous visit on this origin may have left behind.
+    if ("serviceWorker" in navigator) {
+      try { navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.unregister(); }); }).catch(function () {}); } catch (e) {}
+    }
+    return;
+  }
 
   function isStandalone() {
     return (window.matchMedia && (matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: fullscreen)").matches)) ||
@@ -46,7 +57,7 @@
     });
   }
 
-  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  if ("serviceWorker" in navigator && location.protocol !== "file:" && !embedded) {
     window.addEventListener("load", function () {
       navigator.serviceWorker.register("sw.js", { scope: "./", updateViaCache: "none" }).catch(function (err) {
         console.warn("Service worker registration failed:", err);

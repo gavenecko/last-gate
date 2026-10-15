@@ -1,6 +1,60 @@
 (() => {
   "use strict";
 
+  // ---------- Storage that survives sandboxed iframes (itch.io) ----------
+  // Uses localStorage when it works. When the browser blocks it (cross-origin iframe, private mode,
+  // full quota) values live in memory for this session so the game still runs.
+  const LS = (() => {
+    const mem = {};
+    let real = null;
+    try { real = window.localStorage; real.getItem("last-gate-probe"); } catch (err) { real = null; }
+    return {
+      getItem(k) {
+        if (real) {
+          try { const v = real.getItem(k); if (v !== null) return v; } catch (err) { /* memory */ }
+        }
+        return Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null;
+      },
+      setItem(k, v) {
+        v = String(v);
+        if (real) {
+          try { real.setItem(k, v); delete mem[k]; return; } catch (err) { /* memory */ }
+        }
+        mem[k] = v;
+      },
+      removeItem(k) {
+        delete mem[k];
+        if (real) { try { real.removeItem(k); } catch (err) { /* fine */ } }
+      },
+    };
+  })();
+  const ENV = window.LG_ENV || { itch: false, framed: false };
+
+  // ---------- Settings (volume, shake, flashes, difficulty) ----------
+  const SETTINGS_KEY = "last-gate-settings";
+  const TUT_KEY = "last-gate-tut";
+  // Normal is the shipped balance (all 1). hp: zombie health, dmg: damage to the gate, cash: kill and clear cash, ash: ash paid.
+  const DIFFS = {
+    easy: { id: "easy", name: "Easy", hp: 0.75, dmg: 0.75, cash: 1.25, ash: 1, startCash: 25, note: "Weaker zombies, more cash." },
+    normal: { id: "normal", name: "Normal", hp: 1, dmg: 1, cash: 1, ash: 1, startCash: 0, note: "The intended balance." },
+    hard: { id: "hard", name: "Hard", hp: 1.3, dmg: 1.15, cash: 1, ash: 1.5, startCash: 0, note: "Tougher zombies, extra ash." },
+  };
+  const settings = (() => {
+    const d = { music: 100, sfx: 100, shake: true, flash: false, diff: "normal" };
+    try {
+      const raw = JSON.parse(LS.getItem(SETTINGS_KEY) || "null");
+      if (raw && typeof raw === "object") {
+        if (isFinite(raw.music)) d.music = Math.max(0, Math.min(100, Math.round(raw.music)));
+        if (isFinite(raw.sfx)) d.sfx = Math.max(0, Math.min(100, Math.round(raw.sfx)));
+        if (typeof raw.shake === "boolean") d.shake = raw.shake;
+        if (typeof raw.flash === "boolean") d.flash = raw.flash;
+        if (DIFFS[raw.diff]) d.diff = raw.diff;
+      }
+    } catch (err) { /* defaults */ }
+    return d;
+  })();
+  function saveSettings() { LS.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
+
   const WORLD_W = 100;
   // 390x844 phone aspect so the yard fills the screen instead of letterboxing.
   const WORLD_H = WORLD_W * (844 / 390);
@@ -408,7 +462,7 @@
 
   function loadMeta() {
     try {
-      const raw = localStorage.getItem(META_KEY);
+      const raw = LS.getItem(META_KEY);
       const meta = defaultMeta();
       if (!raw) return meta;
       const data = JSON.parse(raw);
@@ -456,7 +510,7 @@
   }
 
   function saveMeta() {
-    try { localStorage.setItem(META_KEY, JSON.stringify(meta)); }
+    try { LS.setItem(META_KEY, JSON.stringify(meta)); }
     catch (err) { /* keep playing on defaults */ }
   }
 
@@ -801,7 +855,9 @@
   const BOUNTY_NAMES = ["Butcher Hank", "Mother Rot", "Old Sawtooth", "Gravel Jaw", "Sister Ash", "The Deacon", "Big Marrow", "Hollow Tom", "Lady Lye", "Rattlebone"];
   const EVENT_KINDS = ["survivor", "drop", "bounty", "rally", "breach"];
   const TIPS_KEY = "last-gate-tips";
-  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const osReduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // "Reduce flashes" in Settings turns on the same calm mode as the system setting.
+  let reduceMotion = osReduceMotion || settings.flash;
   const $ = (id) => document.getElementById(id);
   const canvas = $("game");
   const ctx = canvas.getContext("2d");
@@ -945,6 +1001,8 @@
   let uid = 1;
   let eid = 1;
 
+  function DIFF() { return DIFFS[state.diff] || DIFFS.normal; }
+
   function freshState() {
     return {
       phase: "shop",
@@ -1007,6 +1065,8 @@
       daily: null, rngN: {},
       // Save / resume: which run this is (ties the mid-wave marker to its save).
       runId: "",
+      // Difficulty chosen at run start: easy | normal | hard (the Daily Run is always normal).
+      diff: "normal",
     };
   }
   const state = freshState();
@@ -1228,7 +1288,7 @@
     const p = opts.x != null ? { x: opts.x, y: opts.y } : edgePoint();
     let mul = proto.boss ? spec.bossHp : spec.hpMul;
     if (opts.hpMul) mul *= opts.hpMul;
-    mul *= B().enemyHp * rogueHp(state.wave);
+    mul *= B().enemyHp * rogueHp(state.wave) * DIFF().hp;
     if (state.node === "elite" && !proto.boss) mul *= 1.2;
     const hp = Math.max(1, Math.round(proto.hp * mul));
     const foe = {
@@ -1381,6 +1441,7 @@
     const spec = stageSpec(state.wave);
     if (state.twistWave !== state.wave) setTwists([]);
     state.phase = "fight";
+    tutEvent("wave");
     state.fightT = 0;
     state.sent = true;
     state.spawnQ = [];
@@ -1544,7 +1605,7 @@
     let reward = e.reward;
     if (state.tw.bloodmoon) reward *= 2;
     const bm = B();
-    reward = Math.round(reward * bm.cashMul);
+    reward = Math.round(reward * bm.cashMul * DIFF().cash);
     if (e.elite) reward += bm.eliteCash;
     reward += bm.killCash;
     if (e.bounty) {
@@ -1624,13 +1685,13 @@
       return;
     }
     const bmG = B();
-    const dmg = raw * (1 - gateArmor());
+    const dmg = raw * (1 - gateArmor()) * DIFF().dmg;
     state.baseHp -= dmg;
     state.baseHurt += dmg;
     if (state.baseMax > 0) state.minHpFrac = Math.min(state.minHpFrac, Math.max(0, state.baseHp) / state.baseMax);
     if (state.minHpFrac < 0.7) objFail("gate70");
     state.shake = Math.min(1.3, state.shake + (reduceMotion ? 0 : 0.45));
-    state.baseFlash = 0.16;
+    state.baseFlash = reduceMotion ? 0.05 : 0.16;
     if (floaters.length < 20) {
       floaters.push({
         x: BASE.x + rand(-2, 2), y: BASE.y - BASE.r,
@@ -3183,7 +3244,7 @@
   // ---------- One-time tips (the only new thing saved) ----------
   function showTips() {
     let tips = {};
-    try { tips = JSON.parse(localStorage.getItem(TIPS_KEY) || "{}") || {}; } catch (err) { tips = {}; }
+    try { tips = JSON.parse(LS.getItem(TIPS_KEY) || "{}") || {}; } catch (err) { tips = {}; }
     if (!tips.abil) {
       tips.abil = 1;
       setTimeout(() => toast("Tap a face in the bottom bar to fire her ability", 3200), 2600);
@@ -3194,7 +3255,7 @@
       tips.card = 1;
       setTimeout(() => toast("Tap a heroine, or hold her ability, to open her card", 3400), 2600);
     } else return;
-    try { localStorage.setItem(TIPS_KEY, JSON.stringify(tips)); } catch (err) { /* fine */ }
+    try { LS.setItem(TIPS_KEY, JSON.stringify(tips)); } catch (err) { /* fine */ }
   }
 
   function compact() {
@@ -3234,7 +3295,7 @@
     lateClear(cleared);
     const specCleared = stageSpec(cleared);
     const bmC = B();
-    const bonus = Math.round((8 + cleared * 3) * bmC.clearMul * (state.node === "elite" && !specCleared.boss ? 1.5 : 1)) + bmC.clearFlat;
+    const bonus = Math.round((8 + cleared * 3) * bmC.clearMul * DIFF().cash * (state.node === "elite" && !specCleared.boss ? 1.5 : 1)) + bmC.clearFlat;
     if (bmC.stageHeal > 0) healGate(state.baseMax * bmC.stageHeal);
     state.cash += bonus;
     state.earned += bonus;
@@ -3245,6 +3306,7 @@
     let ashGain = 3;
     if (specCleared.boss) ashGain = 8;
     else if (specCleared.challenge) ashGain = 5;
+    ashGain = Math.ceil(ashGain * DIFF().ash);
     meta.ash = (meta.ash || 0) + ashGain;
     if (cleared >= 20) meta.regions.marsh = true;
     if (cleared >= 50) meta.regions.chapel = true;
@@ -5371,7 +5433,7 @@
     ctx.globalAlpha = 1;
     ctx.fillStyle = "#05060a";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const sh = reduceMotion ? 0 : state.shake;
+    const sh = reduceMotion || !settings.shake ? 0 : state.shake;
     const jx = Math.sin(state.time * 46) * sh * 0.35 * view.s;
     const jy = Math.cos(state.time * 33) * sh * 0.28 * view.s;
     ctx.setTransform(view.s, 0, 0, view.s, view.ox + jx, view.oy + jy);
@@ -5642,12 +5704,31 @@
     toastTimer = setTimeout(() => el.classList.remove("show"), ms || 1500);
   }
 
+  // Every effect (recorded or synth) goes through one master gain so the Effects slider and Mute cover them all.
+  let fxMaster = null;
+  function fxDest() {
+    if (!fxMaster) {
+      fxMaster = audioCtx.createGain();
+      fxMaster.gain.value = state.muted ? 0 : settings.sfx / 100;
+      fxMaster.connect(audioCtx.destination);
+    }
+    return fxMaster;
+  }
+  function mvol(base) { return base * settings.music / 100; }
+  function applyVolumes() {
+    if (fxMaster) { try { fxMaster.gain.value = state.muted ? 0 : settings.sfx / 100; } catch (err) { /* fine */ } }
+    if (music) music.volume = state.muted ? 0 : mvol(shopOpen ? 0.22 : 0.5);
+  }
+
   function unlock() {
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
       if (!audioCtx) audioCtx = new AC();
-      if (audioCtx.state === "suspended") audioCtx.resume();
+      if (audioCtx.state === "suspended") {
+        const p = audioCtx.resume();
+        if (p && typeof p.catch === "function") p.catch(() => {});
+      }
       loadSfx();
     } catch (err) { /* autoplay */ }
   }
@@ -5662,7 +5743,7 @@
       g.gain.value = gain;
       g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
       o.connect(g);
-      g.connect(audioCtx.destination);
+      g.connect(fxDest());
       o.start();
       o.stop(audioCtx.currentTime + dur);
     } catch (err) { /* ignore */ }
@@ -5693,7 +5774,7 @@
     const el = ensureMusicEl();
     musicSrc = src;
     el.src = src;
-    el.volume = state.muted ? 0 : 0.5;
+    el.volume = state.muted ? 0 : mvol(0.5);
     if (!autoplay || state.muted || state.phase === "title" || state.phase === "paused") {
       el.pause();
       return;
@@ -5704,7 +5785,7 @@
 
   function setMusicMuted(muted) {
     if (!music) return;
-    music.volume = muted ? 0 : 0.5;
+    music.volume = muted ? 0 : mvol(0.5);
     if (muted) music.pause();
   }
 
@@ -5714,7 +5795,7 @@
       cueTrack(pickTrack(""), true);
       return;
     }
-    music.volume = 0.5;
+    music.volume = mvol(0.5);
     if (state.phase === "title" || state.phase === "paused") {
       music.pause();
       return;
@@ -5733,7 +5814,7 @@
       f.frequency.value = 1700;
       o.type = "sine";
       o.frequency.value = freq;
-      const dest = audioCtx.destination;
+      const dest = fxDest();
       g.gain.setValueAtTime(0.0001, when);
       g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), when + Math.min(0.12, dur * 0.25));
       g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
@@ -5792,7 +5873,7 @@
       g.connect(c);
       out = c;
     } catch (err) { /* plain gain */ }
-    out.connect(audioCtx.destination);
+    out.connect(fxDest());
     sfxBus = g;
     return sfxBus;
   }
@@ -5902,7 +5983,7 @@
     if (dropTo) o.frequency.exponentialRampToValueAtTime(Math.max(1, dropTo), when + dur);
     sfxEnv(g, when, dur, peak, attack);
     o.connect(g);
-    g.connect(audioCtx.destination);
+    g.connect(fxDest());
     o.start(when);
     o.stop(when + dur + 0.02);
   }
@@ -5939,7 +6020,7 @@
     sfxEnv(g, when, dur, peak, attack);
     src.connect(f);
     f.connect(g);
-    g.connect(audioCtx.destination);
+    g.connect(fxDest());
     src.start(when);
     src.stop(when + dur + 0.02);
   }
@@ -6014,7 +6095,7 @@
       if (!music.paused) music.pause();
       return;
     }
-    music.volume = shopOpen ? 0.22 : 0.5;
+    music.volume = mvol(shopOpen ? 0.22 : 0.5);
     if (music.paused) {
       const pending = music.play();
       if (pending && typeof pending.catch === "function") pending.catch(() => {});
@@ -6031,6 +6112,7 @@
     state.muted = !state.muted;
     syncSoundLabels();
     if (sfxBus) { try { sfxBus.gain.value = state.muted ? 0 : 0.9; } catch (err) { /* fine */ } }
+    applyVolumes();
     if (state.muted) { setMusicMuted(true); return; }
     unlock();
     if (state.runLive && state.phase !== "title") startMusic();
@@ -6064,6 +6146,7 @@
       ["$" + state.earned, "Cash earned"],
     ];
     if (state.daily) rows.push([String((dailyMeta().best[state.daily.key] | 0) || "-"), "Daily best · " + prettyDate(state.daily.key)]);
+    else rows.push([DIFF().name, "Difficulty"]);
     for (const pair of rows) {
       const d = document.createElement("div");
       d.className = "sum";
@@ -6189,7 +6272,7 @@
     // Keep the run saved on the win screen so closing the app here can still go Endless later.
     // The save is dropped when the player leaves this screen without choosing Endless.
     state.phase = "won";
-    try { localStorage.removeItem(MID_KEY); } catch (err) { /* fine */ }
+    try { LS.removeItem(MID_KEY); } catch (err) { /* fine */ }
     midHp = -1;
     runSaveStr = "";
     saveRun();
@@ -6198,7 +6281,7 @@
 
   function lose() {
     if (state.phase === "lost" || state.phase === "won") return;
-    const ashGain = Math.max(4, Math.floor(state.wave * 0.5));
+    const ashGain = Math.ceil(Math.max(4, Math.floor(state.wave * 0.5)) * DIFF().ash);
     meta.ash = (meta.ash || 0) + ashGain;
     saveMeta();
     if (cardOpen) closeCard();
@@ -6278,6 +6361,7 @@
     $("labScreen").classList.add("hidden");
     $("medalScreen").classList.add("hidden");
     $("loadoutScreen").classList.add("hidden");
+    hideMeta();
   }
 
   // The restart confirm doubles as "start a new run over your save?" on the title screen.
@@ -6313,12 +6397,14 @@
     if (which === "marsh" && meta.regions.marsh) safe = "marsh";
     if (which === "chapel" && meta.regions.chapel) safe = "chapel";
     pickedRegion = safe;
+    if (tut.on) tutFinish(true);
     if (cardOpen) closeCard();
     clearRunSave();
     saveNote = "";
     resetRun(true);
     state.runId = Date.now().toString(36) + "-" + ((Math.random() * 1e6) | 0).toString(36);
     state.daily = daily || null;
+    state.diff = daily ? "normal" : DIFFS[settings.diff] ? settings.diff : "normal";
     const startN = safe === "chapel" ? 51 : safe === "marsh" ? 21 : 1;
     state.wave = startN;
     setTwists(rollTwists(startN));
@@ -6331,6 +6417,7 @@
     state.node = "start";
     const lo = daily ? LOADOUT_BY_ID[daily.loadout] : activeLoadout();
     const kinds = applyLoadout(lo, startN);
+    if (DIFF().startCash) state.cash += DIFF().startCash;
     if (daily && dmod("tithe")) { const r = randomRelic(); if (r) addRelic(r, true); }
     rebuild();
     if (daily) state.baseHp = state.baseMax;
@@ -6364,6 +6451,8 @@
     renderLoadoutBtn();
     renderDailyBtn();
     renderContinue();
+    renderDiff();
+    if (tut.on) tutFinish(true);
   }
 
   function enterPause() {
@@ -6371,6 +6460,7 @@
     hideMenus();
     state.pausedFrom = state.phase;
     state.phase = "paused";
+    $("pauseDiff").textContent = state.daily ? "Daily Run  ·  Normal" : "Difficulty: " + DIFF().name;
     $("pauseScreen").classList.remove("hidden");
   }
 
@@ -6430,6 +6520,7 @@
     renderBuild();
     renderStock();
     setShopUi(true);
+    tutEvent("shop");
     $("shopDone").textContent = shopFromPause ? "CLOSE · STAY PAUSED" : state.phase === "fight" ? "CLOSE · RESUME" : "CLOSE";
     const scroller = document.querySelector("#shopPanel .shopScroll");
     if (scroller) scroller.scrollTop = 0;
@@ -7096,6 +7187,7 @@
       void slot.btn.offsetWidth;
       slot.btn.classList.add("fired");
     }
+    tutEvent("abil");
     return true;
   }
 
@@ -7201,10 +7293,12 @@
   // Buttons inside the 3D card fire on a clean tap (pointerup on the same button, finger barely moved).
   // Chrome's tap-to-click hit test can miss a button inside a tilted 3D card and hand the click to
   // the row behind it, so we don't rely on "click" alone. Keyboard clicks still work.
+  // Shared across buttons: a tap re-renders the card, so the click that follows the pointerup lands on a
+  // brand-new button. Without a shared timestamp that second button ran the action again (double purchase).
+  let cardFiredAt = 0;
   function cardTap(btn, fn) {
     let down = null;
-    let firedAt = 0;
-    const run = (ev) => { firedAt = performance.now(); ev.stopPropagation(); fn(ev); };
+    const run = (ev) => { cardFiredAt = performance.now(); ev.stopPropagation(); fn(ev); };
     btn.addEventListener("pointerdown", (ev) => {
       if (ev.button > 0) return;
       down = { id: ev.pointerId, x: ev.clientX, y: ev.clientY };
@@ -7219,7 +7313,7 @@
     });
     btn.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      if (performance.now() - firedAt < 700) return;
+      if (performance.now() - cardFiredAt < 700) return;
       run(ev);
     });
   }
@@ -7261,11 +7355,13 @@
     void box.offsetWidth;
     box.classList.add("opening");
     blip(560, 0.06, "triangle", 0.025);
+    tutEvent("card");
     return true;
   }
 
   function closeCard() {
     if (!cardOpen) return;
+    tutEvent("cardclose");
     cardOpen = false;
     lastLearned = null;
     cardHoldUntil = 0;
@@ -7273,6 +7369,15 @@
     $("heroCard").classList.add("hidden");
     setFlip(false);
     resetTilt();
+  }
+
+  function jumpCard(i) {
+    if (!ORDER[i] || cardKind === ORDER[i]) return;
+    cardKind = ORDER[i];
+    lastLearned = null;
+    renderCard();
+    scrollCardTop();
+    blip(480, 0.04, "triangle", 0.02);
   }
 
   function stepCard(dir) {
@@ -7689,7 +7794,13 @@
     }
     // Gyro parallax where the browser gives it without asking (Android). Gentle, and only while no finger is down.
     let gyroT = 0;
-    window.addEventListener("deviceorientation", (ev) => {
+    // Embedded frames (itch.io) usually are not allowed motion sensors; asking would log a policy error.
+    let gyroOk = true;
+    try {
+      const pp = document.permissionsPolicy || document.featurePolicy;
+      if (pp && typeof pp.allowsFeature === "function") gyroOk = pp.allowsFeature("accelerometer") && pp.allowsFeature("gyroscope");
+    } catch (err) { gyroOk = true; }
+    if (gyroOk) window.addEventListener("deviceorientation", (ev) => {
       if (!cardOpen || cardTilt || ev.gamma == null || ev.beta == null) return;
       if (performance.now() < cardHoldUntil) return;
       const now = performance.now();
@@ -10803,6 +10914,7 @@
     u.hold = { x: d.x, y: d.y };
     lastTap = { id: 0, t: 0 };
     blip(380, 0.05, "triangle", 0.022);
+    tutEvent("drag");
   }
   canvas.addEventListener("pointerup", (ev) => endDrag(ev, true), { passive: false });
   canvas.addEventListener("pointercancel", (ev) => endDrag(ev, false), { passive: false });
@@ -10852,7 +10964,7 @@
     try {
       const body = JSON.stringify(serializeRun());
       if (body === runSaveStr) return true;
-      localStorage.setItem(RUN_KEY, '{"at":' + Date.now() + "," + body.slice(1));
+      LS.setItem(RUN_KEY, '{"at":' + Date.now() + "," + body.slice(1));
       runSaveStr = body;
       return true;
     } catch (err) { return false; }
@@ -10860,7 +10972,7 @@
   function clearRunSave() {
     runSaveStr = "";
     midHp = -1;
-    try { localStorage.removeItem(RUN_KEY); localStorage.removeItem(MID_KEY); } catch (err) { /* fine */ }
+    try { LS.removeItem(RUN_KEY); LS.removeItem(MID_KEY); } catch (err) { /* fine */ }
   }
   function writeMidMarker(force) {
     if (!state.runLive || !state.runId) return;
@@ -10868,10 +10980,10 @@
     const hp = Math.max(0, Math.ceil(state.baseHp));
     if (!force && hp === midHp) return;
     midHp = hp;
-    try { localStorage.setItem(MID_KEY, JSON.stringify({ run: state.runId, wave: state.wave, hp: hp, at: Date.now() })); } catch (err) { /* fine */ }
+    try { LS.setItem(MID_KEY, JSON.stringify({ run: state.runId, wave: state.wave, hp: hp, at: Date.now() })); } catch (err) { /* fine */ }
   }
   function readMid() {
-    try { const m = JSON.parse(localStorage.getItem(MID_KEY) || "null"); return m && typeof m === "object" ? m : null; } catch (err) { return null; }
+    try { const m = JSON.parse(LS.getItem(MID_KEY) || "null"); return m && typeof m === "object" ? m : null; } catch (err) { return null; }
   }
   function finiteNum(v) { return typeof v === "number" && isFinite(v); }
   function validRun(d) {
@@ -10899,7 +11011,7 @@
   // The saved run if it can be resumed. Broken, old-format or stale-daily saves are dropped here.
   function peekRun() {
     let raw = null;
-    try { raw = localStorage.getItem(RUN_KEY); } catch (err) { return null; }
+    try { raw = LS.getItem(RUN_KEY); } catch (err) { return null; }
     if (!raw) return null;
     let d = null;
     try { d = JSON.parse(raw); } catch (err) { d = null; }
@@ -10941,7 +11053,7 @@
     if (!d) { btn.hidden = true; return; }
     btn.hidden = false;
     const st = d.state;
-    $("continueInfo").textContent = "Stage " + st.wave + "  ·  " + REGION_NAME[regionOf(st.wave)] + "  ·  " + runModeName(st, d.phase) + "  ·  saved " + savedWhen(d.at);
+    $("continueInfo").textContent = "Stage " + st.wave + "  ·  " + REGION_NAME[regionOf(st.wave)] + "  ·  " + runModeName(st, d.phase) + (st.diff && st.diff !== "normal" && !st.daily && DIFFS[st.diff] ? "  ·  " + DIFFS[st.diff].name : "") + "  ·  saved " + savedWhen(d.at);
   }
   // Starting any new run over a save asks first.
   function guardNewRun(go) {
@@ -10987,7 +11099,7 @@
       if (finiteNum(mid.hp) && mid.hp < state.baseHp) state.baseHp = Math.max(1, mid.hp);
       note = "Stage " + state.wave + " restarts from the top. The gate keeps its damage.";
     }
-    try { localStorage.removeItem(MID_KEY); } catch (err) { /* fine */ }
+    try { LS.removeItem(MID_KEY); } catch (err) { /* fine */ }
     midHp = -1;
     $("titleScreen").classList.add("hidden");
     $("pauseScreen").classList.add("hidden");
@@ -11044,6 +11156,317 @@
     else writeMidMarker(false);
   }
 
+  // ---------- Settings, help, credits ----------
+  const META_SCREENS = ["settingsScreen", "helpScreen", "creditsScreen"];
+  let metaStack = [];
+  function metaOpen() {
+    for (const id of META_SCREENS) if (!$(id).classList.contains("hidden")) return id;
+    return "";
+  }
+  function hideMetaScreens() { for (const id of META_SCREENS) $(id).classList.add("hidden"); }
+  function hideMeta() { metaStack = []; hideMetaScreens(); }
+  function openMeta(id) {
+    const cur = metaOpen();
+    if (cur && cur !== id) metaStack.push(cur);
+    hideMetaScreens();
+    if (id === "settingsScreen") syncSettingsUi();
+    $(id).classList.remove("hidden");
+    const first = $(id).querySelector("button:not([hidden]), input");
+    if (first && !(window.matchMedia && matchMedia("(pointer: coarse)").matches)) { try { first.focus({ preventScroll: true }); } catch (err) { /* fine */ } }
+  }
+  function closeMetaTop() {
+    hideMetaScreens();
+    const back = metaStack.pop();
+    if (back) openMeta(back);
+  }
+
+  function fsSupported() {
+    const r = document.documentElement;
+    return !!((document.fullscreenEnabled || document.webkitFullscreenEnabled) && (r.requestFullscreen || r.webkitRequestFullscreen));
+  }
+  function inFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+  function toggleFullscreen() {
+    if (!fsSupported()) return;
+    try {
+      if (inFullscreen()) {
+        const x = document.exitFullscreen || document.webkitExitFullscreen;
+        const p = x.call(document);
+        if (p && p.catch) p.catch(() => {});
+      } else {
+        const r = document.documentElement;
+        const p = (r.requestFullscreen || r.webkitRequestFullscreen).call(r);
+        if (p && p.catch) p.catch(() => {});
+      }
+    } catch (err) { /* fine */ }
+  }
+  function syncFsUi() {
+    const ok = fsSupported();
+    $("setFull").hidden = !ok;
+    $("fsFloat").hidden = !ok;
+    $("setFull").textContent = inFullscreen() ? "EXIT FULLSCREEN" : "FULLSCREEN";
+    $("fsFloat").setAttribute("aria-label", inFullscreen() ? "Exit fullscreen" : "Fullscreen");
+  }
+
+  function setToggle(btn, on) {
+    btn.setAttribute("aria-checked", on ? "true" : "false");
+    btn.classList.toggle("on", on);
+    btn.querySelector("b").textContent = on ? "ON" : "OFF";
+  }
+  function syncSettingsUi() {
+    $("setMusic").value = String(settings.music);
+    $("setMusicVal").textContent = settings.music + "%";
+    $("setSfx").value = String(settings.sfx);
+    $("setSfxVal").textContent = settings.sfx + "%";
+    setToggle($("setShake"), settings.shake);
+    setToggle($("setFlash"), settings.flash);
+    document.documentElement.classList.toggle("rf", reduceMotion);
+    syncFsUi();
+  }
+  function applyComfort() {
+    reduceMotion = osReduceMotion || settings.flash;
+    document.documentElement.classList.toggle("rf", reduceMotion);
+  }
+  $("setMusic").addEventListener("input", () => {
+    settings.music = +$("setMusic").value;
+    $("setMusicVal").textContent = settings.music + "%";
+    applyVolumes();
+    saveSettings();
+  });
+  $("setSfx").addEventListener("input", () => {
+    settings.sfx = +$("setSfx").value;
+    $("setSfxVal").textContent = settings.sfx + "%";
+    applyVolumes();
+    saveSettings();
+  });
+  $("setSfx").addEventListener("change", () => { unlock(); if (!state.muted) buySfx(0.3, 640, 0.08, "triangle", 0.03); });
+  $("setShake").addEventListener("click", () => {
+    settings.shake = !settings.shake;
+    setToggle($("setShake"), settings.shake);
+    saveSettings();
+    if (settings.shake) state.shake = Math.max(state.shake, 0.6);
+  });
+  $("setFlash").addEventListener("click", () => {
+    settings.flash = !settings.flash;
+    setToggle($("setFlash"), settings.flash);
+    applyComfort();
+    saveSettings();
+  });
+  $("setFull").addEventListener("click", toggleFullscreen);
+  $("fsFloat").addEventListener("click", toggleFullscreen);
+  for (const ev of ["fullscreenchange", "webkitfullscreenchange"]) document.addEventListener(ev, () => { syncFsUi(); setTimeout(resize, 60); });
+  $("setHow").addEventListener("click", () => openMeta("helpScreen"));
+  $("setCredits").addEventListener("click", () => openMeta("creditsScreen"));
+  $("settingsClose").addEventListener("click", closeMetaTop);
+  $("helpClose").addEventListener("click", closeMetaTop);
+  $("creditsClose").addEventListener("click", closeMetaTop);
+  for (const id of META_SCREENS) $(id).addEventListener("click", (ev) => { if (ev.target === $(id)) closeMetaTop(); });
+  $("titleSettings").addEventListener("click", () => { unlock(); openMeta("settingsScreen"); });
+  $("titleHow").addEventListener("click", () => { unlock(); openMeta("helpScreen"); });
+  $("titleCredits").addEventListener("click", () => { unlock(); openMeta("creditsScreen"); });
+  $("pauseSettings").addEventListener("click", () => { unlock(); openMeta("settingsScreen"); });
+  $("pauseHow").addEventListener("click", () => { unlock(); openMeta("helpScreen"); });
+  $("helpTour").addEventListener("click", () => {
+    unlock();
+    hideMeta();
+    if (state.phase === "title" || !state.runLive) {
+      guardNewRun(() => { startRun(pickedRegion); wakeAudio(); startTutorial(); });
+    } else {
+      if (state.phase === "paused") togglePause();
+      startTutorial();
+    }
+  });
+
+  // Two confirmations before everything is wiped. The restart dialog is reused for both.
+  function askConfirm(prompt, fn) {
+    confirmAction = fn;
+    $("restartConfirmPrompt").textContent = prompt;
+    $("restartConfirm").classList.remove("hidden");
+  }
+  $("setReset").addEventListener("click", () => {
+    askConfirm("Reset ALL progress? Ash, the Lab, medals, loadouts, outfits, bonds, Daily records and your saved run will be erased.", () => {
+      setTimeout(() => askConfirm("Last chance. This cannot be undone. Erase everything and start over?", resetEverything), 0);
+    });
+  });
+  function resetEverything() {
+    if (tut.on) tutFinish(true);
+    for (const k of [META_KEY, RUN_KEY, MID_KEY, TIPS_KEY, TUT_KEY]) LS.removeItem(k);
+    if (cardOpen) closeCard();
+    meta = defaultMeta();
+    runSaveStr = "";
+    midHp = -1;
+    resetRun(true);
+    state.runLive = false;
+    hideMeta();
+    showTitle();
+    saveNote = "All progress erased.";
+    renderContinue();
+    renderEndlessLine();
+    renderLoadoutBtn();
+    renderDailyBtn();
+    renderRegions();
+    toast("All progress erased", 2200);
+  }
+
+  // ---------- Difficulty ----------
+  function renderDiff() {
+    for (const b of document.querySelectorAll("#diffRow button")) {
+      const on = b.dataset.d === settings.diff;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-checked", on ? "true" : "false");
+    }
+    $("diffNote").textContent = DIFFS[settings.diff].note;
+  }
+  for (const b of document.querySelectorAll("#diffRow button")) {
+    b.addEventListener("click", () => {
+      if (!DIFFS[b.dataset.d]) return;
+      settings.diff = b.dataset.d;
+      saveSettings();
+      renderDiff();
+    });
+  }
+
+  // ---------- First-time tour ----------
+  // Coach marks over the live game. Nothing is blocked: the dim layer lets taps through, so players can
+  // do the thing the step asks. Stage 1 is easy, so the tour is safe to run alongside it.
+  const TUT = [
+    { id: "hello", title: "Hold the gate", text: "The dead come from every edge. Your heroines guard the gate in the center. This tour takes about 30 seconds, and you can skip it any time." },
+    { id: "drag", title: "Drag to move", text: "Touch and drag a heroine to move her. Drop her where you want her to stand. Double-tap her to let her roam again.", unit: true, wait: "drag" },
+    { id: "shop", title: "Open the shop", text: "Tap SHOP to hire heroines and upgrade the gate. The game freezes while the shop is open, so take your time.", sel: "#shopBtn", wait: "shop", btn: "OPEN SHOP" },
+    { id: "hire", title: "Hire and upgrade", text: "Spend cash here. New hires join at the gate. Tap a face to read her card.", sel: "#roster" },
+    { id: "card", title: "Heroine cards", text: "Tap a heroine on the field to open her card: stats, traits, outfits. Close it to continue.", unit: true, wait: "card" },
+    { id: "wave", title: "Start the wave", text: "Nothing happens until you press START WAVE. Do it when you are ready.", sel: "#next", wait: "wave", btn: "START WAVE" },
+    { id: "abil", title: "Tap abilities", text: "Tap a face in the bar below to fire her ability. Hold it to open her card. Good luck!", sel: "#abilBar", wait: "abil", live: true, btn: "GOT IT" },
+  ];
+  const tut = { on: false, i: 0, cardWait: false, seenFight: false, sig: "" };
+  function tutDue() {
+    if (LS.getItem(TUT_KEY)) return false;
+    if ((meta.ash || 0) > 0 || meta.epics || meta.bestEndless || meta.legends) return false;
+    if (Object.keys(meta.medals).length) return false;
+    for (const k in meta.life) if (meta.life[k] && meta.life[k].kills > 0) return false;
+    return true;
+  }
+  function startTutorial() {
+    if (!state.runLive) return;
+    tut.on = true;
+    tut.cardWait = false;
+    tut.seenFight = false;
+    tut.i = -1;
+    tutShow(0);
+  }
+  function tutShow(i) {
+    const prev = TUT[tut.i];
+    const st = TUT[i];
+    if (st.id === "wave" && state.phase === "fight") { tutShow(TUT.length - 1); return; }
+    tut.i = i;
+    tut.cardWait = false;
+    if (prev && prev.id === "hire" && st.id !== "hire" && shopOpen) closeShop();
+    if (st.id === "hire" && !shopOpen) openShop();
+    $("tutStep").textContent = "STEP " + (i + 1) + " OF " + TUT.length;
+    $("tutTitle").textContent = st.title;
+    $("tutText").textContent = st.text;
+    $("tutNext").textContent = st.btn || (i === 0 ? "START TOUR" : "NEXT");
+    tut.sig = "";
+    $("tut").classList.remove("hidden");
+    tutTick();
+  }
+  function tutNext() {
+    if (!tut.on) return;
+    const st = TUT[tut.i];
+    if (st.id === "wave") {
+      if (state.phase === "shop") { if (shopOpen) closeShop(); startWave(); }
+      else tutFinish(false);
+      return;
+    }
+    if (tut.i >= TUT.length - 1) { tutFinish(false); return; }
+    tutShow(tut.i + 1);
+  }
+  function tutFinish(skipped) {
+    if (!tut.on) return;
+    const st = TUT[tut.i];
+    tut.on = false;
+    LS.setItem(TUT_KEY, "1");
+    $("tut").classList.add("hidden");
+    if (st && st.id === "hire" && shopOpen) closeShop();
+    if (!skipped) toast("Tour done. Hold the gate!", 1800);
+  }
+  function tutEvent(name) {
+    if (!tut.on) return;
+    const st = TUT[tut.i];
+    if (name === "wave") {
+      const ai = TUT.length - 1;
+      if (tut.i < ai) tutShow(ai);
+      return;
+    }
+    if (name === "cardclose") {
+      if (tut.cardWait) { tut.cardWait = false; tutNext(); }
+      return;
+    }
+    if (name === "card") {
+      if (st.wait === "card") tut.cardWait = true;
+      return;
+    }
+    if (st.wait === name) tutNext();
+  }
+  function worldCss(x, y) {
+    const r = canvas.getBoundingClientRect();
+    const k = canvas.width ? r.width / canvas.width : 1;
+    return { x: r.left + (view.ox + x * view.s) * k, y: r.top + (view.oy + y * view.s) * k, r: view.s * k };
+  }
+  function tutTick() {
+    if (!tut.on) return;
+    const st = TUT[tut.i];
+    if (!state.runLive || state.phase === "won" || state.phase === "lost") { tutFinish(true); return; }
+    if (st.id === "abil") {
+      if (state.phase === "fight") tut.seenFight = true;
+      else if (tut.seenFight && state.phase === "shop") { tutFinish(false); return; }
+    }
+    const root = $("tut");
+    const hide = cardOpen || state.phase === "title" || state.phase === "paused" || state.phase === "brief" || !!placing ||
+      !$("restartConfirm").classList.contains("hidden") || !!metaOpen() || !$("titleScreen").classList.contains("hidden");
+    if (root.classList.contains("hidden") !== hide) root.classList.toggle("hidden", hide);
+    if (hide) return;
+    let rect = null;
+    if (st.unit) {
+      const u = units[0];
+      if (u) { const p = worldCss(u.x, u.y - 1.5); const rr = Math.max(34, p.r * 8); rect = { l: p.x - rr, t: p.y - rr, w: rr * 2, h: rr * 2, round: true }; }
+    } else if (st.sel) {
+      const el = document.querySelector(st.sel);
+      if (el) {
+        const b = el.getBoundingClientRect();
+        if (b.width > 0 && b.height > 0 && getComputedStyle(el).visibility !== "hidden" && !el.hidden) rect = { l: b.left - 5, t: b.top - 5, w: b.width + 10, h: b.height + 10, round: false };
+      }
+    }
+    const vh = window.innerHeight;
+    const place = !rect ? "mid" : st.live ? "top" : rect.t + rect.h / 2 < vh * 0.5 ? "bot" : "top";
+    const sig = [rect ? Math.round(rect.l) + "," + Math.round(rect.t) + "," + Math.round(rect.w) + "," + Math.round(rect.h) + (rect.round ? "r" : "") : "none", place, st.live ? 1 : 0, tut.i].join("|");
+    if (sig === tut.sig) return;
+    tut.sig = sig;
+    const spot = $("tutSpot");
+    root.classList.toggle("noSpot", !rect);
+    root.classList.toggle("live", !!st.live);
+    root.dataset.place = place;
+    if (rect) {
+      spot.style.left = rect.l + "px";
+      spot.style.top = rect.t + "px";
+      spot.style.width = rect.w + "px";
+      spot.style.height = rect.h + "px";
+      spot.style.borderRadius = rect.round ? "50%" : "14px";
+    }
+  }
+  $("tutNext").addEventListener("click", () => { unlock(); tutNext(); });
+  $("tutSkip").addEventListener("click", () => { unlock(); tutFinish(true); });
+
+  // Audio unlocks on the first touch, click or key inside the page, including inside an itch.io iframe.
+  function gestureUnlock() {
+    unlock();
+    try { window.focus(); } catch (err) { /* cross-origin parent */ }
+    if (audioCtx && audioCtx.state === "running") {
+      for (const t of ["pointerdown", "touchend", "mousedown", "click", "keydown"]) window.removeEventListener(t, gestureUnlock, true);
+    }
+  }
+  for (const t of ["pointerdown", "touchend", "mousedown", "click", "keydown"]) window.addEventListener(t, gestureUnlock, { capture: true, passive: true });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && audioCtx && audioCtx.state === "suspended") unlock(); });
+
   canvas.addEventListener("contextmenu", (ev) => ev.preventDefault());
   canvas.addEventListener("touchstart", (ev) => { if (ev.cancelable) ev.preventDefault(); }, { passive: false });
   canvas.addEventListener("touchmove", (ev) => { if (ev.cancelable) ev.preventDefault(); }, { passive: false });
@@ -11058,8 +11481,10 @@
   $("play").addEventListener("click", () => {
     unlock();
     guardNewRun(() => {
+      const first = tutDue();
       startRun(pickedRegion);
       wakeAudio();
+      if (first) startTutorial();
     });
   });
   $("continueBtn").addEventListener("click", () => {
@@ -11142,6 +11567,11 @@
       else if (ev.key === "f" || ev.key === "F") setFlip(!cardFlipped);
       else if (ev.key === "ArrowLeft") stepCard(-1);
       else if (ev.key === "ArrowRight") stepCard(1);
+      else if (ev.key >= "1" && ev.key <= "6") jumpCard(+ev.key - 1);
+      return;
+    }
+    if (metaOpen()) {
+      if (ev.key === "Escape") { if (!$("restartConfirm").classList.contains("hidden")) cancelRestart(); else closeMetaTop(); }
       return;
     }
     if (ev.target && ev.target.tagName === "BUTTON" && (ev.key === " " || ev.code === "Space")) return;
@@ -11153,9 +11583,13 @@
       togglePause();
       return;
     }
-    if (ev.key === "b" || ev.key === "B" || ev.key === "u" || ev.key === "U") { unlock(); toggleShop(); return; }
+    if (ev.key === "b" || ev.key === "B" || ev.key === "u" || ev.key === "U" || ev.key === "s" || ev.key === "S") { unlock(); toggleShop(); return; }
+    if (ev.key === "f" || ev.key === "F") { toggleFullscreen(); return; }
+    if (ev.shiftKey && /^Digit[1-6]$/.test(ev.code || "")) { openCard(ORDER[+ev.code.slice(5) - 1], $("titleScreen").classList.contains("hidden") ? "field" : "title"); return; }
+    if (!$("titleScreen").classList.contains("hidden") && ev.key >= "1" && ev.key <= "6") { openCard(ORDER[+ev.key - 1], "title"); return; }
     if (ev.key === " " || ev.code === "Space") {
       ev.preventDefault();
+      if (!shopOpen && (state.phase === "fight" || state.phase === "paused")) { togglePause(); return; }
       if (shopOpen) {
         if (shopFromPause || state.phase !== "shop") return;
         closeShop();
@@ -11183,6 +11617,9 @@
   renderDailyBtn();
   renderContinue();
   syncSoundLabels();
+  renderDiff();
+  applyComfort();
+  syncFsUi();
 
   let last = 0;
   let prevTs = 0;
@@ -11200,6 +11637,7 @@
     update(dt);
     draw();
     syncHud();
+    if (tut.on) tutTick();
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

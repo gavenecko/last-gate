@@ -10,10 +10,23 @@
   <meta name="apple-mobile-web-app-title" content="Last Gate">
   <meta name="application-name" content="Last Gate">
   <title>Last Gate</title>
+  <script>
+    /* Where are we running? itch.io (or any non-GitHub iframe) turns off the install button and the service worker. */
+    (function () {
+      var h = location.hostname || "", q = location.search || "", framed = false;
+      try { framed = window.self !== window.top; } catch (e) { framed = true; }
+      var itch = /(^|\.)itch\.(io|zone)$/i.test(h) || /(^|\.)hwcdn\.net$/i.test(h) || (framed && !/(^|\.)github\.io$/i.test(h));
+      if (/[?&]itch=1\b/.test(q)) itch = true;
+      if (/[?&]itch=0\b/.test(q)) itch = false;
+      window.LG_ENV = { itch: itch, framed: framed };
+      if (itch) document.documentElement.className += " itch";
+      if (framed) document.documentElement.className += " framed";
+    })();
+  </script>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="css/style.css?v=34">
+  <link rel="stylesheet" href="css/style.css?v=35">
 </head>
 <body>
   <div id="app">
@@ -95,6 +108,7 @@
   </div>
 
   <div id="titleScreen">
+    <button id="fsFloat" class="fsBtn" type="button" aria-label="Fullscreen" hidden><span aria-hidden="true">&#x26F6;</span></button>
     <div class="titleCard">
       <p class="kicker">COMPOUND DEFENSE</p>
       <h1>LAST<br><span>GATE</span></h1>
@@ -105,12 +119,23 @@
       <p id="saveNote" class="saveNote" hidden></p>
       <div id="regionRow" hidden></div>
       <button id="loadoutBtn" type="button" aria-label="Choose a starting loadout"><span class="loFaces" id="loadoutFaces"></span><span class="loLbl"><small>LOADOUT</small><b id="loadoutName">Default</b></span><span class="loGo" aria-hidden="true">&#x203A;</span></button>
+      <div id="diffRow" role="radiogroup" aria-label="Difficulty">
+        <button type="button" role="radio" data-d="easy">EASY</button>
+        <button type="button" role="radio" data-d="normal">NORMAL</button>
+        <button type="button" role="radio" data-d="hard">HARD</button>
+      </div>
+      <p id="diffNote" class="diffNote"></p>
       <button id="play" type="button">PLAY</button>
       <button id="dailyBtn" type="button"><b>DAILY RUN</b><small id="dailyInfo"></small></button>
       <div class="titleRow">
         <button id="titleLab" type="button">LAB</button>
         <button id="titleCards" type="button">CARDS</button>
         <button id="titleMedals" type="button">MEDALS</button>
+      </div>
+      <div class="titleRow">
+        <button id="titleHow" type="button">HOW TO PLAY</button>
+        <button id="titleSettings" type="button">SETTINGS</button>
+        <button id="titleCredits" type="button">CREDITS</button>
       </div>
       <button id="titleMute" type="button">SOUND ON</button>
       <button id="installBtn" class="installBtn" type="button" hidden><span aria-hidden="true">&#x2B07;</span> ADD TO PHONE</button>
@@ -196,8 +221,11 @@
       <p class="kicker">HOLD</p>
       <h2>Paused</h2>
       <p>The yard waits. Nothing moves until you come back.</p>
+      <p id="pauseDiff" class="pauseDiff"></p>
       <button id="resumeBtn" type="button">RESUME</button>
       <button id="pauseShop" type="button" class="texty">SHOP</button>
+      <button id="pauseSettings" type="button" class="texty">SETTINGS</button>
+      <button id="pauseHow" type="button" class="texty">HOW TO PLAY</button>
       <button id="pauseRestart" type="button" class="texty">RESTART</button>
     </div>
   </div>
@@ -232,7 +260,109 @@
       </div>
     </div>
   </div>
-  <script src="js/game.js?v=34"></script>
-  <script src="js/pwa.js?v=34"></script>
+
+  <div id="settingsScreen" class="hidden metaScreen" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="panel">
+      <p class="kicker">GAME</p>
+      <h2 id="settingsTitle">Settings</h2>
+      <div class="setRow">
+        <label for="setMusic">Music</label>
+        <input id="setMusic" type="range" min="0" max="100" step="5" value="100">
+        <output id="setMusicVal">100%</output>
+      </div>
+      <div class="setRow">
+        <label for="setSfx">Effects</label>
+        <input id="setSfx" type="range" min="0" max="100" step="5" value="100">
+        <output id="setSfxVal">100%</output>
+      </div>
+      <button id="setShake" class="setToggle" type="button" role="switch" aria-checked="true"><span>Screen shake</span><b>ON</b></button>
+      <button id="setFlash" class="setToggle" type="button" role="switch" aria-checked="false"><span>Reduce flashes<small>Calmer lights, less flicker and pulsing</small></span><b>OFF</b></button>
+      <button id="setFull" class="setBtn" type="button" hidden>FULLSCREEN</button>
+      <button id="setHow" class="setBtn" type="button">HOW TO PLAY</button>
+      <button id="setCredits" class="setBtn" type="button">CREDITS</button>
+      <button id="setReset" class="setBtn danger" type="button">RESET ALL PROGRESS</button>
+      <button id="settingsClose" class="metaClose" type="button">CLOSE</button>
+    </div>
+  </div>
+
+  <div id="helpScreen" class="hidden metaScreen" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="panel">
+      <p class="kicker">FIELD GUIDE</p>
+      <h2 id="helpTitle">How to play</h2>
+      <div class="helpScroll">
+        <h3>Goal</h3>
+        <p>The dead come from every edge. Keep the gate in the center alive. Clear stages, pick a card after each one, spend cash in the shop, and hold out for 100 stages.</p>
+        <h3>Touch and mouse</h3>
+        <ul>
+          <li><b>Drag</b> a heroine to move her. Double-tap her to let her roam again.</li>
+          <li><b>Tap</b> a heroine to open her card: stats, traits, outfits.</li>
+          <li><b>Tap a face</b> in the bottom bar to fire her ability. Hold it to open her card.</li>
+          <li><b>SHOP</b> pauses the game. Hire heroines, upgrade the gate, build defenses.</li>
+          <li><b>START WAVE</b> sends the dead. Nothing starts until you press it.</li>
+        </ul>
+        <h3>Difficulty</h3>
+        <p>Pick Easy, Normal or Hard on the title screen when you start a run. Easy: weaker zombies, more cash. Hard: tougher zombies, extra ash. The Daily Run is always Normal.</p>
+        <h3 class="kbHead">Keyboard</h3>
+        <table class="kbTable">
+          <tr><td><kbd>P</kbd> <kbd>Space</kbd></td><td>Pause or resume. Space starts the wave before a wave begins</td></tr>
+          <tr><td><kbd>S</kbd> <kbd>B</kbd></td><td>Open or close the shop</td></tr>
+          <tr><td><kbd>M</kbd></td><td>Mute or unmute</td></tr>
+          <tr><td><kbd>F</kbd></td><td>Fullscreen (flips the card when a card is open)</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Close the top menu or card, or pause</td></tr>
+          <tr><td><kbd>1</kbd>-<kbd>6</kbd></td><td>Fire abilities during a wave. On the title or in a card, pick that heroine's card</td></tr>
+          <tr><td><kbd>Shift</kbd>+<kbd>1</kbd>-<kbd>6</kbd></td><td>Open that heroine's card any time</td></tr>
+          <tr><td><kbd>&#x2190;</kbd> <kbd>&#x2192;</kbd></td><td>Browse heroine cards</td></tr>
+          <tr><td><kbd>X</kbd> <kbd>O</kbd> <kbd>R</kbd></td><td>Reroll stock, Overdrive, restart</td></tr>
+        </table>
+      </div>
+      <button id="helpTour" class="setBtn" type="button">GUIDED TOUR</button>
+      <button id="helpClose" class="metaClose" type="button">CLOSE</button>
+    </div>
+  </div>
+
+  <div id="creditsScreen" class="hidden metaScreen" role="dialog" aria-modal="true" aria-labelledby="creditsTitle">
+    <div class="panel">
+      <p class="kicker">THANKS FOR PLAYING</p>
+      <h2 id="creditsTitle">Credits</h2>
+      <div class="helpScroll">
+        <h3>Game</h3>
+        <p>Made by Lord William Gasper (gavenecko). Design, code and direction.</p>
+        <h3>Art</h3>
+        <p>All heroine, zombie, splash and title artwork was made with AI image tools and then cut out, animated and wired into the game.</p>
+        <h3>Music</h3>
+        <p>Six instrumental tracks by gavenecko, generated with Suno (AI music) and selected for the game:</p>
+        <ul>
+          <li>Scrap Tension</li>
+          <li>Scrap Tension 2</li>
+          <li>Survival Loop</li>
+          <li>Survival Loop 2</li>
+          <li>Tick Tock Defense</li>
+          <li>Tick Tock Defense 2</li>
+        </ul>
+        <h3>Sound effects</h3>
+        <p>Custom recordings by gavenecko: gunshot, fire, magic whoosh, upgrade chime, explosion, and three zombie spawn groans.</p>
+        <h3>Type</h3>
+        <p>Passion One, &copy; Fontstage, SIL Open Font License 1.1.</p>
+        <h3>Tech</h3>
+        <p>Plain HTML, CSS and JavaScript. No engine, no tracking.</p>
+      </div>
+      <button id="creditsClose" class="metaClose" type="button">CLOSE</button>
+    </div>
+  </div>
+
+  <div id="tut" class="hidden" aria-live="polite">
+    <div id="tutSpot"></div>
+    <div id="tutCard" role="dialog" aria-labelledby="tutTitle">
+      <p id="tutStep" class="kicker"></p>
+      <h3 id="tutTitle"></h3>
+      <p id="tutText"></p>
+      <div class="tutBtns">
+        <button id="tutSkip" type="button">SKIP TOUR</button>
+        <button id="tutNext" type="button">NEXT</button>
+      </div>
+    </div>
+  </div>
+  <script src="js/game.js?v=35"></script>
+  <script src="js/pwa.js?v=35"></script>
 </body>
 </html>
