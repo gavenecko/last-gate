@@ -964,7 +964,7 @@
       sheet.decoding = "async";
       sheet.onload = () => { walks[key] = sheet; outfitWalk[key] = "ok"; };
       sheet.onerror = () => { outfitWalk[key] = "err"; };
-      sheet.src = "assets/outfits/" + k + "-" + o + "-walk.png";
+      sheet.src = "assets/outfits/" + k + "-" + o + "-walk.png?v=36";
     }
     return k;
   }
