@@ -964,7 +964,7 @@
       sheet.decoding = "async";
       sheet.onload = () => { walks[key] = sheet; outfitWalk[key] = "ok"; };
       sheet.onerror = () => { outfitWalk[key] = "err"; };
-      sheet.src = "assets/outfits/" + k + "-" + o + "-walk.png?v=36";
+      sheet.src = "assets/outfits/" + k + "-" + o + "-walk.png?v=37";
     }
     return k;
   }
@@ -7165,6 +7165,8 @@
         clearTimeout(press.timer);
         const wasLong = press.long;
         press = null;
+        // The card opened under her finger. The click Chrome sends on release must not hit a card button (Prev, Close...).
+        if (wasLong) ghostClickUntil = performance.now() + 500;
         if (fire && !wasLong && !b.classList.contains("idle")) fireAbilityButton(k);
       };
       b.addEventListener("pointerup", (ev) => release(ev, true));
@@ -7175,6 +7177,11 @@
       abilButtons[k] = { btn: b, cd: cd, p: -1, cls: "", due: false };
     }
   }
+
+  let ghostClickUntil = 0;
+  document.addEventListener("click", (ev) => {
+    if (performance.now() < ghostClickUntil) { ev.preventDefault(); ev.stopImmediatePropagation(); }
+  }, true);
 
   function fireAbilityButton(kind) {
     const slot = abilButtons[kind];
